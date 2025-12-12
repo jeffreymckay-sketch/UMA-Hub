@@ -1,0 +1,99 @@
+<script>
+  function nursing_refreshDocList(type) {
+      const container = document.getElementById('nursing-doc-list');
+      container.innerHTML = '<div class="status-message loading">Loading documents...</div>';
+      
+      const handler = function(res) {
+          if (res.error) { container.innerHTML = `<div class="status-message error">Error: ${res.error}</div>`; return; }
+          if (res.data.length === 0) { 
+              container.innerHTML = `<div style="text-align:center; padding:30px; color:#666; background:#f9f9f9; border-radius:8px;">
+                                        <div style="font-size:2rem; margin-bottom:10px;">📄</div>
+                                        <p>No documents found.</p>
+                                        <p style="font-size:0.85em;">Click 'Generate All' to create new reports.</p>
+                                     </div>`; 
+              return; 
+          }
+          
+          let html = '<div class="doc-list-container">';
+          res.data.forEach(doc => { 
+              html += `
+              <div class="doc-card">
+                 <div class="doc-card-left">
+                     <div class="doc-card-icon">📄</div>
+                     <a href="${doc.url}" target="_blank" class="doc-card-link" title="Open Google Doc">${doc.name}</a>
+                 </div>
+                 <div class="doc-card-actions">
+                     <button class="button secondary btn-sm" onclick="nursing_editAccommodations('${doc.id}', '${doc.name}')" title="Edit Accommodations">✏️ Accommodations</button>
+                     <button class="button btn-icon-only" onclick="nursing_regenerateDoc('${doc.id}')" title="Regenerate Document">🔄</button>
+                 </div>
+              </div>`; 
+          });
+          html += '</div>';
+          container.innerHTML = html;
+      };
+      
+      if (type === 'active') { google.script.run.withSuccessHandler(handler).nursing_getActiveDocsList(); } 
+      else { google.script.run.withSuccessHandler(handler).nursing_getDocsFromFolder(); }
+  }
+
+  function nursing_handleGenerateAll() { ui_confirm("Generate ALL documents? This will overwrite existing files.", function(yes) { if(yes) { ui_setStatus('nursing-status', 'Generating documents...', 'loading'); google.script.run.withSuccessHandler(function(res) { ui_setStatus('nursing-status', res.data || res.error, res.error ? 'error' : 'success'); nursing_refreshDocList('active'); }).nursing_generateAllDocuments(); } }); }
+  function nursing_handleRefreshAll() { ui_setStatus('nursing-status', 'Refreshing active documents...', 'loading'); google.script.run.withSuccessHandler(function(res) { ui_setStatus('nursing-status', res.data || res.error, res.error ? 'error' : 'success'); }).nursing_refreshAllActiveDocs(); }
+  function nursing_regenerateDoc(id) { ui_setStatus('nursing-status', 'Regenerating document...', 'loading'); google.script.run.withSuccessHandler(function(res) { ui_setStatus('nursing-status', res.data || res.error, res.error ? 'error' : 'success'); }).nursing_regenerateSingleDocById(id); }
+  function nursing_navigateToNotesEditor() { navigateTo('page-nursing-notes-editor'); document.getElementById('nursing-notes-area').value = "Loading..."; google.script.run.withSuccessHandler(function(res) { document.getElementById('nursing-notes-area').value = res.data || ""; }).nursing_getNotes(); }
+  function nursing_handleSaveNotes() { const text = document.getElementById('nursing-notes-area').value; google.script.run.withSuccessHandler(function(res) { ui_setStatus('nursing-notes-status', 'Notes saved.', 'success'); }).nursing_saveNotes(text); }
+  function nursing_editAccommodations(docId, docName) { navigateTo('page-nursing-accom-editor'); document.getElementById('nursing-accom-doc-name').textContent = docName; document.getElementById('nursing-accom-doc-id').value = docId; document.getElementById('nursing-accom-area').value = "Loading..."; google.script.run.withSuccessHandler(function(res) { document.getElementById('nursing-accom-area').value = res.data || ""; }).nursing_getAccommodations(docId); }
+  function nursing_handleSaveAccommodations() { const docId = document.getElementById('nursing-accom-doc-id').value; const text = document.getElementById('nursing-accom-area').value; ui_setStatus('nursing-accom-status', 'Saving...', 'loading'); google.script.run.withSuccessHandler(function(res) { ui_setStatus('nursing-accom-status', 'Saved.', 'success'); }).nursing_saveAccommodations(docId, text); }
+  function nursing_populateHourDropdown() { const sel = document.getElementById('nursing-auto-hour'); if(!sel) return; for(let i=0; i<24; i++) { const opt = document.createElement('option'); opt.value = i; opt.text = i + ":00"; sel.appendChild(opt); } }
+
+  // --- NURSING CALENDAR ---
+  
+  function nursing_loadCalendarOptions() {
+      google.script.run.withSuccessHandler(function(res) {
+          const select = document.getElementById('nursing-calendar-select');
+          if(!select) return;
+          
+          select.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
+          
+          if (res.success && res.data) { 
+              res.data.forEach(cal => { 
+                  const option = document.createElement('option'); 
+                  option.value = cal.id; 
+                  option.text = cal.name; 
+                  select.appendChild(option); 
+              }); 
+              
+              // Try to load saved ID from settings if available (optional enhancement)
+              // For now, we rely on manual selection or paste
+          }
+      }).getWritableCalendars();
+  }
+
+  function nursing_handleCalendarSync() {
+      const calId = document.getElementById('nursing-calendar-id-input').value;
+      const start = document.getElementById('nursing-cal-start').value;
+      const end = document.getElementById('nursing-cal-end').value;
+      const overwrite = document.getElementById('nursing-cal-overwrite').checked;
+
+      if (!calId || !start || !end) {
+          ui_setStatus('nursing-calendar-status', 'Please enter Calendar ID and Date Range.', 'error');
+          return;
+      }
+
+      ui_confirm("Publish Nursing exams to Calendar? This may delete existing events if Overwrite is checked.", function(yes) {
+          if (yes) {
+              ui_setStatus('nursing-calendar-status', 'Publishing...', 'loading');
+              google.script.run.withSuccessHandler(function(res) {
+                  ui_setStatus('nursing-calendar-status', res.message, res.success ? 'success' : 'error');
+              }).nursing_syncExamsToCalendar(calId, start, end, overwrite);
+          }
+      });
+  }
+
+  // --- INITIALIZATION ---
+  document.addEventListener('DOMContentLoaded', function() {
+      const nursingCalTab = document.querySelector('.tab-nav-item[onclick*="tab-exam-calendar"]');
+      if (nursingCalTab) {
+          nursingCalTab.addEventListener('click', nursing_loadCalendarOptions);
+      }
+  });
+</script>

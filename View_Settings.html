@@ -1,0 +1,317 @@
+<!-- 8. NEW: EVENT DISCOVERY TOOL (Formerly Calendar Inspector) -->
+<div id="page-inspector" class="page">
+  <h1>Event Discovery Tool</h1>
+  <p>Scan a calendar to find frequent keywords and assign them to categories.</p>
+  <div class="form-group inline-group" style="align-items: flex-end;">
+      <div style="flex-grow: 1;">
+          <label>Select Calendar</label>
+          <select id="discovery-calendar-select"><option>Loading...</option></select>
+      </div>
+      <div style="width: 150px;">
+          <label>Lookback Period</label>
+          <select id="discovery-days-back">
+              <option value="30">Last 30 Days</option>
+              <option value="60">Last 60 Days</option>
+              <option value="90">Last 90 Days</option>
+          </select>
+      </div>
+      <button class="button" onclick="discovery_handleScan()">Scan Calendar</button>
+  </div>
+  <div id="discovery-status" class="status-message"></div>
+  <div id="discovery-results-area" style="display:none; margin-top:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h4>Frequent Patterns Found</h4>
+          <button class="button" onclick="discovery_handleSave()">Save Rules</button>
+      </div>
+      <div id="discovery-table-container" class="results-container"></div>
+  </div>
+</div>
+
+<!-- 10. USER GUIDE -->
+<div id="page-guide" class="page">
+  <h1>User Guide</h1>
+  <p>Welcome to the manual. Read this before you panic.</p>
+  
+  <details class="guide-card">
+      <summary class="guide-header">🏠 My Dashboard</summary>
+      <div class="guide-content">
+          <p><strong>Mission Control.</strong> This is where you tell us when you are busy so we don't annoy you.</p>
+          <ul>
+              <li><strong>Availability:</strong> Add times you absolutely cannot work. We will try to respect this.</li>
+              <li><strong>Preferences:</strong> Tell us if you love mornings or hate evenings. We might respect this.</li>
+          </ul>
+      </div>
+  </details>
+
+  <details class="guide-card">
+      <summary class="guide-header">🖥️ Tech Hub</summary>
+      <div class="guide-content">
+          <p><strong>The Roster.</strong> Who is sitting in the chair? Put them there.</p>
+          <ul>
+              <li><strong>Roster Management:</strong> Assign staff to shifts. If the box is empty, the room is empty, and that is bad.</li>
+              <li><strong>Shift Config:</strong> Create the slots. Don't delete shifts unless you want to delete history.</li>
+              <li><strong>Calendar Sync:</strong> Push the roster to Google Calendar so people actually show up.</li>
+          </ul>
+      </div>
+  </details>
+
+  <details class="guide-card">
+      <summary class="guide-header">🎓 MST Support</summary>
+      <div class="guide-content">
+          <p><strong>Course Support.</strong> Matching humans to classes.</p>
+          <ul>
+              <li><strong>Assignments:</strong> Link a staff member to a course.</li>
+              <li><strong>Calendar Sync:</strong> Create invites for the staff member so they know where to go.</li>
+          </ul>
+      </div>
+  </details>
+
+  <details class="guide-card">
+      <summary class="guide-header">🗃️ Data Management</summary>
+      <div class="guide-content">
+          <p><strong>The Bulk Editor.</strong> For when you need to change 50 things at once and don't want to click 50 times.</p>
+          <ul>
+              <li><strong>Course Lookup:</strong> Find a specific class without scrolling for days.</li>
+              <li><strong>Bulk Editor:</strong> Connect to any sheet and update a column for everyone at once. Use with caution.</li>
+          </ul>
+      </div>
+  </details>
+
+  <details class="guide-card">
+      <summary class="guide-header">⚕️ Nursing & 🧪 MLT Proctoring</summary>
+      <div class="guide-content">
+          <p><strong>The Document Factory.</strong> Turns spreadsheet rows into pretty Google Docs.</p>
+          <ul>
+              <li><strong>Generator:</strong> Scans the spreadsheet for "Exam" and "Date" and makes a document for each one.</li>
+              <li><strong>Accommodations:</strong> Click the "Accommodations" button on a doc to add special notes.</li>
+              <li><strong>Calendar Sync:</strong> Puts the exams on a Google Calendar so you don't forget them.</li>
+          </ul>
+      </div>
+  </details>
+
+  <details class="guide-card">
+      <summary class="guide-header">📊 Analytics & Explorer</summary>
+      <div class="guide-content">
+          <p><strong>The Detective Kit.</strong> Find out who is double-booked.</p>
+          <ul>
+              <li><strong>Calendar Inspector:</strong> Select multiple calendars to see a combined list of everything happening. Great for finding conflicts.</li>
+              <li><strong>Report Wizard:</strong> Creates a safe copy of data in a new sheet so you can make Pivot Tables without breaking the app.</li>
+          </ul>
+      </div>
+  </details>
+
+  <details class="guide-card">
+      <summary class="guide-header">⚙️ Settings</summary>
+      <div class="guide-content">
+          <p><strong>The Danger Zone.</strong> Don't touch unless you know what you're doing.</p>
+          <ul>
+              <li><strong>Staff List:</strong> Add new people here. If they aren't in this list, they don't exist to the system.</li>
+              <li><strong>Permissions:</strong> Control who can see what. If you lock yourself out, call an Admin.</li>
+              <li><strong>Configurations:</strong> Manage all URLs, Calendar IDs, and Shift definitions here.</li>
+          </ul>
+      </div>
+  </details>
+
+</div>
+
+<!-- 7. GLOBAL SETTINGS (CONSOLIDATED) -->
+<div id="page-settings" class="page">
+  <h1>Global Settings</h1>
+  <div class="tab-nav">
+      <div class="tab-nav-item active" onclick="navigateToSubTab(this, 'tab-set-general')">General & Access</div>
+      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-staff'); loadRoleAssignmentData();" id="settings-role-assignment-nav">Staff Management</div>
+      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-scheduling'); loadSchedulingRosterData();">Scheduling Config</div>
+      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-proctoring'); mlt_loadSettings();">Proctoring Config</div>
+      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-reporting')">Reporting & Data</div>
+  </div>
+
+  <!-- 1. GENERAL & ACCESS -->
+  <div id="tab-set-general" class="tab-page active">
+      <h3>Database Connection</h3>
+      <p class="setting-description">Controls the connection to the Master Google Sheet and the branding logo.</p>
+      <div class="form-group"><label>Data Hub Master Sheet URL</label><input type="text" id="data-hub-url"></div>
+      <div class="form-group"><label>Logo Google Drive URL</label><input type="text" id="logo-file-id"></div>
+      <button class="button" onclick="handleSaveSettings('adminSettings')">Save Admin Settings</button>
+      <div id="adminSettings-status" class="status-message"></div>
+      
+      <hr class="divider">
+      
+      <h3>User Access Control</h3>
+      <p class="setting-description">Define which roles (Admin, Lead, Staff) can access specific pages.</p>
+      <div id="permissions-matrix-table" class="results-container"><p>Loading permission data...</p></div>
+      <button class="button" onclick="handleSavePermissions()">Save Permissions</button>
+      <div id="permissions-status" class="status-message"></div>
+  </div>
+
+  <!-- 2. STAFF MANAGEMENT -->
+  <div id="tab-set-staff" class="tab-page">
+      <h3>Manage Staff List</h3>
+      <p class="setting-description">Add new employees or change their roles. This list is used across all modules.</p>
+      <div style="background: #f0f0f0; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+          <h4>➕ Add New Staff Member</h4>
+          <div class="form-group inline-group" style="align-items: flex-end;">
+              <div style="flex-grow: 1; min-width: 150px;"><label>Full Name</label><input type="text" id="new-staff-name" placeholder="John Smith"></div>
+              <div style="flex-grow: 1; min-width: 150px;"><label>Staff ID (Email)</label><input type="text" id="new-staff-id" placeholder="jsmith@uni.edu"></div>
+              <div style="width: 150px;"><label>Primary Role</label><select id="new-staff-role"><option value="Staff">Staff</option><option value="Lead">Lead</option><option value="Admin">Admin</option></select></div>
+              <button class="button" id="add-staff-btn" onclick="handleAddStaff()">Add Staff</button>
+          </div>
+          <div id="add-staff-status" class="status-message"></div>
+      </div>
+      <hr class="divider">
+      <div id="role-assignment-buttons">
+          <button class="button" onclick="handleSaveRoleAssignments()">Save Role Changes</button>
+          <div id="role-assignment-status" class="status-message"></div>
+      </div>
+      <div id="role-assignment-list" class="results-container"><p>Loading staff data...</p></div>
+  </div>
+
+  <!-- 3. SCHEDULING CONFIG -->
+  <div id="tab-set-scheduling" class="tab-page">
+      <h3>Tech Hub Shift Configuration</h3>
+      <p class="setting-description">Define the shift slots available in the Tech Hub Roster.</p>
+      
+      <div style="background: #f9f9f9; padding: 15px; border: 1px solid #eee; border-radius: 5px; margin-bottom: 20px;">
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="shift-add-desc" placeholder="e.g. Morning Shift">
+        </div>
+        
+        <div class="form-group">
+          <label>Select Days (Bulk Add)</label>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <label><input type="checkbox" class="shift-day-check" value="Monday"> Mon</label>
+              <label><input type="checkbox" class="shift-day-check" value="Tuesday"> Tue</label>
+              <label><input type="checkbox" class="shift-day-check" value="Wednesday"> Wed</label>
+              <label><input type="checkbox" class="shift-day-check" value="Thursday"> Thu</label>
+              <label><input type="checkbox" class="shift-day-check" value="Friday"> Fri</label>
+              <label><input type="checkbox" class="shift-day-check" value="Saturday"> Sat</label>
+              <label><input type="checkbox" class="shift-day-check" value="Sunday"> Sun</label>
+          </div>
+        </div>
+
+        <div class="form-group inline-group">
+          <div style="width: 120px;">
+              <label>Start Time</label>
+              <input type="time" id="shift-add-start" value="09:00">
+          </div>
+          <div style="width: 120px;">
+              <label>End Time</label>
+              <input type="time" id="shift-add-end" value="11:00">
+          </div>
+          
+          <div style="display: flex; align-items: center; margin-bottom: 10px;">
+              <label style="margin-right: 5px;">Zoom?</label>
+              <input type="checkbox" id="shift-add-zoom" style="width: auto;">
+          </div>
+
+          <button class="button" id="shift-add-btn" onclick="handleAddShift()" style="margin-top: 24px;">Add Shifts</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 10px;">
+        <button class="button danger" onclick="handleBulkDeleteShifts()">Delete Selected Shifts</button>
+      </div>
+
+      <div id="manage-shifts-list" class="results-container"><p>Loading shifts...</p></div>
+    
+      <hr class="divider">
+      <div class="form-group">
+         <label>Master Tech Hub Zoom URL</label>
+         <input type="text" id="tech-hub-zoom-url">
+         <button class="button secondary" style="margin-top:5px;" onclick="handleSaveSettings('schedulingSettings')">Save Zoom URL</button>
+      </div>
+      <button class="button danger" onclick="handleClearAllShifts()">Clear All Shifts</button>
+  </div>
+
+  <!-- 4. PROCTORING CONFIG -->
+  <div id="tab-set-proctoring" class="tab-page">
+      <h3>Nursing Exam Settings</h3>
+      <p class="setting-description">Configure the source data and output folder for Nursing Exam Documents.</p>
+      <div class="form-group"><label>Nursing Sheet URL</label><input type="text" id="nursing-sheet-url"></div>
+      <div class="form-group"><label>Target Folder URL</label><input type="text" id="nursing-folder-url"></div>
+      <div class="form-group"><label>Report Email(s)</label><input type="text" id="nursing-report-email"></div>
+      <div class="form-group"><label>Report Days</label><input type="number" id="nursing-report-days" min="1" max="90"></div>
+      <div class="toggle-group">
+          <label class="toggle-switch"><input type="checkbox" id="nursing-report-resolved-toggle"><span class="slider"></span></label>
+          <label>Include Resolved Comments</label>
+      </div>
+      <div class="toggle-group">
+          <label class="toggle-switch"><input type="checkbox" id="nursing-auto-report-toggle"><span class="slider"></span></label>
+          <label>Enable Automated Report</label>
+      </div>
+      <div class="form-group"><label>Freq</label><select id="nursing-auto-frequency"><option value="WEEKLY">Weekly</option><option value="DAILY">Daily</option></select></div>
+      <div class="form-group" id="nursing-auto-day-group"><label>Day</label><select id="nursing-auto-day"><option value="MONDAY">Monday</option></select></div>
+      <div class="form-group"><label>Hour</label><select id="nursing-auto-hour"></select></div>
+      <button class="button" onclick="handleSaveSettings('nursingExamSettings')">Save Nursing Settings</button>
+      <div id="nursingExamSettings-status" class="status-message"></div>
+
+      <hr class="divider">
+
+      <h3>MLT Exam Settings</h3>
+      <p class="setting-description">Configure the source data and output folder for MLT Exam Documents.</p>
+      <div class="form-group"><label>Source Sheet URL</label><input type="text" id="mlt-sheet-url"></div>
+      <div class="form-group"><label>Target Folder URL</label><input type="text" id="mlt-folder-url"></div>
+      <div class="form-group"><label>Report Email(s)</label><input type="text" id="mlt-report-email"></div>
+      
+      <div style="display:flex; gap:20px; margin-top:15px;">
+          <div style="flex:1;">
+              <label>Column Keywords (JSON)</label>
+              <textarea id="mlt-config-json" style="height:150px; font-family:monospace;"></textarea>
+          </div>
+          <div style="flex:1;">
+              <label>General Notes for Docs</label>
+              <textarea id="mlt-custom-notes" style="height:150px;"></textarea>
+          </div>
+      </div>
+      <button class="button" onclick="mlt_handleSaveSettings()">Save MLT Settings</button>
+      <div id="mltSettings-status" class="status-message"></div>
+
+      <hr class="divider">
+
+      <h3>Exam Booking Settings</h3>
+      <p class="setting-description">Global settings for exam calendar integration.</p>
+      <div class="form-group"><label>Exam Calendar ID</label><input type="text" id="exam-calendar-id"></div>
+      <div class="form-group"><label>Proctor Capability Tag</label><input type="text" id="proctor-capability"></div>
+      <button class="button" onclick="handleSaveSettings('examSettings')">Save Exam Settings</button>
+      <div id="examSettings-status" class="status-message"></div>
+  </div>
+
+  <!-- 5. REPORTING & DATA -->
+  <div id="tab-set-reporting" class="tab-page">
+      <h3>Analytics Dashboard</h3>
+      <p class="setting-description">Link to external Looker Studio dashboards.</p>
+      <div class="form-group"><label>Looker Studio Dashboard URL</label><input type="text" id="reporting-url-input"></div>
+      <button class="button" onclick="handleSaveSettings('reportingSettings')">Save URL</button>
+      <div id="reportingSettings-status" class="status-message"></div>
+      
+      <hr class="divider">
+      
+      <h3>Calendar Connection</h3>
+      <p class="setting-description">Configure the default calendar for MST Sync and Template settings.</p>
+      <div class="form-group">
+          <label>Method 1: Select from List</label>
+          <select id="setting-target-calendar" onchange="document.getElementById('setting-manual-calendar-id').value = this.value"><option value="" disabled selected>Loading...</option></select>
+      </div>
+      <div class="form-group">
+          <label>Method 2: Manual Calendar ID</label>
+          <input type="text" id="setting-manual-calendar-id">
+      </div>
+      <div class="form-group">
+          <label>Source Data Tab</label>
+          <select id="setting-source-tab" onchange="loadTabHeaders(this.value)"><option value="" disabled selected>Loading Tabs...</option></select>
+      </div>
+      <div style="background: #f9f9f9; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
+          <h4>Template Builder</h4>
+          <div class="form-group inline-group">
+              <input type="text" id="template-name-input" placeholder="Template Name" style="width: 40%;">
+              <input type="text" id="template-pattern-input" placeholder="{{Course}} - {{Faculty}}" style="flex-grow: 1;">
+              <button class="button" onclick="handleAddTemplate()">Add</button>
+          </div>
+          <div id="available-headers-list" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px;"></div>
+          <div id="saved-templates-list"></div>
+      </div>
+      <button class="button" onclick="saveCalendarSettings()" style="margin-top: 15px;">Save Calendar Settings</button>
+      <div id="calendarSettings-status" class="status-message"></div>
+  </div>
+
+</div>

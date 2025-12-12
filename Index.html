@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <base target="_top">
+  <?!= include('Styles'); ?> 
+</head>
+  <body>
+
+    <div class="sidebar closed" id="app-sidebar">
+      <div class="sidebar-header">
+        <img id="logo-img" class="header-logo" src="" alt="Logo">
+        <div id="logo-loading-text" class="logo-loading">...</div>
+        <span class="sidebar-title">Staff Portal</span>
+      </div>
+
+      <div class="nav-menu">
+        
+        <!-- DASHBOARDS -->
+        <div class="nav-group-header open" onclick="toggleNavGroup(this)">Dashboards <span class="nav-arrow">▼</span></div>
+        <ul class="nav-sub-menu open">
+            <li class="nav-item active" onclick="navigateTo('page-dashboard')">
+                <span class="nav-icon">🏠</span> My Dashboard
+            </li>
+            <li class="nav-item" onclick="navigateTo('page-analytics')">
+                <span class="nav-icon">📊</span> Analytics & Explorer
+            </li>
+        </ul>
+
+        <!-- SCHEDULING & LOGISTICS -->
+        <div class="nav-group-header" onclick="toggleNavGroup(this)">Scheduling & Logistics <span class="nav-arrow">▼</span></div>
+        <ul class="nav-sub-menu">
+            <li class="nav-item" onclick="navigateTo('page-tech-hub')">
+                <span class="nav-icon">🖥️</span> Tech Hub
+            </li>
+            <li class="nav-item" onclick="navigateTo('page-mst')">
+                <span class="nav-icon">🎓</span> MST Support
+            </li>
+            <li class="nav-item" onclick="navigateTo('page-classroom')">
+                <span class="nav-icon">🗃️</span> Data Management
+            </li>
+        </ul>
+
+        <!-- PROCTORING SERVICES -->
+        <div class="nav-group-header" onclick="toggleNavGroup(this)">Proctoring Services <span class="nav-arrow">▼</span></div>
+        <ul class="nav-sub-menu">
+            <li class="nav-item" onclick="navigateTo('page-exams')">
+                <span class="nav-icon">⚕️</span> Nursing Proctoring
+            </li>
+            <li class="nav-item" onclick="navigateTo('page-mlt-proctoring')">
+                <span class="nav-icon">🧪</span> MLT Proctoring
+            </li>
+        </ul>
+
+        <!-- TOOLS & SETTINGS -->
+        <div class="nav-group-header" onclick="toggleNavGroup(this)">Tools & Settings <span class="nav-arrow">▼</span></div>
+        <ul class="nav-sub-menu">
+            <li class="nav-item" onclick="navigateTo('page-inspector')">
+                <span class="nav-icon">🔍</span> Event Discovery Tool
+            </li>
+            <li class="nav-item" onclick="navigateTo('page-guide')">
+                <span class="nav-icon">📖</span> User Guide
+            </li>
+            <li class="nav-item" onclick="navigateTo('page-settings')">
+                <span class="nav-icon">⚙️</span> Global Settings
+            </li>
+        </ul>
+
+      </div>
+    </div>
+
+    <div class="main-content">
+      
+      <div class="content-top-bar">
+          <button id="nav-toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰ Menu</button>
+      </div>
+
+      <!-- MODULE INCLUDES -->
+      <?!= include('View_Dashboards'); ?>
+      <?!= include('View_Logistics'); ?>
+      <?!= include('View_Proctoring'); ?>
+      <?!= include('View_Settings'); ?>
+
+    </div>
+    
+    <!-- MODALS -->
+    <?!= include('Part_Modals'); ?>
+    
+    <!-- JAVASCRIPT INCLUDES -->
+    <?!= include('JS_Core'); ?>
+    <?!= include('JS_Lookup'); ?>
+    <?!= include('JS_Scheduling'); ?>
+    <?!= include('JS_Calendar'); ?>
+    <?!= include('JS_Nursing'); ?>
+    <?!= include('JS_Settings'); ?>
+    <?!= include('JS_Discovery'); ?>
+    <?!= include('JS_Analytics'); ?>
+    <?!= include('JS_MLT'); ?>
+    <?!= include('JS_Dashboard'); ?>
+</body>
+</html>

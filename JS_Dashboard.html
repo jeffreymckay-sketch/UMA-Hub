@@ -1,0 +1,145 @@
+<script>
+  /**
+   * -------------------------------------------------------------------
+   * DASHBOARD CLIENT LOGIC
+   * Handles Availability, Preferences, and Staff Selection
+   * -------------------------------------------------------------------
+   */
+
+  // --- STAFF SELECTOR (Admin/Lead View) ---
+  function loadStaffSelector() {
+      google.script.run.withSuccessHandler(function(res) {
+          if(res.data) {
+              const sel = document.getElementById('dashboard-staff-select');
+              if(!sel) return;
+              sel.innerHTML = '<option value="">-- Myself --</option>';
+              res.data.forEach(s => {
+                  const opt = document.createElement('option');
+                  opt.value = s.id; // This is the email/ID
+                  opt.text = s.name;
+                  sel.appendChild(opt);
+              });
+          }
+      }).api_getStaffForRoleAssignment();
+  }
+
+  function handleDashboardStaffChange() {
+      loadMyAvailability();
+      loadMyPreferences();
+  }
+
+  // --- AVAILABILITY ---
+  function loadMyAvailability() {
+      const container = document.getElementById('my-availability-list');
+      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      
+      if(!container) return;
+      container.innerHTML = '<p>Loading...</p>';
+      
+      google.script.run.withSuccessHandler(function(res) {
+          if(res.success) {
+              if(res.data.length === 0) { 
+                  container.innerHTML = '<p>No unavailable times set.</p>'; 
+              } else { 
+                  let html = '<table class="data-table"><thead><tr><th>Day</th><th>Time</th><th>Action</th></tr></thead><tbody>'; 
+                  res.data.forEach(item => { 
+                      html += `<tr>
+                          <td>${item.day}</td>
+                          <td>${item.start} - ${item.end}</td>
+                          <td><button class="button danger" style="padding:2px 6px; font-size:0.8em;" onclick="handleDeleteAvailability('${item.id}')">Remove</button></td>
+                      </tr>`; 
+                  }); 
+                  html += '</tbody></table>'; 
+                  container.innerHTML = html; 
+              }
+          } else { 
+              container.innerHTML = `<p style="color:red">${res.message}</p>`; 
+          }
+      }).api_getMyAvailability(targetEmail);
+  }
+
+  function handleAddNotAvailable() {
+      const day = document.getElementById('avail-day').value;
+      const start = document.getElementById('avail-start-time').value;
+      const end = document.getElementById('avail-end-time').value;
+      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      
+      ui_setStatus('my-availability-status', 'Adding...', 'loading');
+      
+      google.script.run.withSuccessHandler(function(res) { 
+          if(res.success) { 
+              ui_setStatus('my-availability-status', 'Added.', 'success'); 
+              loadMyAvailability(); 
+          } else { 
+              ui_setStatus('my-availability-status', res.message, 'error'); 
+          } 
+      }).api_addNotAvailable(day, start, end, targetEmail);
+  }
+
+  function handleDeleteAvailability(id) {
+      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      ui_setStatus('my-availability-status', 'Removing...', 'loading');
+      
+      google.script.run.withSuccessHandler(function(res) { 
+          if(res.success) { 
+              ui_setStatus('my-availability-status', 'Removed.', 'success'); 
+              loadMyAvailability(); 
+          } else { 
+              ui_setStatus('my-availability-status', res.message, 'error'); 
+          } 
+      }).api_deleteAvailability(id, targetEmail);
+  }
+
+  // --- PREFERENCES ---
+  function loadMyPreferences() {
+      const container = document.getElementById('my-preferences-list');
+      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      
+      if(!container) return;
+      container.innerHTML = '<p>Loading...</p>';
+      
+      google.script.run.withSuccessHandler(function(res) {
+          if(res.success) {
+              const prefs = res.data;
+              const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+              const blocks = ['Morning', 'Afternoon', 'Evening'];
+              
+              let html = '<table class="preference-table"><thead><tr><th>Day</th><th>Morning</th><th>Afternoon</th><th>Evening</th></tr></thead><tbody>';
+              
+              days.forEach(day => {
+                  html += `<tr><td><strong>${day}</strong></td>`;
+                  blocks.forEach(block => {
+                      const key = `${day}_${block}`;
+                      const val = prefs[key] || 'Neutral';
+                      const selP = val === 'Preferred' ? 'selected' : '';
+                      const selN = val === 'Neutral' ? 'selected' : '';
+                      const selNP = val === 'Not Preferred' ? 'selected' : '';
+                      
+                      html += `<td>
+                          <select onchange="handleSavePreference('${key}', this.value)" style="font-size:0.85em; padding:4px;">
+                              <option value="Preferred" ${selP}>Preferred</option>
+                              <option value="Neutral" ${selN}>Neutral</option>
+                              <option value="Not Preferred" ${selNP}>Not Preferred</option>
+                          </select>
+                      </td>`;
+                  });
+                  html += '</tr>';
+              });
+              html += '</tbody></table>';
+              container.innerHTML = html;
+          } else { 
+              container.innerHTML = `<p style="color:red">${res.message}</p>`; 
+          }
+      }).api_getMyPreferences(targetEmail);
+  }
+
+  function handleSavePreference(key, value) {
+      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      ui_setStatus('my-preferences-status', 'Saving...', 'loading');
+      
+      google.script.run.withSuccessHandler(function(res) { 
+          if(res.success) ui_setStatus('my-preferences-status', 'Saved.', 'success'); 
+          else ui_setStatus('my-preferences-status', res.message, 'error'); 
+      }).api_savePreference(key, value, targetEmail);
+  }
+</script>

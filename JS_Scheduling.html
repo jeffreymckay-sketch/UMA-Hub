@@ -1,0 +1,293 @@
+<script>
+  // --- ROSTER & SHIFTS ---
+  var cachedCourseAssignments = [];
+  var courseSortState = { field: 'staffName', asc: true };
+
+  function loadSchedulingRosterData() {
+    ui_setStatus('scheduling-status', 'Loading roster...', 'loading');
+    google.script.run
+      .withSuccessHandler(renderSchedulingRoster)
+      .withFailureHandler(function(e) { 
+          console.error("Server Failure:", e);
+          ui_setStatus('scheduling-status', 'Error: ' + e.message, 'error'); 
+      })
+      .getSchedulingRosterData();
+  }
+
+  function renderSchedulingRoster(response) {
+    if (!response || response.error) { 
+        ui_setStatus('scheduling-status', response ? response.error : 'Unknown Error', 'error'); 
+        return; 
+    }
+    
+    // SAFETY: Ensure data object exists, even if empty
+    const data = response.data || {};
+    data.roster = data.roster || [];
+    data.manageShifts = data.manageShifts || [];
+    data.courseAssignments = data.courseAssignments || [];
+    
+    const rosterContainer = document.getElementById('roster-table-container');
+    const manageContainer = document.getElementById('manage-shifts-list');
+    const courseContainer = document.getElementById('sched-assignments-list');
+    
+    // Helper for sorting days
+    const dayOrder = { "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6, "Sunday": 7 };
+    
+    // Sort Roster (Day -> Start Time)
+    data.roster.sort((a, b) => {
+        const d = (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99);
+        if (d !== 0) return d;
+        return a.start.localeCompare(b.start);
+    });
+
+    if (rosterContainer) {
+        if (data.roster.length === 0) { 
+            rosterContainer.innerHTML = '<p>No shifts defined. Go to Settings to add shifts.</p>'; 
+        } else { 
+            let html = '<table class="roster-table"><thead><tr><th>Day</th><th>Time</th><th>Staff Assignment</th></tr></thead><tbody>'; 
+            data.roster.forEach(r => { 
+                let options = `<option value="">-- Unassigned --</option>`; 
+                (r.smartStaffList || []).forEach(s => { 
+                    const selected = r.assignedStaffId === s.id ? 'selected' : ''; 
+                    const style = s.available ? '' : 'class="not-available"'; 
+                    options += `<option value="${s.id}" ${selected} ${style}>${s.name}</option>`; 
+                }); 
+                html += `<tr><td><strong>${r.day}</strong><br><span style="font-size:0.8em">${r.description}</span></td><td>${r.start} - ${r.end}</td><td><select class="roster-select" data-shift-id="${r.shiftId}">${options}</select></td></tr>`; 
+            }); 
+            html += '</tbody></table>'; 
+            rosterContainer.innerHTML = html; 
+        }
+    }
+    
+    // Sort Manage Shifts List (Day -> Start Time)
+    if (manageContainer) { 
+        if (data.manageShifts.length === 0) { 
+            manageContainer.innerHTML = '<p>No shifts found.</p>'; 
+        } else { 
+            // Sort Logic
+            data.manageShifts.sort((a, b) => {
+                const d = (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99);
+                if (d !== 0) return d;
+                return a.start.localeCompare(b.start);
+            });
+
+            let mHtml = '<ul style="list-style:none; padding:0;">'; 
+            data.manageShifts.forEach(s => { 
+                const zoomBadge = s.zoom ? '<span style="background:#e3f2fd; color:#003057; padding:2px 4px; border-radius:4px; font-size:0.7em; margin-left:5px;">Zoom</span>' : '';
+                mHtml += `<li style="padding:5px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center;">
+                        <input type="checkbox" class="shift-delete-check" value="${s.id}" style="margin-right:10px;">
+                        <span><strong>${s.day}</strong> (${s.start}-${s.end}): ${s.desc} ${zoomBadge}</span>
+                    </div>
+                    <button class="button danger" style="padding:2px 6px; font-size:0.8em;" onclick="handleDeleteShift('${s.id}')">Delete</button>
+                </li>`; 
+            }); 
+            mHtml += '</ul>'; 
+            manageContainer.innerHTML = mHtml; 
+        } 
+    }
+    
+    // COURSE ASSIGNMENTS (New Sortable Table)
+    if (courseContainer) { 
+        cachedCourseAssignments = data.courseAssignments;
+        renderCourseTable(data.debug);
+    }
+    
+    const staffSelect = document.getElementById('sched-staff-select');
+    const itemSelect = document.getElementById('sched-item-select');
+    if (staffSelect && data.mstStaffList) { staffSelect.innerHTML = ''; data.mstStaffList.forEach(s => { const opt = document.createElement('option'); opt.value = s.id; opt.text = s.name; staffSelect.appendChild(opt); }); }
+    if (itemSelect && data.courseItems) { itemSelect.innerHTML = ''; data.courseItems.forEach(c => { const opt = document.createElement('option'); opt.value = c.id; opt.text = c.name; itemSelect.appendChild(opt); }); }
+    
+    ui_setStatus('scheduling-status', 'Data loaded.', 'success');
+  }
+
+  function renderCourseTable(debugMsg) {
+      const container = document.getElementById('sched-assignments-list');
+      if (!container) return;
+      
+      if (cachedCourseAssignments.length === 0) { 
+          let msg = '<p>No course assignments found in Course_Schedule.</p>';
+          if (debugMsg) msg += `<p style="color:red; font-size:0.8em;">Debug: ${debugMsg}</p>`;
+          container.innerHTML = msg; 
+          return; 
+      }
+
+      // Add Export Button
+      let html = '<div style="margin-bottom:10px; text-align:right;"><button class="button secondary" onclick="handleExportCourses()">Export to Sheet</button></div>';
+
+      html += '<table class="data-table"><thead><tr>';
+      html += `<th class="sortable-header" onclick="handleSortCourses('staffName')">Assigned Staff</th>`;
+      html += `<th class="sortable-header" onclick="handleSortCourses('itemName')">Course</th>`;
+      html += `<th class="sortable-header" onclick="handleSortCourses('courseFaculty')">Faculty</th>`;
+      html += `<th class="sortable-header" onclick="handleSortCourses('courseDay')">Day</th>`;
+      html += `<th class="sortable-header" onclick="handleSortCourses('courseTime')">Time</th>`;
+      html += `<th class="sortable-header" onclick="handleSortCourses('duration')">Duration</th>`;
+      html += `<th class="sortable-header" onclick="handleSortCourses('location')">Classroom</th>`;
+      html += `<th>Action</th>`; 
+      html += '</tr></thead><tbody>';
+
+      cachedCourseAssignments.forEach(c => {
+          const isUnassigned = c.staffName === 'Unassigned';
+          const staffDisplay = isUnassigned ? `<span style="color:red; font-style:italic;">Unassigned</span>` : `<strong>${c.staffName}</strong>`;
+          const actionBtn = isUnassigned ? '' : `<button class="button danger" style="padding:2px 6px; font-size:0.8em;" onclick="handleUnassignCourse('${c.id}')">Unassign</button>`;
+
+          html += `<tr>
+              <td>${staffDisplay}</td>
+              <td>${c.itemName}</td>
+              <td>${c.courseFaculty}</td>
+              <td>${c.courseDay}</td>
+              <td>${c.courseTime}</td>
+              <td>${c.duration}</td>
+              <td>${c.location}</td>
+              <td>${actionBtn}</td>
+          </tr>`;
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+  }
+
+  function handleSortCourses(field) {
+      if (courseSortState.field === field) {
+          courseSortState.asc = !courseSortState.asc;
+      } else {
+          courseSortState.field = field;
+          courseSortState.asc = true;
+      }
+
+      cachedCourseAssignments.sort((a, b) => {
+          const valA = (a[field] || '').toString().toLowerCase();
+          const valB = (b[field] || '').toString().toLowerCase();
+          if (valA < valB) return courseSortState.asc ? -1 : 1;
+          if (valA > valB) return courseSortState.asc ? 1 : -1;
+          return 0;
+      });
+
+      renderCourseTable();
+  }
+
+  function handleExportCourses() {
+      if (cachedCourseAssignments.length === 0) return;
+      
+      const btn = document.querySelector('#sched-assignments-list button');
+      if(btn) btn.innerText = "Exporting...";
+      
+      google.script.run.withSuccessHandler(function(res) {
+          if(btn) btn.innerText = "Export to Sheet";
+          if(res.success) { window.open(res.url, '_blank'); }
+          else { alert("Export Failed: " + res.message); }
+      }).api_exportCourseAssignments(cachedCourseAssignments);
+  }
+
+  function handleUnassignCourse(courseId) {
+      if(!confirm("Are you sure you want to unassign this staff member?")) return;
+      ui_setStatus('scheduling-status', 'Unassigning...', 'loading');
+      google.script.run.withSuccessHandler(renderSchedulingRoster).api_unassignCourse(courseId);
+  }
+
+  function handleSaveAllRosterAssignments() {
+    const selects = document.querySelectorAll('.roster-select');
+    const assignments = [];
+    selects.forEach(s => { assignments.push({ shiftId: s.getAttribute('data-shift-id'), staffId: s.value }); });
+    const start = document.getElementById('roster-start-date').value;
+    const end = document.getElementById('roster-end-date').value;
+    if (!start || !end) { ui_setStatus('scheduling-status', 'Please select Start and End dates.', 'error'); return; }
+    ui_setStatus('scheduling-status', 'Saving assignments...', 'loading');
+    google.script.run.withSuccessHandler(function(res) { ui_setStatus('scheduling-status', res.message, res.success ? 'success' : 'error'); }).saveAllTechHubAssignments(assignments, start, end);
+  }
+
+  function handleResetAssignments() { ui_confirm("Reset all Tech Hub assignments? This cannot be undone.", function(yes) { if(yes) { ui_setStatus('scheduling-status', 'Resetting...', 'loading'); google.script.run.withSuccessHandler(function(res){ ui_setStatus('scheduling-status', res.message, 'success'); loadSchedulingRosterData(); }).resetAllAssignments(); } }); }
+  
+  function handleAddShift() { 
+      const desc = document.getElementById('shift-add-desc').value;
+      const start = document.getElementById('shift-add-start').value;
+      const end = document.getElementById('shift-add-end').value;
+      const zoom = document.getElementById('shift-add-zoom').checked;
+      
+      // Gather checked days (Bulk Add Logic)
+      const days = [];
+      document.querySelectorAll('.shift-day-check:checked').forEach(cb => days.push(cb.value));
+      
+      if (days.length === 0) {
+          ui_setStatus('scheduling-status', 'Please select at least one day.', 'error');
+          return;
+      }
+
+      const shiftData = { 
+          description: desc, 
+          days: days, // Array of days
+          startTime: start, 
+          endTime: end,
+          zoom: zoom
+      }; 
+      
+      ui_setStatus('scheduling-status', 'Adding shifts...', 'loading');
+      google.script.run.withSuccessHandler(renderSchedulingRoster).addTechHubShift(shiftData); 
+  }
+
+  function handleBulkDeleteShifts() {
+      const checks = document.querySelectorAll('.shift-delete-check:checked');
+      if (checks.length === 0) {
+          ui_setStatus('scheduling-status', 'No shifts selected.', 'error');
+          return;
+      }
+      
+      if (!confirm(`Delete ${checks.length} shifts? This will also remove any assignments linked to them.`)) return;
+      
+      const ids = Array.from(checks).map(c => c.value);
+      ui_setStatus('scheduling-status', 'Deleting...', 'loading');
+      google.script.run.withSuccessHandler(renderSchedulingRoster).deleteBulkTechHubShifts(ids);
+  }
+
+  function handleDeleteShift(id) { if(confirm("Delete this shift?")) { google.script.run.withSuccessHandler(renderSchedulingRoster).deleteTechHubShift(id); } }
+  function handleSaveAssignment() { const staffId = document.getElementById('sched-staff-select').value; const itemId = document.getElementById('sched-item-select').value; google.script.run.withSuccessHandler(renderSchedulingRoster).saveNewAssignment(staffId, itemId, 'Course'); }
+  function handleDeleteAssignment(id) { google.script.run.withSuccessHandler(renderSchedulingRoster).deleteAssignment(id); }
+  function handleClearAllShifts() { ui_confirm("Delete ALL shifts? This clears the roster structure.", function(yes){ if(yes) { google.script.run.withSuccessHandler(renderSchedulingRoster).clearAllShifts(); } }); }
+
+  // --- NEW: TECH HUB SYNC LOGIC ---
+  function loadTechHubSyncOptions() {
+      google.script.run.withSuccessHandler(function(res) {
+          const select = document.getElementById('th-sync-calendar-select');
+          if(!select) return;
+          select.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
+          if (res.success && res.data) { 
+              res.data.forEach(cal => { 
+                  const option = document.createElement('option'); 
+                  option.value = cal.id; 
+                  option.text = cal.name; 
+                  select.appendChild(option); 
+              }); 
+          }
+      }).getWritableCalendars();
+  }
+
+  function handleSyncToCalendar() {
+      // Check Manual Input first
+      const manualId = document.getElementById('th-sync-manual-id').value.trim();
+      const dropdownId = document.getElementById('th-sync-calendar-select').value;
+      const calId = manualId || dropdownId;
+
+      const start = document.getElementById('th-sync-start').value;
+      const end = document.getElementById('th-sync-end').value;
+      const overwrite = document.getElementById('th-sync-overwrite').checked;
+      
+      if (!calId || !start || !end) {
+          ui_setStatus('scheduling-status', 'Please select Calendar, Start Date, and End Date.', 'error');
+          return;
+      }
+      
+      const action = overwrite ? "OVERWRITE existing" : "APPEND to";
+      
+      ui_confirm(`Sync Tech Hub shifts to Calendar? This will ${action} 'Tech Hub' events in this range.`, function(yes) {
+          if (yes) {
+              ui_setStatus('scheduling-status', 'Syncing to Calendar... (This may take a moment)', 'loading');
+              google.script.run.withSuccessHandler(function(res) {
+                  if (res.success) {
+                      ui_setStatus('scheduling-status', res.message, 'success');
+                  } else {
+                      ui_setStatus('scheduling-status', 'Sync Failed: ' + res.message, 'error');
+                  }
+              }).api_syncTechHubToCalendar(start, end, calId, overwrite);
+          }
+      });
+  }
+</script>

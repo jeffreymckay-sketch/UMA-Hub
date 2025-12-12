@@ -1,0 +1,413 @@
+<script>
+  // --- SETTINGS MAPPING ---
+  function mapSettingsToUI(allSettings) {
+    console.log("Mapping settings to UI...");
+    const admin = allSettings.adminSettings || {};
+    if(document.getElementById('data-hub-url')) document.getElementById('data-hub-url').value = admin.dataHubUrl || '';
+    if(document.getElementById('logo-file-id')) document.getElementById('logo-file-id').value = admin.logoFileId || '';
+    
+    const course = allSettings.courseImportSettings || {};
+    if(document.getElementById('course-sheet-url')) document.getElementById('course-sheet-url').value = course.sheetUrl || '';
+    if(document.getElementById('course-tab-name')) document.getElementById('course-tab-name').value = course.tabName || '';
+    
+    const exam = allSettings.examSettings || {};
+    if(document.getElementById('exam-calendar-id')) document.getElementById('exam-calendar-id').value = exam.calendarId || '';
+    if(document.getElementById('proctor-capability')) document.getElementById('proctor-capability').value = exam.proctorTag || '';
+    
+    const scheduling = allSettings.schedulingSettings || {};
+    if(document.getElementById('tech-hub-zoom-url')) document.getElementById('tech-hub-zoom-url').value = scheduling.zoomUrl || '';
+    if(document.getElementById('main-scheduling-calendar-id')) document.getElementById('main-scheduling-calendar-id').value = scheduling.calendarId || '';
+    
+    const nursing = allSettings.nursingExamSettings || {};
+    if(document.getElementById('nursing-sheet-url')) document.getElementById('nursing-sheet-url').value = nursing.spreadsheetUrl || '';
+    if(document.getElementById('nursing-folder-url')) document.getElementById('nursing-folder-url').value = nursing.targetFolderId || '';
+    if(document.getElementById('nursing-report-email')) document.getElementById('nursing-report-email').value = nursing.reportEmail || '';
+    if(document.getElementById('nursing-report-days')) document.getElementById('nursing-report-days').value = nursing.reportDaysForward || '7';
+    if(document.getElementById('nursing-report-resolved-toggle')) {
+       document.getElementById('nursing-report-resolved-toggle').checked = nursing.reportResolvedComments === true;
+    }
+    if(document.getElementById('nursing-auto-frequency')) document.getElementById('nursing-auto-frequency').value = nursing.autoTriggerFrequency || 'WEEKLY';
+    if(document.getElementById('nursing-auto-day')) document.getElementById('nursing-auto-day').value = nursing.autoTriggerDay || 'MONDAY';
+    if(document.getElementById('nursing-auto-hour')) document.getElementById('nursing-auto-hour').value = nursing.autoTriggerHour || '8';
+    
+    const reporting = allSettings.reportingSettings || {};
+    if(document.getElementById('reporting-url-input')) { document.getElementById('reporting-url-input').value = reporting.lookerStudioUrl || ''; }
+    if (reporting.lookerStudioUrl && document.getElementById('looker-studio-link')) { 
+        document.getElementById('looker-studio-link').href = reporting.lookerStudioUrl; 
+        document.getElementById('looker-studio-link').style.display = 'inline-block'; 
+    }
+
+    // --- TRIGGER ROSTER LOAD ---
+    // Safely attempt to load the scheduling list if the container exists
+    if(document.getElementById('scheduling-config-list')) {
+        console.log("Found scheduling list container. Loading config...");
+        loadSchedulingConfig();
+    }
+  }
+
+  function handleSaveSettings(key) {
+    var statusId = key + '-status';
+    ui_setStatus(statusId, 'Saving...', 'loading');
+    
+    var settings = {};
+    if (key === 'nursingExamSettings') {
+        settings = { 
+            spreadsheetUrl: document.getElementById('nursing-sheet-url').value.trim(), 
+            targetFolderId: document.getElementById('nursing-folder-url').value.trim(), 
+            reportEmail: document.getElementById('nursing-report-email').value.trim(), 
+            reportDaysForward: document.getElementById('nursing-report-days').value, 
+            reportResolvedComments: document.getElementById('nursing-report-resolved-toggle').checked, 
+            autoTriggerFrequency: document.getElementById('nursing-auto-frequency').value, 
+            autoTriggerDay: document.getElementById('nursing-auto-day').value, 
+            autoTriggerHour: document.getElementById('nursing-auto-hour').value 
+        };
+        google.script.run.withSuccessHandler(function(r){ if(r.success) ui_setStatus(statusId, 'Core saved.', 'success'); }).saveSettings(key, settings);
+        
+        var emailSettings = { 
+            email: settings.reportEmail, 
+            reportDays: settings.reportDaysForward, 
+            reportResolvedComments: settings.reportResolvedComments, 
+            isAuto: document.getElementById('nursing-auto-report-toggle') ? document.getElementById('nursing-auto-report-toggle').checked : false, 
+            autoFrequency: settings.autoTriggerFrequency, 
+            autoDay: settings.autoTriggerDay, 
+            autoHour: settings.autoTriggerHour 
+        };
+        google.script.run.withSuccessHandler(function(r){ if(r.error) ui_setStatus(statusId, r.error, 'error'); else ui_setStatus(statusId, 'Settings Saved!', 'success'); }).nursing_saveEmailSettings(emailSettings);
+        return;
+    }
+    
+    if (key === 'adminSettings') { 
+        settings.dataHubUrl = document.getElementById('data-hub-url').value.trim(); 
+        settings.logoFileId = document.getElementById('logo-file-id').value.trim(); 
+    } else if (key === 'courseImportSettings') { 
+        settings.sheetUrl = document.getElementById('course-sheet-url').value.trim(); 
+        settings.tabName = document.getElementById('course-tab-name').value.trim(); 
+    } else if (key === 'examSettings') { 
+        settings.calendarId = document.getElementById('exam-calendar-id').value.trim(); 
+        settings.proctorTag = document.getElementById('proctor-capability').value.trim(); 
+    } else if (key === 'schedulingSettings') { 
+        settings.zoomUrl = document.getElementById('tech-hub-zoom-url').value.trim(); 
+        settings.calendarId = document.getElementById('main-scheduling-calendar-id').value.trim(); 
+    } else if (key === 'reportingSettings') { 
+        settings.lookerStudioUrl = document.getElementById('reporting-url-input').value.trim(); 
+    } else if (key === 'calendarSettings') {
+        var manualId = document.getElementById('setting-manual-calendar-id').value.trim();
+        var dropdownId = document.getElementById('setting-target-calendar').value;
+        var finalId = manualId ? manualId : dropdownId;
+        settings.targetCalendarId = finalId;
+        settings.sourceTabName = document.getElementById('setting-source-tab').value;
+        settings.savedTemplates = currentTemplates || []; 
+    }
+    
+    google.script.run.withSuccessHandler(function(res) { 
+        if (res.success) { 
+            ui_setStatus(statusId, res.message, 'success'); 
+            if(key==='adminSettings') { setTimeout(() => window.top.location.reload(), 1000); } 
+            if(key==='reportingSettings') { updateLookerStudioLink(); } 
+            if(key==='calendarSettings') { updateConfigStatus(true); loadCurrentCalendarSettings(); } 
+        } else { 
+            ui_setStatus(statusId, res.message, 'error'); 
+        } 
+    }).saveSettings(key, settings);
+  }
+
+  // --- SCHEDULING CONFIGURATION (MANAGE SHIFTS) ---
+  
+  function loadSchedulingConfig() {
+    const statusId = 'sched-config-status';
+    ui_setStatus(statusId, 'Loading shift roster...', 'loading');
+    google.script.run
+      .withSuccessHandler(renderSchedulingConfigTable)
+      .withFailureHandler(function(e) { ui_setStatus(statusId, 'Server Error: ' + e.message, 'error'); })
+      .getSchedulingRosterData();
+  }
+
+  function renderSchedulingConfigTable(response) {
+    const statusId = 'sched-config-status';
+    const container = document.getElementById('scheduling-config-list');
+    
+    if (response.error) {
+       ui_setStatus(statusId, response.error, 'error');
+       return;
+    }
+    
+    const shifts = response.data.manageShifts || [];
+    if (!container) { console.error("Container 'scheduling-config-list' not found."); return; }
+
+    if (shifts.length === 0) {
+      container.innerHTML = '<p>No shift templates found. Add one above.</p><button class="button secondary small" onclick="loadSchedulingConfig()">Refresh List</button>';
+      ui_setStatus(statusId, 'No shifts found.', 'success');
+      return;
+    }
+
+    // Sort by Day then Time
+    const dayOrder = { "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6, "Sunday": 7 };
+    shifts.sort((a, b) => {
+        const d = (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99);
+        if (d !== 0) return d;
+        return a.start.localeCompare(b.start);
+    });
+
+    let html = '<button class="button secondary small" style="margin-bottom:10px;" onclick="loadSchedulingConfig()">Refresh List</button>';
+    html += '<table class="data-table"><thead><tr><th>Day</th><th>Time</th><th>Description</th><th>Zoom?</th><th>Action</th></tr></thead><tbody>';
+    shifts.forEach(s => {
+       html += `<tr>
+         <td>${s.day}</td>
+         <td>${s.start} - ${s.end}</td>
+         <td>${s.desc}</td>
+         <td>${s.zoom ? '✅' : 'No'}</td>
+         <td><button class="button danger small" onclick="handleDeleteShift('${s.id}')">Delete</button></td>
+       </tr>`;
+    });
+    html += '</tbody></table>';
+    
+    container.innerHTML = html;
+    ui_setStatus(statusId, 'Shift roster loaded.', 'success');
+  }
+
+  function handleAddShift() {
+    const statusId = 'sched-config-status';
+    
+    // --- SAFE DOM RETRIEVAL ---
+    const elDesc = document.getElementById('new-shift-desc');
+    const elStart = document.getElementById('new-shift-start');
+    const elEnd = document.getElementById('new-shift-end');
+    const elZoom = document.getElementById('new-shift-zoom');
+    
+    // Check if elements exist
+    if (!elDesc || !elStart || !elEnd) {
+        alert("Error: One or more input fields (Desc, Start, or End) are missing in the HTML. Check IDs.");
+        console.error("Missing Elements:", { Desc: elDesc, Start: elStart, End: elEnd });
+        return;
+    }
+
+    const desc = elDesc.value.trim();
+    const start = elStart.value;
+    const end = elEnd.value;
+    const isZoom = elZoom ? elZoom.checked : false; // Safe check for Zoom
+    
+    // Get Selected Days
+    const days = [];
+    const checkboxes = document.querySelectorAll('.day-checkbox:checked');
+    checkboxes.forEach(cb => days.push(cb.value));
+
+    // Validation
+    if (!desc || !start || !end) {
+      ui_setStatus(statusId, 'Please fill in Description, Start Time, and End Time.', 'error');
+      return;
+    }
+    
+    if (days.length === 0) {
+      ui_setStatus(statusId, 'Please select at least one day.', 'error');
+      return;
+    }
+
+    ui_setStatus(statusId, 'Adding shifts...', 'loading');
+
+    const shiftData = {
+      description: desc,
+      days: days,
+      startTime: start,
+      endTime: end,
+      zoom: isZoom
+    };
+
+    google.script.run
+      .withSuccessHandler(function(response) {
+         if(response.error) { 
+             ui_setStatus(statusId, response.error, 'error'); 
+         } else { 
+           // Clear Inputs
+           elDesc.value = '';
+           document.querySelectorAll('.day-checkbox').forEach(cb => cb.checked = false);
+           renderSchedulingConfigTable(response); 
+           ui_setStatus(statusId, 'Shifts added successfully.', 'success');
+         }
+      })
+      .withFailureHandler(function(e){ 
+          ui_setStatus(statusId, "Server Error: " + e.message, 'error'); 
+      })
+      .addTechHubShift(shiftData);
+  }
+
+  function handleDeleteShift(id) {
+    if(!confirm('Are you sure you want to delete this shift? This will remove it from the roster.')) return;
+    
+    ui_setStatus('sched-config-status', 'Deleting...', 'loading');
+    google.script.run
+      .withSuccessHandler(renderSchedulingConfigTable)
+      .withFailureHandler(function(e){ ui_setStatus('sched-config-status', e.message, 'error'); })
+      .deleteTechHubShift(id);
+  }
+
+  // --- ROLE ASSIGNMENT ---
+  function loadRoleAssignmentData() {
+    ui_setStatus('role-assignment-status', 'Loading staff list...', 'loading');
+    google.script.run.withSuccessHandler(renderRoleAssignmentTable).withFailureHandler(function(e){ ui_setStatus('role-assignment-status', e.message, 'error'); }).api_getStaffForRoleAssignment();
+  }
+
+  function renderRoleAssignmentTable(response) {
+    if (response.error) { ui_setStatus('role-assignment-status', response.error, 'error'); return; }
+    allStaffList = response.data; 
+    const validRoles = response.validRoles;
+    const container = document.getElementById('role-assignment-list');
+    if (allStaffList.length === 0) { container.innerHTML = '<p>No staff members found in the Staff_List tab.</p>'; return; }
+    allStaffList.sort((a, b) => a.name.localeCompare(b.name));
+    let html = '<table class="data-table"><thead><tr><th>Full Name</th><th>Staff ID</th><th>Current Role</th><th>New Role</th><th>Actions</th></tr></thead><tbody>';
+    allStaffList.forEach(staff => {
+        let options = '';
+        let primaryRole = 'Staff';
+        if (staff.currentRole.includes('Admin')) primaryRole = 'Admin';
+        else if (staff.currentRole.includes('Lead')) primaryRole = 'Lead';
+        
+        validRoles.forEach(role => { const isSelected = primaryRole === role ? 'selected' : ''; options += `<option value="${role}" ${isSelected}>${role}</option>`; });
+        
+        html += `<tr><td id="staff-name-${staff.row}">${staff.name}</td><td id="staff-id-${staff.row}">${staff.id}</td><td>${staff.currentRole}</td><td><select id="role-select-${staff.row}" data-staff-id="${staff.id}" data-row-id="${staff.row}">${options}</select></td><td><button class="button secondary" onclick="handleEditStaffDetails('${staff.id}', '${staff.name}', ${staff.row}, '${staff.currentRole}')">Edit</button></td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    ui_setStatus('role-assignment-status', 'Staff list loaded.', 'success');
+  }
+
+  function handleSaveRoleAssignments() {
+    ui_setStatus('role-assignment-status', 'Saving role changes...', 'loading');
+    const roleSelectors = document.querySelectorAll('#role-assignment-list select');
+    const promises = [];
+    let changesMade = 0;
+    let hasError = false;
+    roleSelectors.forEach(select => {
+        const newPrimaryRole = select.value;
+        const staffId = select.getAttribute('data-staff-id');
+        const rowId = select.getAttribute('data-row-id');
+        const originalStaff = allStaffList.find(s => s.id === staffId);
+        
+        let currentPrimary = 'Staff';
+        if (originalStaff.currentRole.includes('Admin')) currentPrimary = 'Admin';
+        else if (originalStaff.currentRole.includes('Lead')) currentPrimary = 'Lead';
+
+        if (originalStaff && currentPrimary !== newPrimaryRole) {
+            changesMade++;
+            let parts = originalStaff.currentRole.split(',').map(s => s.trim());
+            parts = parts.filter(p => p !== 'Admin' && p !== 'Lead' && p !== 'Staff');
+            parts.unshift(newPrimaryRole);
+            const newFullRoleString = parts.join(', ');
+
+            const savePromise = new Promise((resolve, reject) => {
+                google.script.run.withSuccessHandler(function(res) { if (res.success) { resolve(res); } else { hasError = true; reject(new Error(res.message)); } }).withFailureHandler(function(err) { hasError = true; reject(new Error(`Server failed for ${staffId}: ${err}`)); }).api_editStaffMember(staffId, originalStaff.name, staffId, parseInt(rowId), newFullRoleString);
+            });
+            promises.push(savePromise);
+        }
+    });
+    if (changesMade === 0) { ui_setStatus('role-assignment-status', 'No changes detected.', 'success'); return; }
+    Promise.allSettled(promises).then(() => { if (hasError) { ui_setStatus('role-assignment-status', `Errors occurred during batch save. Check console.`, 'error'); } else { ui_setStatus('role-assignment-status', `${changesMade} roles updated! Reloading...`, 'success'); } loadRoleAssignmentData(); }).catch(e => { ui_setStatus('role-assignment-status', `Critical failure during save.`, 'error'); loadRoleAssignmentData(); });
+  }
+
+  function handleEditStaffDetails(oldStaffId, oldFullName, row, currentRoleStr) {
+    document.getElementById('edit-staff-modal-old-id').value = oldStaffId;
+    document.getElementById('edit-staff-modal-row').value = row;
+    document.getElementById('edit-staff-modal-name').value = oldFullName;
+    document.getElementById('edit-staff-modal-id').value = oldStaffId;
+    
+    let primary = 'Staff';
+    if (currentRoleStr && currentRoleStr.includes('Admin')) primary = 'Admin';
+    else if (currentRoleStr && currentRoleStr.includes('Lead')) primary = 'Lead';
+    document.getElementById('edit-staff-modal-primary-role').value = primary;
+
+    document.querySelectorAll('.sub-role-check').forEach(cb => cb.checked = false);
+    
+    if (currentRoleStr) {
+        const parts = currentRoleStr.split(',').map(s => s.trim());
+        parts.forEach(p => {
+            const cb = document.querySelector(`.sub-role-check[value="${p}"]`);
+            if(cb) cb.checked = true;
+        });
+    }
+
+    document.getElementById('edit-staff-status').textContent = '';
+    document.getElementById('edit-staff-overlay').style.display = 'flex';
+  }
+
+  function handleSaveStaffEdit() {
+    const oldStaffId = document.getElementById('edit-staff-modal-old-id').value;
+    const row = parseInt(document.getElementById('edit-staff-modal-row').value);
+    const newFullName = document.getElementById('edit-staff-modal-name').value.trim();
+    const newStaffId = document.getElementById('edit-staff-modal-id').value.trim();
+    const primaryRole = document.getElementById('edit-staff-modal-primary-role').value;
+    
+    const subRoles = [];
+    document.querySelectorAll('.sub-role-check:checked').forEach(cb => subRoles.push(cb.value));
+    
+    const fullRoleParts = [primaryRole, ...subRoles];
+    const newRoleString = fullRoleParts.join(', ');
+
+    const statusId = 'edit-staff-status';
+    if (!newFullName || !newStaffId) { ui_setStatus(statusId, 'Name and Staff ID are required.', 'error'); return; }
+    
+    ui_setStatus(statusId, 'Saving changes...', 'loading');
+    google.script.run.withSuccessHandler(function(res) { 
+        if (res.success) { 
+            document.getElementById('edit-staff-overlay').style.display = 'none'; 
+            ui_setStatus('role-assignment-status', res.message, 'success'); 
+            loadRoleAssignmentData(); 
+        } else { 
+            ui_setStatus(statusId, res.message, 'error'); 
+        } 
+    }).withFailureHandler(function(err) { 
+        ui_setStatus(statusId, 'Server Error: ' + err.message, 'error'); 
+    }).api_editStaffMember(oldStaffId, newFullName, newStaffId, row, newRoleString);
+  }
+
+  function handleCancelStaffEdit() { document.getElementById('edit-staff-overlay').style.display = 'none'; }
+  
+  function handleAddStaff() {
+    const fullName = document.getElementById('new-staff-name').value.trim();
+    const staffId = document.getElementById('new-staff-id').value.trim();
+    const primaryRole = document.getElementById('new-staff-role').value;
+    const statusId = 'add-staff-status';
+    if (!fullName || !staffId) { ui_setStatus(statusId, 'Name and Staff ID are required.', 'error'); return; }
+    ui_setStatus(statusId, 'Adding new staff...', 'loading');
+    google.script.run.withSuccessHandler(function(res) { if (res.success) { ui_setStatus(statusId, res.message, 'success'); document.getElementById('new-staff-name').value = ''; document.getElementById('new-staff-id').value = ''; loadRoleAssignmentData(); } else { ui_setStatus(statusId, res.message, 'error'); } }).withFailureHandler(function(err) { ui_setStatus(statusId, 'Server Error: ' + err.message, 'error'); }).api_staff_create(fullName, staffId, primaryRole); 
+  }
+
+  // --- PERMISSIONS MATRIX ---
+  function loadPermissionsMatrix() {
+    ui_setStatus('permissions-status', 'Loading matrix...', 'loading');
+    google.script.run.withSuccessHandler(function(response) {
+       if (response.error) { ui_setStatus('permissions-status', response.error, 'error'); return; }
+       const matrix = response.matrix; 
+       const container = document.getElementById('permissions-matrix-table');
+       let html = '<table class="data-table" id="perm-table"><thead><tr><th>Page Section</th><th>Admin</th><th>Lead</th><th>Staff</th></tr></thead><tbody>';
+       for (const [pageId, perms] of Object.entries(matrix)) {
+           const adminChecked = perms.Admin ? 'checked' : '';
+           const leadChecked = perms.Lead ? 'checked' : '';
+           const staffChecked = perms.Staff ? 'checked' : '';
+           html += `<tr><td>${pageId}</td><td><input type="checkbox" checked disabled title="Admin always has access"></td><td><input type="checkbox" class="perm-check" data-page="${pageId}" data-role="Lead" ${leadChecked}></td><td><input type="checkbox" class="perm-check" data-page="${pageId}" data-role="Staff" ${staffChecked}></td></tr>`;
+       }
+       html += '</tbody></table>';
+       container.innerHTML = html;
+       ui_setStatus('permissions-status', 'Matrix loaded.', 'success');
+    }).withFailureHandler(function(e) { ui_setStatus('permissions-status', e.message, 'error'); }).api_getAccessControlData();
+  }
+
+  function handleSavePermissions() {
+    ui_confirm('WARNING: Modifying permissions affects all users immediately. Proceed?', function(result) {
+      if (result) {
+        ui_setStatus('permissions-status', 'Saving permissions...', 'loading');
+        const checkboxes = document.querySelectorAll('.perm-check');
+        const newMatrix = {};
+        checkboxes.forEach(cb => {
+            const pageId = cb.getAttribute('data-page');
+            const role = cb.getAttribute('data-role');
+            const isChecked = cb.checked;
+            if (!newMatrix[pageId]) { newMatrix[pageId] = { Admin: true }; }
+            newMatrix[pageId][role] = isChecked;
+        });
+        google.script.run.withSuccessHandler(function(res){ if(res.success) { ui_setStatus('permissions-status', 'Permissions updated.', 'success'); loadAllSettings(); } else { ui_setStatus('permissions-status', res.message, 'error'); } }).withFailureHandler(function(e){ ui_setStatus('permissions-status', e.message, 'error'); }).api_savePermissionsMatrix(newMatrix);
+      }
+    });
+  }
+
+  // --- REPORTING ---
+  function handleGenerateReportData() { ui_setStatus('reporting-status', 'Report generation triggered (Server logic not provided in snippet).', 'success'); }
+  function updateLookerStudioLink() { }
+</script>
