@@ -1,126 +1,13 @@
-<!-- 8. NEW: EVENT DISCOVERY TOOL (Formerly Calendar Inspector) -->
-<div id="page-inspector" class="page">
-  <h1>Event Discovery Tool</h1>
-  <p>Scan a calendar to find frequent keywords and assign them to categories.</p>
-  <div class="form-group inline-group" style="align-items: flex-end;">
-      <div style="flex-grow: 1;">
-          <label>Select Calendar</label>
-          <select id="discovery-calendar-select"><option>Loading...</option></select>
-      </div>
-      <div style="width: 150px;">
-          <label>Lookback Period</label>
-          <select id="discovery-days-back">
-              <option value="30">Last 30 Days</option>
-              <option value="60">Last 60 Days</option>
-              <option value="90">Last 90 Days</option>
-          </select>
-      </div>
-      <button class="button" onclick="discovery_handleScan()">Scan Calendar</button>
-  </div>
-  <div id="discovery-status" class="status-message"></div>
-  <div id="discovery-results-area" style="display:none; margin-top:20px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-          <h4>Frequent Patterns Found</h4>
-          <button class="button" onclick="discovery_handleSave()">Save Rules</button>
-      </div>
-      <div id="discovery-table-container" class="results-container"></div>
-  </div>
-</div>
-
-<!-- 10. USER GUIDE -->
-<div id="page-guide" class="page">
-  <h1>User Guide</h1>
-  <p>Welcome to the manual. Read this before you panic.</p>
-  
-  <details class="guide-card">
-      <summary class="guide-header">🏠 My Dashboard</summary>
-      <div class="guide-content">
-          <p><strong>Mission Control.</strong> This is where you tell us when you are busy so we don't annoy you.</p>
-          <ul>
-              <li><strong>Availability:</strong> Add times you absolutely cannot work. We will try to respect this.</li>
-              <li><strong>Preferences:</strong> Tell us if you love mornings or hate evenings. We might respect this.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">🖥️ Tech Hub</summary>
-      <div class="guide-content">
-          <p><strong>The Roster.</strong> Who is sitting in the chair? Put them there.</p>
-          <ul>
-              <li><strong>Roster Management:</strong> Assign staff to shifts. If the box is empty, the room is empty, and that is bad.</li>
-              <li><strong>Shift Config:</strong> Create the slots. Don't delete shifts unless you want to delete history.</li>
-              <li><strong>Calendar Sync:</strong> Push the roster to Google Calendar so people actually show up.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">🎓 MST Support</summary>
-      <div class="guide-content">
-          <p><strong>Course Support.</strong> Matching humans to classes.</p>
-          <ul>
-              <li><strong>Assignments:</strong> Link a staff member to a course.</li>
-              <li><strong>Calendar Sync:</strong> Create invites for the staff member so they know where to go.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">🗃️ Data Management</summary>
-      <div class="guide-content">
-          <p><strong>The Bulk Editor.</strong> For when you need to change 50 things at once and don't want to click 50 times.</p>
-          <ul>
-              <li><strong>Course Lookup:</strong> Find a specific class without scrolling for days.</li>
-              <li><strong>Bulk Editor:</strong> Connect to any sheet and update a column for everyone at once. Use with caution.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">⚕️ Nursing & 🧪 MLT Proctoring</summary>
-      <div class="guide-content">
-          <p><strong>The Document Factory.</strong> Turns spreadsheet rows into pretty Google Docs.</p>
-          <ul>
-              <li><strong>Generator:</strong> Scans the spreadsheet for "Exam" and "Date" and makes a document for each one.</li>
-              <li><strong>Accommodations:</strong> Click the "Accommodations" button on a doc to add special notes.</li>
-              <li><strong>Calendar Sync:</strong> Puts the exams on a Google Calendar so you don't forget them.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">📊 Analytics & Explorer</summary>
-      <div class="guide-content">
-          <p><strong>The Detective Kit.</strong> Find out who is double-booked.</p>
-          <ul>
-              <li><strong>Calendar Inspector:</strong> Select multiple calendars to see a combined list of everything happening. Great for finding conflicts.</li>
-              <li><strong>Report Wizard:</strong> Creates a safe copy of data in a new sheet so you can make Pivot Tables without breaking the app.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">⚙️ Settings</summary>
-      <div class="guide-content">
-          <p><strong>The Danger Zone.</strong> Don't touch unless you know what you're doing.</p>
-          <ul>
-              <li><strong>Staff List:</strong> Add new people here. If they aren't in this list, they don't exist to the system.</li>
-              <li><strong>Permissions:</strong> Control who can see what. If you lock yourself out, call an Admin.</li>
-              <li><strong>Configurations:</strong> Manage all URLs, Calendar IDs, and Shift definitions here.</li>
-          </ul>
-      </div>
-  </details>
-
-</div>
-
 <!-- 7. GLOBAL SETTINGS (CONSOLIDATED) -->
 <div id="page-settings" class="page">
   <h1>Global Settings</h1>
   <div class="tab-nav">
       <div class="tab-nav-item active" onclick="navigateToSubTab(this, 'tab-set-general')">General & Access</div>
+      <!-- UPDATED: Added loadRoleAssignmentData() trigger -->
       <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-staff'); loadRoleAssignmentData();" id="settings-role-assignment-nav">Staff Management</div>
+      <!-- UPDATED: Added loadSchedulingRosterData() trigger -->
       <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-scheduling'); loadSchedulingRosterData();">Scheduling Config</div>
+      <!-- UPDATED: Added mlt_loadSettings() trigger -->
       <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-proctoring'); mlt_loadSettings();">Proctoring Config</div>
       <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-reporting')">Reporting & Data</div>
   </div>
@@ -167,6 +54,15 @@
 
   <!-- 3. SCHEDULING CONFIG -->
   <div id="tab-set-scheduling" class="tab-page">
+      <h3>Course Data Connection (MST)</h3>
+      <p class="setting-description">Connect to an external spreadsheet to import the Course Schedule. Leave blank to use local data only.</p>
+      <div class="form-group"><label>External Sheet URL</label><input type="text" id="course-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+      <div class="form-group"><label>Tab Name</label><input type="text" id="course-tab-name" placeholder="e.g. Master_Schedule"></div>
+      <button class="button" onclick="handleSaveSettings('courseImportSettings')">Save Connection</button>
+      <div id="courseImportSettings-status" class="status-message"></div>
+      
+      <hr class="divider">
+
       <h3>Tech Hub Shift Configuration</h3>
       <p class="setting-description">Define the shift slots available in the Tech Hub Roster.</p>
       
