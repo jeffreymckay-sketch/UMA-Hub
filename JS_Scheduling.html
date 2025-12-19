@@ -1,7 +1,7 @@
 <script>
   // --- ROSTER & SHIFT MANAGEMENT ---
   var cachedCourseAssignments = [];
-  var cachedMstStaffList = []; // NEW: Store staff list for dropdowns
+  var cachedMstStaffList = []; // Store staff list for dropdowns
   var courseSortState = { field: 'staffName', asc: true };
 
   // Helper to update status on BOTH pages (Tech Hub & MST)
@@ -93,41 +93,22 @@
         renderCourseTable();
     }
     
-    // POPULATE DROPDOWNS
-    const staffSelect = document.getElementById('sched-staff-select');
-    const itemSelect = document.getElementById('sched-item-select');
-    
-    if (staffSelect && data.mstStaffList) { 
-        staffSelect.innerHTML = ''; 
-        data.mstStaffList.forEach(s => { 
-            const opt = document.createElement('option'); 
-            opt.value = s.id; 
-            opt.text = s.name; 
-            staffSelect.appendChild(opt); 
-        }); 
-    }
-    
-    if (itemSelect && data.courseItems) { 
-        itemSelect.innerHTML = ''; 
-        data.courseItems.forEach(c => { 
-            const opt = document.createElement('option'); 
-            opt.value = c.id; 
-            opt.text = c.name; 
-            itemSelect.appendChild(opt); 
-        }); 
-    }
-    
     setSchedulingStatus('Data loaded.', 'success');
   }
 
   function renderCourseTable() {
       const container = document.getElementById('sched-assignments-list');
+      
+      // Button Container
+      let html = '<div style="margin-bottom:10px; text-align:right; display:flex; justify-content:flex-end; gap:10px;">';
+      html += '<button class="button" onclick="handleForceRemoteSync()">🔄 Update from Master Schedule</button>';
+      html += '<button class="button secondary" onclick="handleExportCourses()">Export to Sheet</button>';
+      html += '</div>';
+
       if (!cachedCourseAssignments || cachedCourseAssignments.length === 0) { 
-          container.innerHTML = '<p>No course assignments found in Course_Schedule.</p>';
+          container.innerHTML = html + '<p>No course assignments found in Course_Schedule. Click "Update from Master Schedule" to fetch data.</p>';
           return; 
       }
-
-      let html = '<div style="margin-bottom:10px; text-align:right;"><button class="button secondary" onclick="handleExportCourses()">Export to Sheet</button></div>';
 
       html += '<table class="data-table"><thead><tr>';
       html += `<th class="sortable-header" onclick="handleSortCourses('staffName')">Assigned Staff</th>`;
@@ -168,6 +149,22 @@
       container.innerHTML = html;
   }
 
+  // Handler for Manual Sync
+  function handleForceRemoteSync() {
+      if(!confirm("Update local data from the External Master Schedule? This will fetch new classes and fix durations. It may take a few seconds.")) return;
+      
+      setSchedulingStatus('Updating from Master Schedule...', 'loading');
+      
+      google.script.run.withSuccessHandler(function(res) {
+          if (res.success) {
+              setSchedulingStatus(res.message, 'success');
+              loadSchedulingRosterData(); // Reload the view to show changes
+          } else {
+              setSchedulingStatus('Update Failed: ' + res.message, 'error');
+          }
+      }).api_forceRemoteSync();
+  }
+
   function handleInlineAssignmentUpdate(courseId) {
       const select = document.getElementById(`assign-select-${courseId}`);
       const newStaffId = select.value;
@@ -199,7 +196,7 @@
   function handleExportCourses() {
       if (cachedCourseAssignments.length === 0) return;
       
-      const btn = document.querySelector('#sched-assignments-list button');
+      const btn = document.querySelector('#sched-assignments-list button.secondary');
       if(btn) btn.innerText = "Exporting...";
       
       google.script.run.withSuccessHandler(function(res) {
@@ -210,7 +207,6 @@
   }
 
   function handleUnassignCourse(courseId) {
-      // Legacy wrapper - now handled by inline dropdown
       if(!confirm("Are you sure you want to unassign this staff member?")) return;
       setSchedulingStatus('Unassigning...', 'loading');
       google.script.run.withSuccessHandler(renderSchedulingRoster).api_unassignCourse(courseId);
@@ -270,7 +266,6 @@
   }
 
   function handleDeleteShift(id) { if(confirm("Delete this shift?")) { google.script.run.withSuccessHandler(renderSchedulingRoster).deleteTechHubShift(id); } }
-  function handleSaveAssignment() { const staffId = document.getElementById('sched-staff-select').value; const itemId = document.getElementById('sched-item-select').value; google.script.run.withSuccessHandler(renderSchedulingRoster).saveNewAssignment(staffId, itemId, 'Course'); }
   function handleDeleteAssignment(id) { google.script.run.withSuccessHandler(renderSchedulingRoster).deleteAssignment(id); }
   function handleClearAllShifts() { ui_confirm("Delete ALL shifts? This clears the roster structure.", function(yes){ if(yes) { google.script.run.withSuccessHandler(renderSchedulingRoster).clearAllShifts(); } }); }
 

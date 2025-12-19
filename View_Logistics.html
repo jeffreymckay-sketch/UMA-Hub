@@ -124,7 +124,7 @@
       <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-mst-sync')">Calendar Sync</div>
   </div>
   
-  <!-- NEW: Status Message Box for MST -->
+  <!-- Status Message Box for MST -->
   <div id="mst-status" class="status-message"></div>
 
   <div id="tab-mst-assign" class="tab-page active">
@@ -132,9 +132,7 @@
           <h3>Assign Staff to Courses</h3>
           <button class="button secondary btn-sm" onclick="loadSchedulingRosterData()">🔄 Refresh Data</button>
       </div>
-      <div class="form-group"><label>Staff Member</label><select id="sched-staff-select"><option>Loading...</option></select></div>
-      <div class="form-group"><label>Course</label><select id="sched-item-select"><option>Loading...</option></select></div>
-      <button class="button" id="sched-save-btn" onclick="handleSaveAssignment()">Save Assignment</button>
+      <!-- REMOVED: Manual Assignment Form (Now handled by table below) -->
       <div id="sched-assignments-list" class="results-container"><p>Loading assignments...</p></div>
   </div>
 

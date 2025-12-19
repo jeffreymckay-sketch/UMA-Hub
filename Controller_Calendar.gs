@@ -4,103 +4,46 @@
  * -------------------------------------------------------------------
  */
 
-/**
- * Returns a list of calendars the user has write access to.
- */
 function getWritableCalendars() {
   try {
     const calendars = CalendarApp.getAllOwnedCalendars();
-    const writable = calendars.map(cal => ({
-      id: cal.getId(),
-      name: cal.getName(),
-      description: cal.getDescription()
-    }));
-    
+    const writable = calendars.map(cal => ({ id: cal.getId(), name: cal.getName() }));
     writable.sort((a, b) => a.name.localeCompare(b.name));
-    
     return { success: true, data: writable };
-  } catch (e) {
-    console.error("Error fetching calendars: " + e.message);
-    return { success: false, message: "Error fetching calendars: " + e.message };
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * Returns a list of ALL calendars the user can view.
- */
 function getAllViewableCalendars() {
   try {
     const calendars = CalendarApp.getAllCalendars();
-    const viewable = calendars.map(cal => ({
-      id: cal.getId(),
-      name: cal.getName(),
-      description: cal.getDescription()
-    }));
-    
+    const viewable = calendars.map(cal => ({ id: cal.getId(), name: cal.getName() }));
     viewable.sort((a, b) => a.name.localeCompare(b.name));
-    
     return { success: true, data: viewable };
-  } catch (e) {
-    console.error("Error fetching calendars: " + e.message);
-    return { success: false, message: "Error fetching calendars: " + e.message };
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * Returns the name of the currently configured target calendar.
- */
 function api_getCalendarTargetName() {
   try {
     const settings = getSettings('calendarSettings');
-    if (!settings || !settings.targetCalendarId) {
-      return { success: false, message: "No calendar configured." };
-    }
-    
+    if (!settings || !settings.targetCalendarId) return { success: false, message: "No calendar configured." };
     const cal = CalendarApp.getCalendarById(settings.targetCalendarId);
-    if (!cal) {
-      return { success: false, message: "Calendar not found (ID invalid)." };
-    }
-    
-    return { success: true, name: cal.getName() };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
+    return cal ? { success: true, name: cal.getName() } : { success: false, message: "Calendar not found." };
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * Syncs data from the Source Sheet to the Target Calendar.
- */
-function api_syncSheetToCalendar(templateName) {
-  return core_syncLogic(templateName, false); // false = execute
-}
+function api_syncSheetToCalendar(templateName) { return core_syncLogic(templateName, false); }
+function api_previewSheetToCalendar(templateName) { return core_syncLogic(templateName, true); }
 
-/**
- * Previews changes without applying them.
- */
-function api_previewSheetToCalendar(templateName) {
-  return core_syncLogic(templateName, true); // true = preview
-}
-
-/**
- * Core Sync Logic (Shared by Sync and Preview)
- * UPDATED: Added Throttling (Utilities.sleep) to prevent Rate Limit errors.
- */
 function core_syncLogic(templateName, isPreview) {
   try {
-    // 1. Load Settings
     const settings = getSettings('calendarSettings');
-    if (!settings.targetCalendarId || !settings.sourceTabName) {
-      return { success: false, message: "Calendar or Source Tab not configured." };
-    }
+    if (!settings.targetCalendarId || !settings.sourceTabName) return { success: false, message: "Config missing." };
 
-    // 2. Get Data
     const ss = getMasterDataHub();
     const sheet = ss.getSheetByName(settings.sourceTabName);
-    if (!sheet) return { success: false, message: `Tab "${settings.sourceTabName}" not found.` };
+    if (!sheet) return { success: false, message: "Tab not found." };
     
     const data = sheet.getDataRange().getValues();
-    
-    // Handle Header Row (Row 2 detection logic)
     let headerRowIdx = 0;
     for(let r=0; r<Math.min(data.length, 5); r++) {
         const rowStr = data[r].join(' ').toLowerCase();
@@ -112,191 +55,278 @@ function core_syncLogic(templateName, isPreview) {
 
     const headers = data[headerRowIdx];
     const rows = data.slice(headerRowIdx + 1);
-
-    // 3. Get Template Pattern
-    let pattern = "{{Course}} - {{Faculty}}"; // Default
+    let pattern = "{{Course}} - {{Faculty}}";
     if (settings.savedTemplates) {
       const t = settings.savedTemplates.find(x => x.name === templateName);
       if (t) pattern = t.pattern;
     }
 
-    // 4. Prepare Calendar
     const calendar = CalendarApp.getCalendarById(settings.targetCalendarId);
     const stats = { created: 0, updated: 0, skipped: 0, errors: 0 };
     const changes = [];
+    const warnings = []; 
 
-    // 5. Identify Columns
     const hMap = headers.map(h => String(h).toLowerCase().replace(/[\s_]/g, ''));
-    
     const colIdx = {
         id: hMap.indexOf('eventid'),
         course: hMap.indexOf('course'),
-        date: hMap.indexOf('startdate'),
+        startDate: hMap.findIndex(h => h.includes('startdate')),
+        endDate: hMap.findIndex(h => h.includes('enddate')),
+        day: hMap.indexOf('day'),
         startTime: hMap.indexOf('runtime'), 
         ampm: hMap.indexOf('timeofday'),    
-        location: hMap.indexOf('bxlocation')
+        location: hMap.indexOf('bxlocation'),
+        duration: hMap.indexOf('coveragehrs')
     };
     
-    // Fallbacks
-    if (colIdx.date === -1) colIdx.date = hMap.findIndex(h => h.includes('date'));
     if (colIdx.startTime === -1) colIdx.startTime = hMap.findIndex(h => h.includes('time'));
     if (colIdx.location === -1) colIdx.location = hMap.findIndex(h => h.includes('location') || h.includes('room'));
 
-    // Determine Date Range
+    // Cache Existing Events
     let minDate = new Date(8640000000000000);
     let maxDate = new Date(-8640000000000000);
 
     rows.forEach(row => {
-        if (colIdx.date > -1 && row[colIdx.date]) {
-            const d = new Date(row[colIdx.date]);
+        if (colIdx.startDate > -1 && row[colIdx.startDate]) {
+            const d = new Date(row[colIdx.startDate]);
             if (!isNaN(d.getTime())) {
                 if (d < minDate) minDate = d;
-                if (d > maxDate) maxDate = d;
+                if (colIdx.endDate > -1 && row[colIdx.endDate]) {
+                    const ed = new Date(row[colIdx.endDate]);
+                    if (ed > maxDate) maxDate = ed;
+                } else {
+                    if (d > maxDate) maxDate = d;
+                }
             }
         }
     });
 
-    // Fetch Existing Events
     const eventIdMap = new Map(); 
-    const legacyMap = new Map();  
+    const allExistingEvents = []; 
 
     if (minDate < maxDate) {
         minDate.setHours(0,0,0,0);
         maxDate.setHours(23,59,59,999);
         const existingEvents = calendar.getEvents(minDate, maxDate);
-        
         existingEvents.forEach(e => {
             const tagId = e.getTag('StaffHub_EventID');
-            if (tagId) {
-                eventIdMap.set(tagId, e);
-            } else {
-                const key = e.getStartTime().toISOString();
-                if (!legacyMap.has(key)) legacyMap.set(key, []);
-                legacyMap.get(key).push(e);
-            }
+            if (tagId) eventIdMap.set(tagId, e);
+            allExistingEvents.push(e); 
         });
     }
 
-    // 6. Process Rows
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        const rowId = (colIdx.id > -1) ? String(row[colIdx.id]).trim() : null;
-        const courseName = (colIdx.course > -1) ? String(row[colIdx.course]).trim() : "";
+        const rowNum = i + headerRowIdx + 2;
         
-        // Construct Title
+        const rowId = (colIdx.id > -1) ? String(row[colIdx.id]).trim() : null;
+        if (!rowId) {
+            if (row[colIdx.course]) warnings.push({ row: rowNum, message: "Skipped: Missing Event ID" });
+            continue; 
+        }
+
         let title = pattern;
-        headers.forEach((h, idx) => {
-            title = title.replace(new RegExp(`{{${h}}}`, 'gi'), row[idx]);
-        });
+        headers.forEach((h, idx) => { title = title.replace(new RegExp(`{{${h}}}`, 'gi'), row[idx]); });
         title = title.replace(/{{.*?}}/g, '').trim();
         if (!title || title === '-') title = "Untitled Event";
 
-        // Determine Time
+        // --- TIME PARSING ---
         let startDt = null;
         let endDt = null;
+        let seriesEndDate = null;
 
-        if (colIdx.date > -1 && row[colIdx.date]) {
-             const dVal = row[colIdx.date];
+        if (colIdx.startDate > -1 && row[colIdx.startDate]) {
+             const dVal = row[colIdx.startDate];
              let tStr = (colIdx.startTime > -1) ? String(row[colIdx.startTime]) : "09:00";
              const ampmVal = (colIdx.ampm > -1) ? String(row[colIdx.ampm]).trim() : "";
 
-             if (tStr.includes('-')) tStr = tStr.split('-')[0].trim();
-             
              startDt = new Date(dVal);
-             const timeMatch = tStr.match(/(\d+):(\d+)/);
+             if (isNaN(startDt.getTime())) {
+                 warnings.push({ row: rowNum, message: "Skipped: Invalid Start Date" });
+                 continue;
+             }
+
+             // Robust Split: Handle "9:00-11:00", "9:00 - 11:00", "9:00 to 11:00"
+             let startPart = tStr;
+             let endPart = null;
+             
+             if (tStr.includes('-')) {
+                 const parts = tStr.split('-');
+                 startPart = parts[0].trim();
+                 endPart = parts[1].trim();
+             } else if (tStr.toLowerCase().includes(' to ')) {
+                 const parts = tStr.toLowerCase().split(' to ');
+                 startPart = parts[0].trim();
+                 endPart = parts[1].trim();
+             }
+
+             const timeMatch = startPart.match(/(\d+):(\d+)/);
              if (timeMatch) {
                  let h = parseInt(timeMatch[1]);
                  const m = parseInt(timeMatch[2]);
-                 if (ampmVal.toLowerCase() === 'pm' && h < 12) h += 12;
-                 if (ampmVal.toLowerCase() === 'am' && h === 12) h = 0;
-                 if (!ampmVal && tStr.toLowerCase().includes('pm') && h < 12) h += 12;
+                 
+                 const isPM = ampmVal.toLowerCase() === 'pm' || (!ampmVal && startPart.toLowerCase().includes('pm'));
+                 const isAM = ampmVal.toLowerCase() === 'am' || (!ampmVal && startPart.toLowerCase().includes('am'));
+                 
+                 if (isPM && h < 12) h += 12;
+                 if (isAM && h === 12) h = 0;
+                 
                  startDt.setHours(h, m, 0, 0);
              } else {
                  startDt.setHours(9, 0, 0, 0);
              }
              
-             let durationMinutes = 60;
-             if (colIdx.duration > -1 && row[colIdx.duration]) {
-                 const durVal = row[colIdx.duration];
-                 if (String(durVal).includes(':')) {
-                     const parts = String(durVal).split(':');
-                     durationMinutes = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
-                 } else if (typeof durVal === 'number') {
-                     if (durVal < 1) durationMinutes = durVal * 24 * 60;
-                     else durationMinutes = durVal;
+             // END TIME LOGIC
+             let explicitEndFound = false;
+
+             // 1. Try Explicit End Time from String (Highest Priority)
+             if (endPart) {
+                 const endMatch = endPart.match(/(\d+):(\d+)/);
+                 if (endMatch) {
+                     let eh = parseInt(endMatch[1]);
+                     const em = parseInt(endMatch[2]);
+                     
+                     // AM/PM Inference
+                     // If End < Start (e.g. 11:00 - 1:00), assume PM wrap
+                     if (eh < startDt.getHours()) eh += 12;
+                     // If Start is PM (e.g. 1:00 PM), End must be PM
+                     if (startDt.getHours() >= 12 && eh < 12) eh += 12;
+
+                     endDt = new Date(startDt);
+                     endDt.setHours(eh, em, 0, 0);
+                     explicitEndFound = true;
                  }
              }
-             endDt = new Date(startDt.getTime() + (durationMinutes * 60000));
+             
+             // 2. Fallback to Duration Column
+             if (!explicitEndFound) {
+                 let durationMinutes = 60;
+                 if (colIdx.duration > -1 && row[colIdx.duration]) {
+                     const durVal = row[colIdx.duration];
+                     if (typeof durVal === 'number') {
+                         if (durVal < 1) durationMinutes = durVal * 24 * 60;
+                         else if (durVal <= 12) durationMinutes = durVal * 60;
+                         else durationMinutes = durVal;
+                     }
+                 }
+                 if (durationMinutes < 15) durationMinutes = 60;
+                 endDt = new Date(startDt.getTime() + (durationMinutes * 60000));
+             }
+
+             if (colIdx.endDate > -1 && row[colIdx.endDate]) {
+                 seriesEndDate = new Date(row[colIdx.endDate]);
+                 seriesEndDate.setHours(23, 59, 59);
+             }
+        } else {
+            warnings.push({ row: rowNum, message: "Skipped: No Start Date column found" });
+            continue;
         }
 
         if (startDt && !isNaN(startDt.getTime())) {
             const location = (colIdx.location > -1) ? row[colIdx.location] : "";
+            const dayStr = (colIdx.day > -1) ? String(row[colIdx.day]) : "";
+            
+            // --- MATCHING LOGIC ---
             let eventToUpdate = null;
             let matchType = "NEW";
 
-            // A. Check ID Match
-            if (rowId && eventIdMap.has(rowId)) {
+            if (eventIdMap.has(rowId)) {
                 eventToUpdate = eventIdMap.get(rowId);
                 matchType = "ID";
-            } 
-            // B. Check Legacy Match
-            else {
-                const timeKey = startDt.toISOString();
-                if (legacyMap.has(timeKey)) {
-                    const candidates = legacyMap.get(timeKey);
-                    eventToUpdate = candidates.find(e => e.getTitle().includes(courseName));
-                    if (eventToUpdate) matchType = "LEGACY";
-                }
+            } else {
+                const targetDay = startDt.getDay();
+                const candidates = allExistingEvents.filter(e => e.getStartTime().getDay() === targetDay);
+                const targetTitle = title.toLowerCase().replace(/\s+/g, '');
+                
+                eventToUpdate = candidates.find(e => {
+                    const eTitle = e.getTitle().toLowerCase().replace(/\s+/g, '');
+                    const eStart = e.getStartTime();
+                    const timeDiff = Math.abs(eStart.getHours()*60 + eStart.getMinutes() - (startDt.getHours()*60 + startDt.getMinutes()));
+                    const isTimeClose = timeDiff <= 45;
+                    const isTitleMatch = eTitle.includes(targetTitle) || targetTitle.includes(eTitle);
+                    return isTimeClose && isTitleMatch;
+                });
+
+                if (eventToUpdate) matchType = "LEGACY";
             }
-
+            
             if (eventToUpdate) {
-                // UPDATE EXISTING
-                if (!isPreview) {
-                    let needsUpdate = false;
-                    
-                    // Only call API if data actually changed (Saves Quota)
-                    if (eventToUpdate.getTitle() !== title) {
-                        eventToUpdate.setTitle(title);
-                        needsUpdate = true;
-                    }
-                    if (eventToUpdate.getLocation() !== location) {
-                        eventToUpdate.setLocation(location);
-                        needsUpdate = true;
-                    }
-                    
-                    // Always ensure tags are set for future
-                    if (rowId && eventToUpdate.getTag('StaffHub_EventID') !== rowId) {
-                        eventToUpdate.setTag('StaffHub_EventID', rowId);
-                        needsUpdate = true;
-                    }
-                    if (eventToUpdate.getTag('AppSource') !== 'StaffHub') {
-                        eventToUpdate.setTag('AppSource', 'StaffHub');
-                        needsUpdate = true;
-                    }
+                // --- DIFF LOGIC ---
+                const diffs = [];
+                
+                if (String(eventToUpdate.getTitle()).trim() !== String(title).trim()) {
+                    diffs.push(`Title: "${eventToUpdate.getTitle()}" → "${title}"`);
+                }
+                
+                const loc1 = String(eventToUpdate.getLocation() || "").trim();
+                const loc2 = String(location || "").trim();
+                if (loc1 !== loc2) {
+                    diffs.push(`Loc: "${loc1}" → "${loc2}"`);
+                }
+                
+                const existStart = eventToUpdate.getStartTime();
+                const existEnd = eventToUpdate.getEndTime();
+                
+                const time1 = `${formatTime(existStart)} - ${formatTime(existEnd)}`;
+                const time2 = `${formatTime(startDt)} - ${formatTime(endDt)}`;
+                
+                // Compare minutes to avoid second-level diffs
+                const isTimeDiff = Math.abs(existStart.getTime() - startDt.getTime()) > 60000 || 
+                                   Math.abs(existEnd.getTime() - endDt.getTime()) > 60000;
 
-                    if (needsUpdate) {
+                if (isTimeDiff) {
+                     diffs.push(`Time: ${time1} → ${time2}`);
+                }
+
+                if (diffs.length > 0 || matchType === "LEGACY") {
+                    if (!isPreview) {
+                        if (matchType === "LEGACY") eventToUpdate.setTag('StaffHub_EventID', rowId);
+                        if (diffs.length > 0) {
+                            eventToUpdate.setTitle(title);
+                            eventToUpdate.setLocation(location);
+                            // Only update time if it's a single event or we are confident
+                            // For series, we usually can't update time easily without recreating
+                        }
                         stats.updated++;
-                        // THROTTLE: Sleep 800ms after every update to prevent "Too Many Requests"
-                        Utilities.sleep(800); 
                     } else {
-                        stats.skipped++;
+                        const actionLabel = matchType === "LEGACY" ? "LINK & UPDATE" : "UPDATE";
+                        const details = diffs.length > 0 ? diffs.join("<br>") : "Restoring Link (ID Mismatch)";
+                        changes.push({ row: rowNum, action: actionLabel, title: title, details: details });
+                        stats.updated++;
                     }
                 } else {
-                    changes.push({ row: i + headerRowIdx + 2, action: "UPDATE (" + matchType + ")", title: title, details: "Updating existing event" });
-                    stats.updated++;
+                    stats.skipped++;
                 }
+
             } else {
                 // CREATE NEW
                 if (!isPreview) {
-                    const evt = calendar.createEvent(title, startDt, endDt, { location: location });
-                    if (rowId) evt.setTag('StaffHub_EventID', rowId);
-                    evt.setTag('AppSource', 'StaffHub');
-                    stats.created++;
-                    
-                    // THROTTLE: Sleep 1000ms after creation (Creation is heavier than update)
-                    Utilities.sleep(1000); 
+                    if (seriesEndDate && seriesEndDate > startDt) {
+                        const weekday = parseDayOfWeek(dayStr);
+                        if (weekday) {
+                            const recurrence = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekday(weekday).until(seriesEndDate);
+                            const series = calendar.createEventSeries(title, startDt, endDt, recurrence, { location: location });
+                            series.setTag('StaffHub_EventID', rowId);
+                            series.setTag('AppSource', 'StaffHub');
+                            stats.created++;
+                            Utilities.sleep(1500); 
+                        } else {
+                            const evt = calendar.createEvent(title, startDt, endDt, { location: location });
+                            evt.setTag('StaffHub_EventID', rowId);
+                            evt.setTag('AppSource', 'StaffHub');
+                            stats.created++;
+                            Utilities.sleep(800);
+                        }
+                    } else {
+                        const evt = calendar.createEvent(title, startDt, endDt, { location: location });
+                        evt.setTag('StaffHub_EventID', rowId);
+                        evt.setTag('AppSource', 'StaffHub');
+                        stats.created++;
+                        Utilities.sleep(800);
+                    }
                 } else {
-                    changes.push({ row: i + headerRowIdx + 2, action: "CREATE", title: title, details: startDt.toLocaleString() });
+                    const type = (seriesEndDate && seriesEndDate > startDt) ? "SERIES" : "SINGLE";
+                    changes.push({ row: rowNum, action: "CREATE", title: title, details: `${type} starting ${startDt.toLocaleString()}` });
                     stats.created++;
                 }
             }
@@ -304,25 +334,42 @@ function core_syncLogic(templateName, isPreview) {
     }
     
     return { 
-      success: true, 
-      isPreview: isPreview, 
-      stats: stats, 
-      changes: changes,
-      message: isPreview ? `Preview: ${stats.created} Create, ${stats.updated} Update.` : `Sync Complete. Created ${stats.created}, Updated ${stats.updated}, Skipped ${stats.skipped}.` 
+        success: true, 
+        isPreview: isPreview, 
+        stats: stats, 
+        changes: changes, 
+        warnings: warnings, 
+        message: isPreview ? `Preview: ${stats.created} Create, ${stats.updated} Update.` : `Sync Complete. Created ${stats.created}.` 
     };
 
-  } catch (e) {
-    return { success: false, message: "Sync Error: " + e.message };
-  }
+  } catch (e) { return { success: false, message: "Sync Error: " + e.message }; }
 }
 
-/**
- * Sends invites to staff based on the synced events.
- * Checks existing guest list to avoid duplicate invites.
- */
+function parseDayOfWeek(dayStr) {
+    if (!dayStr) return null;
+    const s = dayStr.toLowerCase().trim();
+    if (s.includes('mon')) return CalendarApp.Weekday.MONDAY;
+    if (s.includes('tue')) return CalendarApp.Weekday.TUESDAY;
+    if (s.includes('wed')) return CalendarApp.Weekday.WEDNESDAY;
+    if (s.includes('thu')) return CalendarApp.Weekday.THURSDAY;
+    if (s.includes('fri')) return CalendarApp.Weekday.FRIDAY;
+    if (s.includes('sat')) return CalendarApp.Weekday.SATURDAY;
+    if (s.includes('sun')) return CalendarApp.Weekday.SUNDAY;
+    return null;
+}
+
+function formatTime(date) {
+    let h = date.getHours();
+    const m = date.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; 
+    const mStr = m < 10 ? '0'+m : m;
+    return `${h}:${mStr} ${ampm}`;
+}
+
 function api_syncStaffToCalendar() {
   try {
-    // 1. Setup
     const settings = getSettings('calendarSettings');
     if (!settings.targetCalendarId) return { success: false, message: "No calendar configured." };
     
@@ -333,82 +380,74 @@ function api_syncStaffToCalendar() {
     const assignData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_ASSIGNMENTS);
     const staffData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_LIST);
 
-    // 2. Build Maps
-    const staffEmailMap = new Map();
+    const allStaffEmails = new Set();
     for (let i = 1; i < staffData.length; i++) {
-        if (staffData[i][1]) staffEmailMap.set(String(staffData[i][1]).trim(), String(staffData[i][1]).trim());
+        if (staffData[i][1]) allStaffEmails.add(String(staffData[i][1]).trim().toLowerCase());
     }
 
     const assignmentMap = new Map();
     for (let i = 1; i < assignData.length; i++) {
         if (assignData[i][2] === 'Course') {
-            const staffId = String(assignData[i][1]).trim();
+            const staffId = String(assignData[i][1]).trim().toLowerCase();
             const eventId = String(assignData[i][3]).trim(); 
-            
-            if (staffId && eventId && staffEmailMap.has(staffId)) {
-                assignmentMap.set(eventId, staffEmailMap.get(staffId));
-            }
+            if (staffId && eventId) assignmentMap.set(eventId, staffId);
         }
     }
 
-    // 3. Scan Future Events
     const now = new Date();
     const future = new Date();
     future.setDate(now.getDate() + 120);
     
     const events = cal.getEvents(now, future);
     let invitesSent = 0;
-    let skipped = 0;
+    let invitesRemoved = 0;
 
     for (const event of events) {
-        const eventId = event.getTag('StaffHub_EventID');
+        let eventId = event.getTag('StaffHub_EventID');
+        if (!eventId) {
+            try {
+                const series = event.getEventSeries();
+                if (series) eventId = series.getTag('StaffHub_EventID');
+            } catch(e) { }
+        }
         
         if (eventId && assignmentMap.has(eventId)) {
             const targetEmail = assignmentMap.get(eventId);
-            const currentGuests = event.getGuestList().map(g => g.getEmail());
+            const currentGuests = event.getGuestList().map(g => g.getEmail().toLowerCase());
             
             if (!currentGuests.includes(targetEmail)) {
                 event.addGuest(targetEmail);
                 invitesSent++;
-                // THROTTLE: Sleep 500ms after adding guest
                 Utilities.sleep(500);
-            } else {
-                skipped++;
+            }
+
+            for (const guestEmail of currentGuests) {
+                if (allStaffEmails.has(guestEmail) && guestEmail !== targetEmail) {
+                    event.removeGuest(guestEmail);
+                    invitesRemoved++;
+                    Utilities.sleep(200);
+                }
             }
         }
     }
 
     return { 
         success: true, 
-        message: `Process Complete.\nSent ${invitesSent} new invites.\nSkipped ${skipped} existing guests.` 
+        message: `Process Complete.\nSent ${invitesSent} new invites.\nRemoved ${invitesRemoved} outdated staff guests.` 
     };
 
-  } catch (e) {
-    return { success: false, message: "Invite Error: " + e.message };
-  }
+  } catch (e) { return { success: false, message: "Invite Error: " + e.message }; }
 }
 
-/**
- * Inspects the calendar for events in a date range.
- */
 function api_getCalendarEvents(startStr, endStr, calendarId) {
   try {
-    let targetId = calendarId;
-    
-    if (!targetId) {
-        const settings = getSettings('calendarSettings');
-        targetId = settings.targetCalendarId;
-    }
-    
-    if (!targetId) return { success: false, message: "No calendar selected or configured." };
-    
+    let targetId = calendarId || getSettings('calendarSettings').targetCalendarId;
+    if (!targetId) return { success: false, message: "No calendar." };
     const cal = CalendarApp.getCalendarById(targetId);
     if (!cal) return { success: false, message: "Calendar not found." };
-
     const start = new Date(startStr);
     const end = new Date(endStr);
     end.setHours(23, 59, 59); 
-
     const events = cal.getEvents(start, end);
     const result = events.map(evt => ({
       title: evt.getTitle(),
@@ -417,31 +456,19 @@ function api_getCalendarEvents(startStr, endStr, calendarId) {
       location: evt.getLocation(),
       guests: evt.getGuestList().map(g => g.getEmail()).join(", ")
     }));
-
     return { success: true, data: result };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * Exports inspected events to a new sheet.
- */
 function api_exportCalendarEvents(events) {
   try {
     const ss = SpreadsheetApp.create("Calendar Export " + new Date().toISOString().split('T')[0]);
     const sheet = ss.getActiveSheet();
-    
     if (!events || events.length === 0) return { success: false, message: "No data." };
-    
     const headers = ["Title", "Start", "End", "Location", "Guests"];
     const rows = events.map(e => [e.title, e.start, e.end, e.location, e.guests]);
-    
     sheet.appendRow(headers);
     sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-    
     return { success: true, url: ss.getUrl() };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }

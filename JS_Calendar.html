@@ -100,22 +100,52 @@
     let func = '';
     let args = [];
     if (type === 'preview') { func = 'api_previewSheetToCalendar'; args = [templateName]; } else if (type === 'events') { func = 'api_syncSheetToCalendar'; args = [templateName]; } else { func = 'api_syncStaffToCalendar'; args = []; }
+    
     google.script.run.withSuccessHandler(function(res) {
         if(btn) { btn.disabled = false; btn.innerText = originalText; }
         if(previewBtn) previewBtn.disabled = false;
         resBox.style.display = 'block';
+        
+        let html = "";
+
+        // 1. Render Warnings (Pre-Flight Check)
+        if (res.warnings && res.warnings.length > 0) {
+            html += `<div style="background:#fff3cd; color:#856404; padding:10px; border:1px solid #ffeeba; border-radius:4px; margin-bottom:15px;">
+                <strong>⚠️ Validation Warnings (${res.warnings.length})</strong>
+                <ul style="margin:5px 0 0 20px; padding:0; font-size:0.9em;">`;
+            res.warnings.forEach(w => { html += `<li>Row ${w.row}: ${w.message}</li>`; });
+            html += `</ul></div>`;
+        }
+
+        // 2. Render Changes (Visual Diff)
         if (res.isPreview && res.changes) {
-            let html = `<h4>Preview Results</h4>`;
+            html += `<h4>Preview Results</h4>`;
             html += `<p><strong>Creates:</strong> ${res.stats.created} | <strong>Updates:</strong> ${res.stats.updated} | <strong>Errors:</strong> ${res.stats.errors}</p>`;
+            
             if (res.changes.length > 0) {
                 html += `<table class="data-table" style="font-size:0.85rem;"><thead><tr><th>Row</th><th>Action</th><th>Title</th><th>Details</th></tr></thead><tbody>`;
-                res.changes.forEach(c => { let color = c.action === 'CREATE' ? '#e6fffa' : (c.action === 'UPDATE' ? '#fff8e1' : '#ffebee'); html += `<tr style="background-color:${color}"><td>${c.row}</td><td><strong>${c.action}</strong></td><td>${c.title}</td><td>${c.details}</td></tr>`; });
+                res.changes.forEach(c => { 
+                    let color = c.action === 'CREATE' ? '#e6fffa' : (c.action === 'UPDATE' ? '#fff8e1' : '#ffebee'); 
+                    html += `<tr style="background-color:${color}"><td>${c.row}</td><td><strong>${c.action}</strong></td><td>${c.title}</td><td>${c.details}</td></tr>`; 
+                });
                 html += `</tbody></table>`;
-            } else { html += `<p>No changes detected.</p>`; }
-            resText.innerHTML = html;
-        } else { resText.innerHTML = res.message; }
+            } else { 
+                html += `<p>No changes detected.</p>`; 
+            }
+        } else { 
+            html += `<p>${res.message}</p>`; 
+        }
+        
+        resText.innerHTML = html;
         resBox.style.borderLeft = res.success ? "5px solid #007934" : "5px solid #c00";
-      }).withFailureHandler(function(err) { if(btn) { btn.disabled = false; btn.innerText = originalText; } if(previewBtn) previewBtn.disabled = false; resBox.style.display = 'block'; resBox.style.borderLeft = "5px solid #c00"; resText.textContent = "System Error: " + err.message; })[func](...args);
+
+      }).withFailureHandler(function(err) { 
+          if(btn) { btn.disabled = false; btn.innerText = originalText; } 
+          if(previewBtn) previewBtn.disabled = false; 
+          resBox.style.display = 'block'; 
+          resBox.style.borderLeft = "5px solid #c00"; 
+          resText.textContent = "System Error: " + err.message; 
+      })[func](...args);
   }
 
   // --- MST INSPECTOR LOGIC (UPDATED FOR MULTI-CALENDAR) ---
