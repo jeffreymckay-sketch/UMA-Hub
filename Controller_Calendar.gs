@@ -41,7 +41,6 @@ function api_syncSheetToCalendar(templateName, selectedRowIndices, targetCalenda
 
 /**
  * CORE LOGIC: Handles both Preview and Execution.
- * Now supports Short Day Codes (M, Tu, W, Th, F) and Title-based Reporting.
  */
 function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId) {
   try {
@@ -261,14 +260,23 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                 const targetTitle = title.toLowerCase().replace(/\s+/g, '');
                 
                 eventToUpdate = candidates.find(e => {
-                    const eTitle = e.getTitle().toLowerCase().replace(/\s+/g, '');
+                    const existingTag = e.getTag('StaffHub_EventID');
+                    if (existingTag && existingTag !== rowId) return false;
+
                     const eStart = e.getStartTime();
+                    if (eStart < startDt) return false; 
+                    if (seriesEndDate && eStart > seriesEndDate) return false;
+
+                    const eTitle = e.getTitle().toLowerCase().replace(/\s+/g, '');
+                    const isTitleMatch = eTitle.includes(targetTitle) || targetTitle.includes(eTitle);
+                    if (!isTitleMatch) return false;
+
                     const normE = normalizeDateToEpoch(eStart);
                     const normS = normalizeDateToEpoch(startDt);
                     const timeDiff = Math.abs(normE - normS);
                     const isTimeClose = timeDiff <= (45 * 60000);
-                    const isTitleMatch = eTitle.includes(targetTitle) || targetTitle.includes(eTitle);
-                    return isTimeClose && isTitleMatch;
+
+                    return isTimeClose;
                 });
 
                 if (eventToUpdate) matchType = "LEGACY";
@@ -360,16 +368,11 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                                 targetObj.setLocation(location);
                                 if (!storedSig) targetObj.setTag('StaffHub_TimeSignature', timeSignature);
                                 
-                                if (targetEmail && !currentGuests.includes(targetEmail)) {
-                                    targetObj.addGuest(targetEmail);
-                                }
-                                currentGuests.forEach(email => {
-                                    if (allStaffEmails.has(email) && email !== targetEmail) {
-                                        targetObj.removeGuest(email);
-                                    }
-                                });
+                                // NOTE: We do NOT add guests here in Phase 1.
+                                // Phase 1 is structure only. Phase 2 is invites.
+                                
                                 stats.updated++;
-                                results.push({ title: title, status: "✅ Updated", details: "Metadata/Invites updated." });
+                                results.push({ title: title, status: "✅ Updated", details: "Metadata updated." });
                             }
                             Utilities.sleep(500); 
                         } catch (err) {
@@ -403,7 +406,7 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                                 series.setTag('StaffHub_EventID', rowId);
                                 series.setTag('StaffHub_TimeSignature', timeSignature);
                                 series.setTag('AppSource', 'StaffHub');
-                                if (targetEmail) series.addGuest(targetEmail);
+                                // No guests added in Phase 1
                                 stats.created++;
                                 results.push({ title: title, status: "✅ Created", details: "New Series created." });
                                 Utilities.sleep(1000); 
@@ -457,31 +460,16 @@ function normalizeDateToEpoch(d) {
     return n.getTime();
 }
 
-/**
- * UPDATED: Handles M, Tu, W, Th, F abbreviations.
- */
 function parseDayOfWeek(dayStr) {
     if (!dayStr) return null;
     const s = dayStr.toLowerCase().trim();
-    
-    // Explicit Short Codes
-    if (s === 'm') return CalendarApp.Weekday.MONDAY;
-    if (s === 'tu' || s === 't') return CalendarApp.Weekday.TUESDAY;
-    if (s === 'w') return CalendarApp.Weekday.WEDNESDAY;
-    if (s === 'th' || s === 'r') return CalendarApp.Weekday.THURSDAY;
-    if (s === 'f') return CalendarApp.Weekday.FRIDAY;
-    if (s === 'sa') return CalendarApp.Weekday.SATURDAY;
-    if (s === 'su') return CalendarApp.Weekday.SUNDAY;
-
-    // Standard Names
-    if (s.includes('mon')) return CalendarApp.Weekday.MONDAY;
-    if (s.includes('tue')) return CalendarApp.Weekday.TUESDAY;
-    if (s.includes('wed')) return CalendarApp.Weekday.WEDNESDAY;
-    if (s.includes('thu')) return CalendarApp.Weekday.THURSDAY;
-    if (s.includes('fri')) return CalendarApp.Weekday.FRIDAY;
-    if (s.includes('sat')) return CalendarApp.Weekday.SATURDAY;
-    if (s.includes('sun')) return CalendarApp.Weekday.SUNDAY;
-    
+    if (s === 'm' || s.includes('mon')) return CalendarApp.Weekday.MONDAY;
+    if (s === 'tu' || s === 't' || s.includes('tue')) return CalendarApp.Weekday.TUESDAY;
+    if (s === 'w' || s.includes('wed')) return CalendarApp.Weekday.WEDNESDAY;
+    if (s === 'th' || s === 'r' || s.includes('thu')) return CalendarApp.Weekday.THURSDAY;
+    if (s === 'f' || s.includes('fri')) return CalendarApp.Weekday.FRIDAY;
+    if (s === 'sa' || s.includes('sat')) return CalendarApp.Weekday.SATURDAY;
+    if (s === 'su' || s.includes('sun')) return CalendarApp.Weekday.SUNDAY;
     return null;
 }
 
@@ -495,8 +483,113 @@ function formatTime(date) {
     return `${h}:${mStr} ${ampm}`;
 }
 
+/**
+ * PHASE 2: Sends Invites (Loud).
+ * Uses Advanced Calendar API to force email notifications.
+ * FIX: Cleans ID to prevent "Not Found" error.
+ */
 function api_syncStaffToCalendar(targetCalendarId) {
-    return api_syncSheetToCalendar("Default", null, targetCalendarId); 
+  try {
+    if (typeof Calendar === 'undefined') {
+        return { success: false, message: "Error: 'Google Calendar API' service is not enabled in the script editor." };
+    }
+
+    const settings = getSettings('calendarSettings');
+    const calId = targetCalendarId || settings.targetCalendarId;
+    if (!calId) return { success: false, message: "No Calendar Selected." };
+
+    const ss = getMasterDataHub();
+    const assignData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_ASSIGNMENTS);
+    const staffData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_LIST);
+
+    const allStaffEmails = new Set();
+    for (let i = 1; i < staffData.length; i++) {
+        if (staffData[i][1]) allStaffEmails.add(String(staffData[i][1]).trim().toLowerCase());
+    }
+
+    const assignmentMap = new Map();
+    for (let i = 1; i < assignData.length; i++) {
+        if (assignData[i][2] === 'Course') {
+            const staffId = String(assignData[i][1]).trim().toLowerCase();
+            const eventId = String(assignData[i][3]).trim(); 
+            if (staffId && eventId) assignmentMap.set(eventId, staffId);
+        }
+    }
+
+    const now = new Date();
+    const future = new Date();
+    future.setDate(now.getDate() + 120);
+    
+    const calendar = CalendarApp.getCalendarById(calId);
+    const events = calendar.getEvents(now, future);
+    
+    let invitesSent = 0;
+    let invitesRemoved = 0;
+    let errors = 0;
+
+    const processedSeries = new Set();
+
+    for (const event of events) {
+        let eventId = event.getTag('StaffHub_EventID');
+        
+        // FIX: Clean the ID for Advanced API (Remove @google.com and recurrence suffix)
+        let rawId = event.getId();
+        let cleanId = rawId.split('@')[0].split('_')[0];
+
+        if (!eventId) {
+            try {
+                const series = event.getEventSeries();
+                if (series) eventId = series.getTag('StaffHub_EventID');
+            } catch(e) { }
+        }
+        
+        if (eventId && assignmentMap.has(eventId)) {
+            if (processedSeries.has(cleanId)) continue;
+            processedSeries.add(cleanId);
+
+            const targetEmail = assignmentMap.get(eventId);
+            const currentGuests = event.getGuestList().map(g => g.getEmail().toLowerCase());
+            
+            let needsUpdate = false;
+            let attendees = event.getGuestList().map(g => ({ email: g.getEmail() }));
+
+            if (!currentGuests.includes(targetEmail)) {
+                attendees.push({ email: targetEmail });
+                needsUpdate = true;
+                invitesSent++;
+            }
+
+            const filteredAttendees = [];
+            attendees.forEach(att => {
+                const email = att.email.toLowerCase();
+                if (allStaffEmails.has(email) && email !== targetEmail) {
+                    needsUpdate = true;
+                    invitesRemoved++;
+                } else {
+                    filteredAttendees.push(att);
+                }
+            });
+
+            if (needsUpdate) {
+                try {
+                    const resource = { attendees: filteredAttendees };
+                    // Use the CLEAN ID for the patch request
+                    Calendar.Events.patch(resource, calId, cleanId, { sendUpdates: 'all' });
+                    Utilities.sleep(500);
+                } catch (err) {
+                    console.error("API Error: " + err.message);
+                    errors++;
+                }
+            }
+        }
+    }
+
+    return { 
+        success: true, 
+        message: `Invites Sent: ${invitesSent}\nInvites Removed: ${invitesRemoved}\nErrors: ${errors}` 
+    };
+
+  } catch (e) { return { success: false, message: "Invite Error: " + e.message }; }
 }
 
 function api_getCalendarEvents(startStr, endStr, calendarId) {

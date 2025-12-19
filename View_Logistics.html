@@ -138,7 +138,7 @@
   <div id="tab-mst-sync" class="tab-page">
       <h3>Sync Assignments to Calendar</h3>
       
-      <!-- NEW: Direct Calendar Selection -->
+      <!-- Direct Calendar Selection -->
       <div class="form-group" style="background: #e3f2fd; padding: 15px; border-radius: 5px; border: 1px solid #90caf9;">
           <label style="font-weight:bold; color:#003057;">Target Calendar</label>
           <select id="mst-sync-calendar-select" style="width:100%;">
@@ -152,15 +152,31 @@
           <select id="sync-template-select"><option value="Default">Default (Course - Faculty)</option></select>
       </div>
       
-      <!-- NEW: Status Indicator -->
+      <!-- Status Indicator -->
       <div id="mst-sync-status-indicator" style="display:none; margin: 15px 0; padding: 10px; background: #fff3e0; border: 1px solid #ffe0b2; border-radius: 4px; color: #e65100; font-weight: bold;">
           🔄 Processing...
       </div>
 
-      <div class="button-group">
-          <button id="btn-preview-events" class="button secondary" onclick="handleCalendarSync('preview')">👁️ Preview Changes</button>
-          <button id="btn-sync-events" class="button" onclick="handleCalendarSync('events')">1. Create/Update Calendar</button>
-          <button id="btn-sync-staff" class="button secondary" onclick="handleCalendarSync('staff')">2. Send Invites to Staff</button>
+      <!-- ACTION BUTTONS -->
+      <div style="display:flex; flex-direction:column; gap:15px; margin-top:20px;">
+          
+          <!-- Step 1: Build -->
+          <div style="border:1px solid #ddd; padding:15px; border-radius:5px; background:#f9f9f9;">
+              <h4 style="margin-top:0; color:#555;">Step 1: Build Calendar Structure</h4>
+              <p style="font-size:0.9em; color:#666; margin-bottom:10px;">Creates or updates events (Time, Room, Title). <strong>Does NOT send emails.</strong></p>
+              <div class="button-group">
+                  <button id="btn-preview-events" class="button secondary" onclick="handleCalendarSync('preview')">👁️ Preview Changes</button>
+                  <button id="btn-sync-events" class="button" onclick="handleCalendarSync('events')">🛠️ Create/Update Events (Silent)</button>
+              </div>
+          </div>
+
+          <!-- Step 2: Invite -->
+          <div style="border:1px solid #ddd; padding:15px; border-radius:5px; background:#f9f9f9;">
+              <h4 style="margin-top:0; color:#555;">Step 2: Notify Staff</h4>
+              <p style="font-size:0.9em; color:#666; margin-bottom:10px;">Adds staff to the guest list and sends official email invitations.</p>
+              <button id="btn-sync-staff" class="button primary" onclick="handleCalendarSync('staff')">📧 Send Invites to Staff</button>
+          </div>
+
       </div>
       
       <div id="calendar-result-area" style="display: none; background: #f8f9fa; padding: 15px; border: 1px solid #eee; border-radius: 4px; margin-top:15px;">
