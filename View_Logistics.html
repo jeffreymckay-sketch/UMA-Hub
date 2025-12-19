@@ -121,7 +121,7 @@
   <h1>MST Support Services</h1>
   <div class="tab-nav">
       <div class="tab-nav-item active" onclick="navigateToSubTab(this, 'tab-mst-assign')">Course Assignments</div>
-      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-mst-sync')">Calendar Sync</div>
+      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-mst-sync'); loadCalendarOptions();">Calendar Sync</div>
   </div>
   
   <!-- Status Message Box for MST -->
@@ -132,22 +132,37 @@
           <h3>Assign Staff to Courses</h3>
           <button class="button secondary btn-sm" onclick="loadSchedulingRosterData()">🔄 Refresh Data</button>
       </div>
-      <!-- REMOVED: Manual Assignment Form (Now handled by table below) -->
       <div id="sched-assignments-list" class="results-container"><p>Loading assignments...</p></div>
   </div>
 
   <div id="tab-mst-sync" class="tab-page">
       <h3>Sync Assignments to Calendar</h3>
-      <div id="calendar-config-status" class="status-message" style="display:block;">Checking configuration...</div>
+      
+      <!-- NEW: Direct Calendar Selection -->
+      <div class="form-group" style="background: #e3f2fd; padding: 15px; border-radius: 5px; border: 1px solid #90caf9;">
+          <label style="font-weight:bold; color:#003057;">Target Calendar</label>
+          <select id="mst-sync-calendar-select" style="width:100%;">
+              <option value="" disabled selected>Loading Calendars...</option>
+          </select>
+          <p style="font-size:0.85em; color:#666; margin-top:5px;">Select the calendar you want to update. This overrides any saved settings.</p>
+      </div>
+
       <div class="form-group" style="margin-top:15px;">
           <label>Event Naming Format</label>
           <select id="sync-template-select"><option value="Default">Default (Course - Faculty)</option></select>
       </div>
+      
+      <!-- NEW: Status Indicator -->
+      <div id="mst-sync-status-indicator" style="display:none; margin: 15px 0; padding: 10px; background: #fff3e0; border: 1px solid #ffe0b2; border-radius: 4px; color: #e65100; font-weight: bold;">
+          🔄 Processing...
+      </div>
+
       <div class="button-group">
           <button id="btn-preview-events" class="button secondary" onclick="handleCalendarSync('preview')">👁️ Preview Changes</button>
           <button id="btn-sync-events" class="button" onclick="handleCalendarSync('events')">1. Create/Update Calendar</button>
           <button id="btn-sync-staff" class="button secondary" onclick="handleCalendarSync('staff')">2. Send Invites to Staff</button>
       </div>
+      
       <div id="calendar-result-area" style="display: none; background: #f8f9fa; padding: 15px; border: 1px solid #eee; border-radius: 4px; margin-top:15px;">
             <pre id="calendar-result-text" style="white-space: pre-wrap; font-size: 0.9rem; margin: 0; font-family: monospace;"></pre>
       </div>

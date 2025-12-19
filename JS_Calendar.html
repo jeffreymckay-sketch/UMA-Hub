@@ -3,9 +3,22 @@
   function loadCalendarOptions() {
     google.script.run.withSuccessHandler(function(res) {
       const select = document.getElementById('setting-target-calendar');
-      if(!select) return;
-      select.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
-      if (res.success && res.data) { res.data.forEach(cal => { const option = document.createElement('option'); option.value = cal.id; option.text = cal.name; select.appendChild(option); }); loadCurrentCalendarSettings(); }
+      const mstSelect = document.getElementById('mst-sync-calendar-select');
+      
+      if (res.success && res.data) { 
+          if(select) select.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
+          if(mstSelect) mstSelect.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
+          
+          res.data.forEach(cal => { 
+              const option = document.createElement('option'); 
+              option.value = cal.id; 
+              option.text = cal.name; 
+              if(select) select.appendChild(option);
+              if(mstSelect) mstSelect.appendChild(option.cloneNode(true));
+          }); 
+          
+          loadCurrentCalendarSettings(); 
+      }
     }).getWritableCalendars();
   }
   
@@ -32,8 +45,16 @@
       const manualInput = document.getElementById('setting-manual-calendar-id');
       const sourceSelect = document.getElementById('setting-source-tab');
       const syncTemplateSelect = document.getElementById('sync-template-select');
+      const mstSelect = document.getElementById('mst-sync-calendar-select');
+
       if (settings) {
-        if (settings.targetCalendarId) { if (calSelect) calSelect.value = settings.targetCalendarId; if (manualInput) manualInput.value = settings.targetCalendarId; updateConfigStatus(true); } else { updateConfigStatus(false); }
+        if (settings.targetCalendarId) { 
+            if (calSelect) calSelect.value = settings.targetCalendarId; 
+            if (manualInput) manualInput.value = settings.targetCalendarId; 
+            if (mstSelect) mstSelect.value = settings.targetCalendarId; 
+            updateConfigStatus(true); 
+        } else { updateConfigStatus(false); }
+        
         if (settings.sourceTabName && sourceSelect) { sourceSelect.value = settings.sourceTabName; loadTabHeaders(settings.sourceTabName); }
         currentTemplates = settings.savedTemplates || [];
         renderSavedTemplates();
@@ -85,30 +106,75 @@
   }
 
   // --- SYNC & INSPECT ---
+  
+  var currentSyncPreview = [];
+  var currentSyncCalendarId = null; 
+
   function handleCalendarSync(type) {
-    const btn = document.getElementById(type === 'events' ? 'btn-sync-events' : 'btn-sync-staff');
-    const previewBtn = document.getElementById('btn-preview-events');
+    const btnPreview = document.getElementById('btn-preview-events');
+    const btnSync = document.getElementById('btn-sync-events');
+    const btnStaff = document.getElementById('btn-sync-staff');
+    
     const resBox = document.getElementById('calendar-result-area');
     const resText = document.getElementById('calendar-result-text');
+    const statusInd = document.getElementById('mst-sync-status-indicator');
+    
     const templateSelect = document.getElementById('sync-template-select');
     const templateName = templateSelect ? templateSelect.value : "Default";
-    if(btn) btn.disabled = true;
-    if(previewBtn) previewBtn.disabled = true;
-    const originalText = btn ? btn.innerText : "";
-    if(btn) btn.innerText = "Processing...";
+    const calendarSelect = document.getElementById('mst-sync-calendar-select');
+    
+    let targetId = calendarSelect.value;
+    if (!targetId) {
+        alert("Please select a Target Calendar first.");
+        return;
+    }
+
+    btnPreview.disabled = true;
+    btnSync.disabled = true;
+    btnStaff.disabled = true;
+    
+    statusInd.style.display = 'block';
+    statusInd.innerHTML = '🔄 Processing... Please wait.';
     resBox.style.display = 'none';
+    
+    let selectedRows = null;
     let func = '';
     let args = [];
-    if (type === 'preview') { func = 'api_previewSheetToCalendar'; args = [templateName]; } else if (type === 'events') { func = 'api_syncSheetToCalendar'; args = [templateName]; } else { func = 'api_syncStaffToCalendar'; args = []; }
+
+    if (type === 'preview') {
+        currentSyncCalendarId = targetId; 
+        func = 'api_previewSheetToCalendar';
+        args = [templateName, targetId];
+    } 
+    else if (type === 'execute') {
+        if (!currentSyncCalendarId) currentSyncCalendarId = targetId;
+        
+        const checks = document.querySelectorAll('.sync-check:checked');
+        if (checks.length === 0) {
+            alert("No changes selected.");
+            resetSyncUI();
+            return;
+        }
+        selectedRows = Array.from(checks).map(c => parseInt(c.value));
+        func = 'api_syncSheetToCalendar';
+        args = [templateName, selectedRows, currentSyncCalendarId];
+    } 
+    else if (type === 'events') {
+        currentSyncCalendarId = targetId;
+        func = 'api_syncSheetToCalendar';
+        args = [templateName, null, targetId];
+    } 
+    else {
+        func = 'api_syncStaffToCalendar';
+        args = [targetId]; 
+    }
     
     google.script.run.withSuccessHandler(function(res) {
-        if(btn) { btn.disabled = false; btn.innerText = originalText; }
-        if(previewBtn) previewBtn.disabled = false;
+        resetSyncUI();
         resBox.style.display = 'block';
         
         let html = "";
 
-        // 1. Render Warnings (Pre-Flight Check)
         if (res.warnings && res.warnings.length > 0) {
             html += `<div style="background:#fff3cd; color:#856404; padding:10px; border:1px solid #ffeeba; border-radius:4px; margin-bottom:15px;">
                 <strong>⚠️ Validation Warnings (${res.warnings.length})</strong>
@@ -117,20 +183,66 @@
             html += `</ul></div>`;
         }
 
-        // 2. Render Changes (Visual Diff)
-        if (res.isPreview && res.changes) {
-            html += `<h4>Preview Results</h4>`;
-            html += `<p><strong>Creates:</strong> ${res.stats.created} | <strong>Updates:</strong> ${res.stats.updated} | <strong>Errors:</strong> ${res.stats.errors}</p>`;
+        // RENDER EXECUTION REPORT (UPDATED: Shows Title)
+        if (!res.isPreview && res.results) {
+            html += `<h4>Execution Report</h4>`;
+            html += `<p>${res.message}</p>`;
+            
+            if (res.results.length > 0) {
+                html += `<div style="max-height:400px; overflow-y:auto; border:1px solid #ddd;">
+                <table class="sync-table">
+                    <thead><tr><th>Event</th><th>Status</th><th>Details</th></tr></thead>
+                    <tbody>`;
+                res.results.forEach(r => {
+                    html += `<tr><td><strong>${r.title}</strong></td><td>${r.status}</td><td>${r.details}</td></tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+        }
+        // RENDER PREVIEW
+        else if (res.isPreview && res.changes) {
+            currentSyncPreview = res.changes; 
+            html += `<h4>Proposed Changes (${res.changes.length})</h4>`;
             
             if (res.changes.length > 0) {
-                html += `<table class="data-table" style="font-size:0.85rem;"><thead><tr><th>Row</th><th>Action</th><th>Title</th><th>Details</th></tr></thead><tbody>`;
+                html += `<div style="max-height:400px; overflow-y:auto; border:1px solid #ddd;">
+                <table class="sync-table">
+                    <thead>
+                        <tr>
+                            <th style="width:30px;"><input type="checkbox" checked onchange="toggleAllSync(this)"></th>
+                            <th>Row</th>
+                            <th>Action</th>
+                            <th>Course</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                
                 res.changes.forEach(c => { 
-                    let color = c.action === 'CREATE' ? '#e6fffa' : (c.action === 'UPDATE' ? '#fff8e1' : '#ffebee'); 
-                    html += `<tr style="background-color:${color}"><td>${c.row}</td><td><strong>${c.action}</strong></td><td>${c.title}</td><td>${c.details}</td></tr>`; 
+                    let badgeClass = c.action === 'CREATE' ? 'create' : (c.action === 'RECREATE' ? 'recreate' : 'update');
+                    html += `<tr>
+                        <td><input type="checkbox" class="sync-check" value="${c.row}" checked></td>
+                        <td>${c.row}</td>
+                        <td><span class="badge ${badgeClass}">${c.action}</span></td>
+                        <td><strong>${c.title}</strong></td>
+                        <td>`;
+                    if (c.diffs && c.diffs.length > 0) {
+                        c.diffs.forEach(d => {
+                            html += `<div><span style="color:#666; font-size:0.9em;">${d.field}:</span> <span class="diff-old">${d.old}</span> <span class="diff-arrow">→</span> <span class="diff-new">${d.new}</span></div>`;
+                        });
+                    } else {
+                        html += `<span style="color:#999;">${c.details}</span>`;
+                    }
+                    html += `</td></tr>`; 
                 });
-                html += `</tbody></table>`;
+                html += `</tbody></table></div>`;
+                
+                html += `<div class="sync-actions">
+                    <span>Check the boxes above to confirm changes.</span>
+                    <button class="button primary" onclick="handleCalendarSync('execute')">✅ Apply Selected Changes</button>
+                </div>`;
             } else { 
-                html += `<p>No changes detected.</p>`; 
+                html += `<p>No changes detected. Calendar is in sync.</p>`; 
             }
         } else { 
             html += `<p>${res.message}</p>`; 
@@ -138,23 +250,35 @@
         
         resText.innerHTML = html;
         resBox.style.borderLeft = res.success ? "5px solid #007934" : "5px solid #c00";
+        statusInd.style.display = 'none';
 
       }).withFailureHandler(function(err) { 
-          if(btn) { btn.disabled = false; btn.innerText = originalText; } 
-          if(previewBtn) previewBtn.disabled = false; 
+          resetSyncUI();
           resBox.style.display = 'block'; 
           resBox.style.borderLeft = "5px solid #c00"; 
           resText.textContent = "System Error: " + err.message; 
+          statusInd.style.display = 'none';
       })[func](...args);
   }
 
-  // --- MST INSPECTOR LOGIC (UPDATED FOR MULTI-CALENDAR) ---
+  function resetSyncUI() {
+    document.getElementById('btn-preview-events').disabled = false;
+    document.getElementById('btn-sync-events').disabled = false;
+    document.getElementById('btn-sync-staff').disabled = false;
+    document.getElementById('mst-sync-status-indicator').style.display = 'none';
+  }
+
+  function toggleAllSync(source) {
+      const checks = document.querySelectorAll('.sync-check');
+      checks.forEach(c => c.checked = source.checked);
+  }
+
+  // --- MST INSPECTOR LOGIC ---
   
   function loadMSTInspectorCalendars() {
       const select = document.getElementById('mst-inspect-calendar-select');
       if(!select) return;
       
-      // Replace the single <select> with a checkbox container if it hasn't been done yet
       const containerId = 'mst-inspect-cal-container';
       let container = document.getElementById(containerId);
       
@@ -169,8 +293,6 @@
       google.script.run.withSuccessHandler(function(res) {
           if (res.success && res.data) { 
               container.innerHTML = '';
-              
-              // "Select All" option
               const allDiv = document.createElement('div');
               allDiv.innerHTML = `<label style="font-weight:bold;"><input type="checkbox" onchange="toggleInspectCalendars(this)"> Select All</label><hr style="margin: 5px 0;">`;
               container.appendChild(allDiv);
@@ -194,8 +316,6 @@
   function handleInspectCalendar() {
     const start = document.getElementById('inspect-start-date').value;
     const end = document.getElementById('inspect-end-date').value;
-    
-    // Gather selected calendars
     const checks = document.querySelectorAll('.inspect-cal-check:checked');
     const calIds = Array.from(checks).map(c => c.value);
     
@@ -346,7 +466,6 @@
 
   // --- INITIALIZATION HOOK ---
   document.addEventListener('DOMContentLoaded', function() {
-      // UPDATED: Now listens for the Analytics tab click
       const inspectorTab = document.querySelector('.tab-nav-item[onclick*="tab-an-inspector"]');
       if (inspectorTab) {
           inspectorTab.addEventListener('click', loadMSTInspectorCalendars);

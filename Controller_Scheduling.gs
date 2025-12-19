@@ -232,6 +232,13 @@ function api_forceRemoteSync() {
     return syncExternalCourseData();
 }
 
+/**
+ * THE SMART MERGE & SANITIZER: 
+ * 1. Fetches External Data.
+ * 2. SANITIZES: Calculates Duration using "Run Time" + "Time of Day" (AM/PM).
+ * 3. Matches with Local Data via Composite Key.
+ * 4. STICKY ID: Preserves Local ID.
+ */
 function syncExternalCourseData() {
   try {
     const settings = getSettings('courseImportSettings');
@@ -244,6 +251,7 @@ function syncExternalCourseData() {
     const assignSheet = ss.getSheetByName(CONFIG.TABS.STAFF_ASSIGNMENTS);
     const staffSheet = ss.getSheetByName(CONFIG.TABS.STAFF_LIST);
 
+    // 1. Read Local Data (To Preserve IDs)
     const localData = localSheet.getDataRange().getValues();
     const localIdMap = new Map(); 
     
@@ -276,6 +284,7 @@ function syncExternalCourseData() {
         }
     }
 
+    // 2. Fetch External Data
     const sourceId = extractFileIdFromUrl(settings.sheetUrl);
     if (!sourceId) return { success: false, message: "Invalid Source URL" };
 
@@ -286,6 +295,7 @@ function syncExternalCourseData() {
     const sourceValues = sourceSheet.getDataRange().getValues();
     if (sourceValues.length === 0) return { success: false, message: "Source sheet is empty." };
 
+    // 3. Identify Source Headers
     let headerIdx = -1;
     for (let r = 0; r < Math.min(sourceValues.length, 5); r++) {
         const rowStr = sourceValues[r].join(' ').toLowerCase().replace(/[\s_]/g, '');
@@ -315,6 +325,7 @@ function syncExternalCourseData() {
         }
     }
 
+    // 4. SMART MERGE & SANITIZATION
     const assignData = assignSheet.getDataRange().getValues();
     let assignmentsChanged = false;
     
@@ -326,38 +337,55 @@ function syncExternalCourseData() {
     for (let i = headerIdx + 1; i < sourceValues.length; i++) {
         const row = sourceValues[i];
         
-        // --- DATA SANITIZATION: Fix Duration ---
-        if (sIdx.time > -1 && sIdx.duration > -1) {
+        // --- DATA SANITIZATION: Fix Duration using AM/PM Logic ---
+        if (sIdx.time > -1 && sIdx.duration > -1 && sIdx.ampm > -1) {
             const timeStr = String(row[sIdx.time]);
-            const ampmVal = (sIdx.ampm > -1) ? String(row[sIdx.ampm]) : "";
+            const amPmStr = String(row[sIdx.ampm]).trim().toUpperCase();
             
+            // Parse "9:00 - 11:00" (Handle spaces)
             if (timeStr.includes('-')) {
-                const parts = timeStr.split('-');
-                const startPart = parts[0].trim();
-                const endPart = parts[1].trim();
-                
-                const startMatch = startPart.match(/(\d+):(\d+)/);
-                const endMatch = endPart.match(/(\d+):(\d+)/);
-                
-                if (startMatch && endMatch) {
-                    let h1 = parseInt(startMatch[1]);
-                    const m1 = parseInt(startMatch[2]);
-                    let h2 = parseInt(endMatch[1]);
-                    const m2 = parseInt(endMatch[2]);
+                const parts = timeStr.split('-').map(p => p.trim());
+                if (parts.length === 2) {
+                    const startMatch = parts[0].match(/(\d+):(\d+)/);
+                    const endMatch = parts[1].match(/(\d+):(\d+)/);
                     
-                    const isPM = ampmVal.toLowerCase() === 'pm' || (!ampmVal && startPart.toLowerCase().includes('pm'));
-                    if (isPM && h1 < 12) h1 += 12;
-                    
-                    if (h2 < h1) h2 += 12; 
-                    if (h1 >= 12 && h2 < 12) h2 += 12; 
+                    if (startMatch && endMatch) {
+                        let h1 = parseInt(startMatch[1]);
+                        const m1 = parseInt(startMatch[2]);
+                        let h2 = parseInt(endMatch[1]);
+                        const m2 = parseInt(endMatch[2]);
+                        
+                        const isPm = amPmStr === 'PM';
+                        
+                        // Apply AM/PM to Start Time
+                        if (isPm && h1 !== 12) h1 += 12;
+                        else if (!isPm && h1 === 12) h1 = 0;
 
-                    const startMins = h1 * 60 + m1;
-                    const endMins = h2 * 60 + m2;
-                    const diffMins = endMins - startMins;
-                    
-                    if (diffMins > 0) {
-                        // FIX: Ensure we write HOURS (decimal), not minutes
-                        row[sIdx.duration] = Number((diffMins / 60).toFixed(2));
+                        // Apply AM/PM to End Time (Logic from Snippet)
+                        // If End < Start, assume it wraps to next day (or PM if start was AM)
+                        // But since we know start is absolute based on AM/PM col, we just need to ensure End > Start
+                        
+                        // First, assume End has same AM/PM as Start
+                        let h2_abs = h2;
+                        if (isPm && h2 !== 12) h2_abs += 12;
+                        else if (!isPm && h2 === 12) h2_abs = 0;
+                        
+                        // If End is now smaller than Start, it implies a crossover.
+                        // E.g. Start 11:00 (AM), End 1:00. 
+                        // If we assumed 1:00 AM, it's wrong. It must be 1:00 PM.
+                        if (h2_abs < h1) {
+                            h2_abs += 12;
+                        }
+                        
+                        // Calculate Duration in Minutes
+                        const startMins = h1 * 60 + m1;
+                        const endMins = h2_abs * 60 + m2;
+                        const diffMins = endMins - startMins;
+                        
+                        if (diffMins > 0) {
+                            // Write calculated hours (e.g. 2.75) to the Duration column
+                            row[sIdx.duration] = Number((diffMins / 60).toFixed(2));
+                        }
                     }
                 }
             }
@@ -388,6 +416,7 @@ function syncExternalCourseData() {
         row[idCol] = finalId;
     }
 
+    // 5. Overwrite Local Sheet
     localSheet.clear();
     const maxCols = sourceValues[0].length;
     const cleanValues = sourceValues.map(r => {
@@ -396,6 +425,7 @@ function syncExternalCourseData() {
     });
     localSheet.getRange(1, 1, cleanValues.length, maxCols).setValues(cleanValues);
 
+    // 6. Sync "MST Assigned" Column
     if (mstEmailCol > -1 && idCol > -1) {
         const staffData = staffSheet.getDataRange().getValues();
         const staffEmailMap = new Map();
