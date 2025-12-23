@@ -1,6 +1,6 @@
 /**
  * -------------------------------------------------------------------
- * SCHEDULING CONTROLLER (Tech Hub & MST) - OPTIMIZED
+ * SCHEDULING CONTROLLER (Tech Hub & MST) - COMPLETE
  * -------------------------------------------------------------------
  */
 
@@ -125,7 +125,8 @@ function getSchedulingRosterData() {
             runTime: headers.indexOf('runtime'),     
             timeOfDay: headers.indexOf('timeofday'), 
             location: headers.indexOf('bxlocation'), 
-            duration: headers.indexOf('coveragehrs') 
+            duration: headers.indexOf('coveragehrs'),
+            zoomLink: headers.indexOf('zoomlink')
         };
 
         let idColumnNeedsUpdate = false;
@@ -165,6 +166,8 @@ function getSchedulingRosterData() {
                 }
             }
 
+            const link = (colMap.zoomLink > -1) ? String(courseData[i][colMap.zoomLink]) : "";
+
             courseItems.push({ id: cId, name: `${courseName} - ${faculty}` });
             
             const assignEntry = assignmentMap.get(`Course|${cId}`);
@@ -179,6 +182,7 @@ function getSchedulingRosterData() {
                 courseTime: timeStr,
                 location: (colMap.location > -1) ? String(courseData[i][colMap.location]) : "",
                 duration: durationStr,
+                link: link,
                 staffName: staffObj ? staffObj.name : "Unassigned",
                 staffId: assignEntry ? assignEntry.staffId : null
             });
@@ -233,12 +237,245 @@ function api_forceRemoteSync() {
 }
 
 /**
- * THE SMART MERGE & SANITIZER: 
- * 1. Fetches External Data.
- * 2. SANITIZES: Calculates Duration using "Run Time" + "Time of Day" (AM/PM).
- * 3. Matches with Local Data via Composite Key.
- * 4. STICKY ID: Preserves Local ID.
+ * NEW: Imports Zoom Links using BUCKET & FUZZY NAME Logic
+ * Matches via: Course+Day+Time (Bucket) -> Name Containment (Fuzzy)
  */
+function importCourseLinks(sheetUrl, tabName) {
+  const debugLog = [];
+  try {
+    if (!sheetUrl || !tabName) return { success: false, message: "Missing URL or Tab Name." };
+
+    const ss = getMasterDataHub();
+    const localSheet = ss.getSheetByName(CONFIG.TABS.COURSE_SCHEDULE);
+    if (!localSheet) return { success: false, message: "Local Course Schedule not found." };
+
+    // 1. Prepare Local Data
+    const localData = localSheet.getDataRange().getValues();
+    let localHeaderIdx = -1;
+    for (let r = 0; r < Math.min(localData.length, 5); r++) {
+        const rowStr = localData[r].join(' ').toLowerCase().replace(/[\s_]/g, '');
+        if (rowStr.includes('course') || rowStr.includes('startdate')) {
+            localHeaderIdx = r;
+            break;
+        }
+    }
+    if (localHeaderIdx === -1) return { success: false, message: "Local headers not found." };
+
+    const lHeaders = localData[localHeaderIdx].map(h => String(h).toLowerCase().replace(/[\s_]/g, ''));
+    debugLog.push(`Local Headers Found: ${lHeaders.join(', ')}`);
+
+    const lIdx = {
+        course: lHeaders.indexOf('course'),
+        faculty: lHeaders.indexOf('faculty'),
+        day: lHeaders.indexOf('day'),
+        runTime: lHeaders.indexOf('runtime'),
+        timeOfDay: lHeaders.indexOf('timeofday'),
+        zoomLink: lHeaders.indexOf('zoomlink')
+    };
+
+    if (lIdx.zoomLink === -1) {
+        lIdx.zoomLink = localData[localHeaderIdx].length;
+        localSheet.getRange(localHeaderIdx + 1, lIdx.zoomLink + 1).setValue("Zoom Link");
+        debugLog.push("Created new 'Zoom Link' column.");
+    }
+
+    // 2. Fetch External Data
+    const sourceId = extractFileIdFromUrl(sheetUrl);
+    const sourceSS = SpreadsheetApp.openById(sourceId);
+    const sourceSheet = sourceSS.getSheetByName(tabName);
+    if (!sourceSheet) return { success: false, message: "External tab not found." };
+    
+    const sourceValues = sourceSheet.getDataRange().getValues();
+    const sourceRichText = sourceSheet.getDataRange().getRichTextValues();
+
+    let sourceHeaderIdx = -1;
+    for (let r = 0; r < Math.min(sourceValues.length, 5); r++) {
+        const rowStr = sourceValues[r].join(' ').toLowerCase().replace(/[\s_]/g, '');
+        if (rowStr.includes('coursenumber') && rowStr.includes('instructorname')) {
+            sourceHeaderIdx = r;
+            break;
+        }
+    }
+    if (sourceHeaderIdx === -1) return { success: false, message: "External headers not found." };
+
+    const sHeaders = sourceValues[sourceHeaderIdx].map(h => String(h).toLowerCase().replace(/[\s_]/g, ''));
+    debugLog.push(`External Headers Found: ${sHeaders.join(', ')}`);
+
+    const sIdx = {
+        course: sHeaders.indexOf('coursenumber'),
+        instructor: sHeaders.indexOf('instructorname'),
+        day: sHeaders.indexOf('day'),
+        startTime: sHeaders.indexOf('starttime'),
+        link: sHeaders.indexOf('zoomlink')
+    };
+
+    if (sIdx.link === -1) return { success: false, message: "'ZOOM Link' column not found in source." };
+
+    // 3. Build Source Map (Bucket by Course|Day|Time)
+    const sourceMap = new Map(); 
+    let sampleExtKey = "";
+    
+    let lastCourse = "";
+    let lastInstructor = "";
+
+    for (let i = sourceHeaderIdx + 1; i < sourceValues.length; i++) {
+        const row = sourceValues[i];
+        const richRow = sourceRichText[i];
+
+        let courseVal = row[sIdx.course];
+        let instrVal = row[sIdx.instructor];
+
+        if (courseVal) lastCourse = courseVal;
+        else courseVal = lastCourse;
+
+        if (instrVal) lastInstructor = instrVal;
+        else instrVal = lastInstructor;
+
+        if (!courseVal || String(courseVal).toLowerCase().includes('mode')) continue;
+
+        // Generate Bucket Key (No Instructor)
+        const c = String(courseVal).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const d = sched_normalizeDay(row[sIdx.day]);
+        const t = sched_normalizeTime(row[sIdx.startTime], null);
+        const bucketKey = `${c}|${d}|${t}`;
+        
+        if (!sampleExtKey) sampleExtKey = bucketKey; 
+
+        let link = String(row[sIdx.link]).trim();
+        if (!link.startsWith('http')) {
+            const richCell = richRow[sIdx.link];
+            const url = richCell.getLinkUrl();
+            if (url) link = url;
+        }
+
+        if (link && link.startsWith('http')) {
+            if (!sourceMap.has(bucketKey)) sourceMap.set(bucketKey, []);
+            sourceMap.get(bucketKey).push({
+                instructor: String(instrVal).toLowerCase().replace(/[^a-z]/g, ''), // Simple normalize for fuzzy match
+                link: link
+            });
+        }
+    }
+    debugLog.push(`External Map Size: ${sourceMap.size}`);
+    debugLog.push(`Sample External Bucket: ${sampleExtKey}`);
+
+    // 4. Match and Update Local Data
+    let updates = 0;
+    const outputColumn = []; 
+    let sampleLocalKey = "";
+
+    for (let i = localHeaderIdx + 1; i < localData.length; i++) {
+        const row = localData[i];
+        
+        let rawTime = String(row[lIdx.runTime]);
+        if (rawTime.includes('-')) rawTime = rawTime.split('-')[0].trim();
+        
+        const c = String(row[lIdx.course]).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const d = sched_normalizeDay(row[lIdx.day]);
+        const t = sched_normalizeTime(rawTime, row[lIdx.timeOfDay]);
+        const bucketKey = `${c}|${d}|${t}`;
+        
+        if (!sampleLocalKey) sampleLocalKey = bucketKey; 
+
+        const candidates = sourceMap.get(bucketKey);
+        let link = "";
+
+        if (candidates) {
+            const localInstr = String(row[lIdx.faculty]).toLowerCase().replace(/[^a-z]/g, '');
+            // Fuzzy Name Match: Containment
+            const match = candidates.find(cand => cand.instructor.includes(localInstr) || localInstr.includes(cand.instructor));
+            if (match) {
+                link = match.link;
+            }
+        }
+        
+        if (link) {
+            outputColumn.push([link]);
+            updates++;
+        } else {
+            outputColumn.push([row[lIdx.zoomLink] || ""]);
+        }
+    }
+    debugLog.push(`Sample Local Bucket: ${sampleLocalKey}`);
+
+    // 5. Write Back
+    if (updates > 0) {
+        localSheet.getRange(localHeaderIdx + 2, lIdx.zoomLink + 1, outputColumn.length, 1).setValues(outputColumn);
+    }
+
+    // 6. Save Settings
+    const props = PropertiesService.getScriptProperties();
+    const savedSettings = { url: sheetUrl, tab: tabName };
+    props.setProperty('mst_links_settings', JSON.stringify(savedSettings));
+
+    const report = `Import Complete.\nMatched: ${updates} links.\n\n--- DEBUG INFO ---\n${debugLog.join('\n')}`;
+    return { success: true, message: report };
+
+  } catch (e) {
+    return { success: false, message: e.message + "\n\nLog:\n" + debugLog.join('\n') };
+  }
+}
+
+/**
+ * Retrieves saved Link Import settings for the frontend.
+ */
+function api_getLinkImportSettings() {
+    try {
+        const props = PropertiesService.getScriptProperties();
+        const json = props.getProperty('mst_links_settings');
+        return json ? JSON.parse(json) : { url: '', tab: '' };
+    } catch (e) {
+        return { url: '', tab: '' };
+    }
+}
+
+function sched_normalizeDay(dayStr) {
+    if (!dayStr) return 0;
+    const s = String(dayStr).toLowerCase().trim();
+    if (s.includes('mon') || s === 'm') return 1;
+    if (s.includes('tue') || s === 'tu' || s === 't') return 2;
+    if (s.includes('wed') || s === 'w') return 3;
+    if (s.includes('thu') || s === 'th' || s === 'r') return 4;
+    if (s.includes('fri') || s === 'f') return 5;
+    if (s.includes('sat') || s === 'sa') return 6;
+    if (s.includes('sun') || s === 'su') return 0;
+    return 0;
+}
+
+function sched_normalizeTime(timeVal, amPmVal) {
+    if (!timeVal) return 0;
+    
+    let h = 0, m = 0;
+
+    if (timeVal instanceof Date) {
+        h = timeVal.getHours();
+        m = timeVal.getMinutes();
+    } 
+    else {
+        const str = String(timeVal).trim();
+        const match = str.match(/(\d+):(\d+)/);
+        if (match) {
+            h = parseInt(match[1]);
+            m = parseInt(match[2]);
+        }
+        
+        if (!amPmVal) {
+            if (str.toUpperCase().includes('PM')) amPmVal = 'PM';
+            if (str.toUpperCase().includes('AM')) amPmVal = 'AM';
+        }
+    }
+
+    if (amPmVal) {
+        const isPm = String(amPmVal).trim().toUpperCase().includes('PM');
+        const isAm = String(amPmVal).trim().toUpperCase().includes('AM');
+        
+        if (isPm && h < 12) h += 12;
+        if (isAm && h === 12) h = 0;
+    }
+
+    return (h * 60) + m;
+}
+
 function syncExternalCourseData() {
   try {
     const settings = getSettings('courseImportSettings');
@@ -337,12 +574,11 @@ function syncExternalCourseData() {
     for (let i = headerIdx + 1; i < sourceValues.length; i++) {
         const row = sourceValues[i];
         
-        // --- DATA SANITIZATION: Fix Duration using AM/PM Logic ---
-        if (sIdx.time > -1 && sIdx.duration > -1 && sIdx.ampm > -1) {
+        // --- DATA SANITIZATION: Fix Duration ---
+        if (sIdx.time > -1 && sIdx.duration > -1) {
             const timeStr = String(row[sIdx.time]);
-            const amPmStr = String(row[sIdx.ampm]).trim().toUpperCase();
+            const ampmVal = (sIdx.ampm > -1) ? String(row[sIdx.ampm]) : "";
             
-            // Parse "9:00 - 11:00" (Handle spaces)
             if (timeStr.includes('-')) {
                 const parts = timeStr.split('-').map(p => p.trim());
                 if (parts.length === 2) {
@@ -355,35 +591,20 @@ function syncExternalCourseData() {
                         let h2 = parseInt(endMatch[1]);
                         const m2 = parseInt(endMatch[2]);
                         
-                        const isPm = amPmStr === 'PM';
-                        
-                        // Apply AM/PM to Start Time
-                        if (isPm && h1 !== 12) h1 += 12;
-                        else if (!isPm && h1 === 12) h1 = 0;
+                        const isPM = ampmVal.toLowerCase().includes('pm') || parts[0].toLowerCase().includes('pm');
+                        if (isPM && h1 < 12) h1 += 12;
+                        if (!isPM && h1 === 12) h1 = 0; 
 
-                        // Apply AM/PM to End Time (Logic from Snippet)
-                        // If End < Start, assume it wraps to next day (or PM if start was AM)
-                        // But since we know start is absolute based on AM/PM col, we just need to ensure End > Start
-                        
-                        // First, assume End has same AM/PM as Start
-                        let h2_abs = h2;
-                        if (isPm && h2 !== 12) h2_abs += 12;
-                        else if (!isPm && h2 === 12) h2_abs = 0;
-                        
-                        // If End is now smaller than Start, it implies a crossover.
-                        // E.g. Start 11:00 (AM), End 1:00. 
-                        // If we assumed 1:00 AM, it's wrong. It must be 1:00 PM.
-                        if (h2_abs < h1) {
-                            h2_abs += 12;
-                        }
-                        
-                        // Calculate Duration in Minutes
-                        const startMins = h1 * 60 + m1;
-                        const endMins = h2_abs * 60 + m2;
+                        let startMins = h1 * 60 + m1;
+                        let endMins = h2 * 60 + m2;
+
+                        if (endMins < startMins) endMins += 720;
+                        else if (startMins >= 720 && endMins < 720) endMins += 720;
+                        if (startMins >= 720 && endMins < startMins) endMins += 720;
+
                         const diffMins = endMins - startMins;
                         
                         if (diffMins > 0) {
-                            // Write calculated hours (e.g. 2.75) to the Duration column
                             row[sIdx.duration] = Number((diffMins / 60).toFixed(2));
                         }
                     }

@@ -114,6 +114,7 @@
       html += `<th class="sortable-header" onclick="handleSortCourses('staffName')">Assigned Staff</th>`;
       html += `<th class="sortable-header" onclick="handleSortCourses('itemName')">Course</th>`;
       html += `<th class="sortable-header" onclick="handleSortCourses('courseFaculty')">Faculty</th>`;
+      html += `<th>Link</th>`; // NEW COLUMN
       html += `<th class="sortable-header" onclick="handleSortCourses('courseDay')">Day</th>`;
       html += `<th class="sortable-header" onclick="handleSortCourses('courseTime')">Time</th>`;
       html += `<th class="sortable-header" onclick="handleSortCourses('duration')">Duration</th>`;
@@ -135,10 +136,14 @@
             </div>
           `;
 
+          // Link Icon
+          const linkHtml = c.link ? `<a href="${c.link}" target="_blank" title="Open Zoom Link" style="text-decoration:none; font-size:1.2em;">🔗</a>` : '';
+
           html += `<tr>
               <td>${dropdownHtml}</td>
               <td>${c.itemName}</td>
               <td>${c.courseFaculty}</td>
+              <td style="text-align:center;">${linkHtml}</td>
               <td>${c.courseDay}</td>
               <td>${c.courseTime}</td>
               <td>${c.duration}</td>
@@ -147,6 +152,43 @@
       });
       html += '</tbody></table>';
       container.innerHTML = html;
+  }
+
+  // NEW: Handler for Import Links with In-Page Report
+  function handleImportLinks() {
+      const url = document.getElementById('mst-links-url').value;
+      const tab = document.getElementById('mst-links-tab').value;
+      const reportBox = document.getElementById('import-result-container');
+      
+      if (!url || !tab) {
+          setSchedulingStatus('Please enter both URL and Tab Name.', 'error');
+          return;
+      }
+      
+      setSchedulingStatus('Importing Links...', 'loading');
+      reportBox.style.display = 'none';
+      reportBox.innerText = '';
+      
+      google.script.run.withSuccessHandler(function(res) {
+          if (res.success) {
+              setSchedulingStatus("Import Complete.", 'success');
+              reportBox.style.display = 'block';
+              reportBox.innerText = res.message;
+              loadSchedulingRosterData(); 
+          } else {
+              setSchedulingStatus('Import Failed.', 'error');
+              reportBox.style.display = 'block';
+              reportBox.innerText = "Error:\n" + res.message;
+          }
+      }).importCourseLinks(url, tab);
+  }
+
+  // NEW: Load Saved Settings on Init
+  function loadLinkImportSettings() {
+      google.script.run.withSuccessHandler(function(res) {
+          if(res.url) document.getElementById('mst-links-url').value = res.url;
+          if(res.tab) document.getElementById('mst-links-tab').value = res.tab;
+      }).api_getLinkImportSettings();
   }
 
   // Handler for Manual Sync
@@ -315,4 +357,15 @@
           }
       });
   }
+
+  // --- INIT ---
+  document.addEventListener('DOMContentLoaded', function() {
+      // Load settings when MST tab is clicked
+      const mstTab = document.querySelector('.tab-nav-item[onclick*="tab-mst-assign"]');
+      if (mstTab) {
+          mstTab.addEventListener('click', loadLinkImportSettings);
+      }
+      // Also load immediately if we start on this page (optional)
+      loadLinkImportSettings();
+  });
 </script>

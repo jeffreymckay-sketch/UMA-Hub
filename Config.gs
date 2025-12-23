@@ -7,15 +7,15 @@
 const CONFIG = {
   ROLES: ['Admin', 'Lead', 'Staff'],
   
+  // UPDATED: Matches current Sidebar structure
   PAGES: [
     'page-dashboard',
+    'page-analytics',       // Merged Inspector is here
     'page-tech-hub',
     'page-mst',
     'page-classroom',
     'page-exams',
     'page-mlt-proctoring',
-    'page-analytics',
-    'page-inspector',
     'page-guide',
     'page-settings'
   ],
@@ -44,17 +44,15 @@ const CONFIG = {
     REPORTING: ['Date', 'StaffID', 'FullName', 'PrimaryRole', 'AssignmentType', 'ReferenceID', 'AssignmentDescription', 'PlannedStart', 'PlannedEnd', 'PlannedDurationHours', 'EventStatus', 'ActualDurationHours']
   },
 
-  // NEW: Specific Configuration for MST Course Schedule
   MST: {
     HEADERS: {
-      // Exact headers provided by user
       ASSIGNED_STAFF: ['mst assigned by email'], 
-      COURSE_UNIQUE_ID: ['eventid'], // The unique ID for saving/logic
-      COURSE_CODE: ['course'],       // The display name (e.g. HUS 236)
+      COURSE_UNIQUE_ID: ['eventid'], 
+      COURSE_CODE: ['course'],       
       FACULTY: ['faculty'],
       DAY: ['day'],
-      TIME: ['run time'],            // Specifically "Run Time"
-      LOCATION: ['bx location']      // Specifically "BX Location"
+      TIME: ['run time'],            
+      LOCATION: ['bx location']      
     }
   },
 

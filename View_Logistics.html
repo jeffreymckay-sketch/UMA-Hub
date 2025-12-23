@@ -132,6 +132,25 @@
           <h3>Assign Staff to Courses</h3>
           <button class="button secondary btn-sm" onclick="loadSchedulingRosterData()">🔄 Refresh Data</button>
       </div>
+      
+      <!-- Import Links Section -->
+      <div style="background: #f0f4f8; padding: 15px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #d1e3f0;">
+          <h4 style="margin-top:0; color:#003057;">📥 Import Zoom Links</h4>
+          <div class="form-group inline-group" style="align-items: flex-end;">
+              <div style="flex-grow: 1;">
+                  <label>Links Spreadsheet URL</label>
+                  <input type="text" id="mst-links-url" placeholder="Paste Google Sheet Link">
+              </div>
+              <div style="width: 150px;">
+                  <label>Tab Name</label>
+                  <input type="text" id="mst-links-tab" placeholder="e.g. Sheet1">
+              </div>
+              <button class="button" onclick="handleImportLinks()">Import Links</button>
+          </div>
+          <!-- NEW: Report Container -->
+          <div id="import-result-container" style="display:none; margin-top:15px; padding:10px; background:#fff; border:1px solid #ccc; font-family:monospace; font-size:0.85em; max-height:200px; overflow-y:auto; white-space: pre-wrap;"></div>
+      </div>
+
       <div id="sched-assignments-list" class="results-container"><p>Loading assignments...</p></div>
   </div>
 

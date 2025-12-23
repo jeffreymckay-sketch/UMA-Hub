@@ -41,6 +41,7 @@ function api_syncSheetToCalendar(templateName, selectedRowIndices, targetCalenda
 
 /**
  * CORE LOGIC: Handles both Preview and Execution.
+ * Now includes ZOOM LINK in description and diff logic.
  */
 function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId) {
   try {
@@ -102,13 +103,15 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
     const colIdx = {
         id: hMap.indexOf('eventid'),
         course: hMap.indexOf('course'),
+        faculty: hMap.indexOf('faculty'),
         startDate: hMap.findIndex(h => h.includes('startdate')),
         endDate: hMap.findIndex(h => h.includes('enddate')),
         day: hMap.indexOf('day'),
         startTime: hMap.indexOf('runtime'), 
         ampm: hMap.indexOf('timeofday'),    
         location: hMap.indexOf('bxlocation'),
-        duration: hMap.indexOf('coveragehrs')
+        duration: hMap.indexOf('coveragehrs'),
+        zoomLink: hMap.indexOf('zoomlink') // NEW
     };
     
     if (colIdx.startTime === -1) colIdx.startTime = hMap.findIndex(h => h.includes('time'));
@@ -164,6 +167,16 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
         headers.forEach((h, idx) => { title = title.replace(new RegExp(`{{${h}}}`, 'gi'), row[idx]); });
         title = title.replace(/{{.*?}}/g, '').trim();
         if (!title || title === '-') title = "Untitled Event";
+
+        // Build Description with Link
+        const courseName = (colIdx.course > -1) ? row[colIdx.course] : "";
+        const faculty = (colIdx.faculty > -1) ? row[colIdx.faculty] : "";
+        const zoomLink = (colIdx.zoomLink > -1) ? String(row[colIdx.zoomLink]).trim() : "";
+        
+        let description = `Course: ${courseName}\nFaculty: ${faculty}`;
+        if (zoomLink) {
+            description += `\n\n--- RESOURCES ---\nZoom Link: ${zoomLink}`;
+        }
 
         let startDt = null;
         let endDt = null;
@@ -295,6 +308,14 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                 if (loc1 !== loc2) {
                     diffs.push({ field: "Location", old: loc1, new: loc2 });
                 }
+
+                // NEW: Check Description (Link)
+                const desc1 = String(eventToUpdate.getDescription() || "").trim();
+                const desc2 = String(description || "").trim();
+                // Simple check: if new description has link and old doesn't, or if they differ
+                if (desc1 !== desc2) {
+                    diffs.push({ field: "Description", old: "Old Text", new: "Updated (Link)" });
+                }
                 
                 let series = null;
                 try { series = eventToUpdate.getEventSeries(); } catch(e) {}
@@ -351,7 +372,7 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                                 const weekday = parseDayOfWeek(dayStr);
                                 if (weekday && seriesEndDate) {
                                     const recurrence = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekday(weekday).until(seriesEndDate);
-                                    const newSeries = calendar.createEventSeries(title, startDt, endDt, recurrence, { location: location });
+                                    const newSeries = calendar.createEventSeries(title, startDt, endDt, recurrence, { location: location, description: description });
                                     newSeries.setTag('StaffHub_EventID', rowId);
                                     newSeries.setTag('StaffHub_TimeSignature', timeSignature);
                                     newSeries.setTag('AppSource', 'StaffHub');
@@ -366,10 +387,8 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                                 const targetObj = series || eventToUpdate;
                                 targetObj.setTitle(title);
                                 targetObj.setLocation(location);
+                                targetObj.setDescription(description); // Update Description
                                 if (!storedSig) targetObj.setTag('StaffHub_TimeSignature', timeSignature);
-                                
-                                // NOTE: We do NOT add guests here in Phase 1.
-                                // Phase 1 is structure only. Phase 2 is invites.
                                 
                                 stats.updated++;
                                 results.push({ title: title, status: "✅ Updated", details: "Metadata updated." });
@@ -402,11 +421,11 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                             const weekday = parseDayOfWeek(dayStr);
                             if (weekday) {
                                 const recurrence = CalendarApp.newRecurrence().addWeeklyRule().onlyOnWeekday(weekday).until(seriesEndDate);
-                                const series = calendar.createEventSeries(title, startDt, endDt, recurrence, { location: location });
+                                const series = calendar.createEventSeries(title, startDt, endDt, recurrence, { location: location, description: description });
                                 series.setTag('StaffHub_EventID', rowId);
                                 series.setTag('StaffHub_TimeSignature', timeSignature);
                                 series.setTag('AppSource', 'StaffHub');
-                                // No guests added in Phase 1
+                                if (targetEmail) series.addGuest(targetEmail);
                                 stats.created++;
                                 results.push({ title: title, status: "✅ Created", details: "New Series created." });
                                 Utilities.sleep(1000); 
@@ -483,11 +502,6 @@ function formatTime(date) {
     return `${h}:${mStr} ${ampm}`;
 }
 
-/**
- * PHASE 2: Sends Invites (Loud).
- * Uses Advanced Calendar API to force email notifications.
- * FIX: Cleans ID to prevent "Not Found" error.
- */
 function api_syncStaffToCalendar(targetCalendarId) {
   try {
     if (typeof Calendar === 'undefined') {
@@ -531,10 +545,8 @@ function api_syncStaffToCalendar(targetCalendarId) {
 
     for (const event of events) {
         let eventId = event.getTag('StaffHub_EventID');
-        
-        // FIX: Clean the ID for Advanced API (Remove @google.com and recurrence suffix)
         let rawId = event.getId();
-        let cleanId = rawId.split('@')[0].split('_')[0];
+        let cleanId = rawId.split('@')[0].split('_')[0]; 
 
         if (!eventId) {
             try {
@@ -573,7 +585,6 @@ function api_syncStaffToCalendar(targetCalendarId) {
             if (needsUpdate) {
                 try {
                     const resource = { attendees: filteredAttendees };
-                    // Use the CLEAN ID for the patch request
                     Calendar.Events.patch(resource, calId, cleanId, { sendUpdates: 'all' });
                     Utilities.sleep(500);
                 } catch (err) {
