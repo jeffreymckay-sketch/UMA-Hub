@@ -1,0 +1,30 @@
+<script>
+  App.api = (function() {
+    /**
+     * A generic wrapper for google.script.run that returns a Promise.
+     * This makes server-side calls feel more like modern JavaScript.
+     * @param {string} functionName - The name of the server-side function to call.
+     * @param {any[]} args - The arguments to pass to the server-side function.
+     * @returns {Promise<any>} A Promise that resolves with the server's response or rejects with an error.
+     */
+    function serverCall(functionName, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          [functionName](...args);
+      });
+    }
+
+    // --- Public API Functions ---
+    return {
+      getAccessControlData: () => serverCall('api_getAccessControlData'),
+      getAllSettings: () => serverCall('api_getAllSettings'),
+      getSettings: (settings) => serverCall('getSettings', settings),
+      getImageDataUrl: (fileId) => serverCall('getImageDataUrl', fileId),
+      nursing: {
+        getEmailSettings: () => serverCall('nursing_getEmailSettings'),
+      },
+    };
+  })();
+</script>

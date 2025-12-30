@@ -17,9 +17,9 @@ function api_generateStaffReport(startDateString, endDateString) {
         const shiftData = getRequiredSheetData(ss, CONFIG.TABS.TECH_HUB_SHIFTS);
         const courseData = getRequiredSheetData(ss, CONFIG.TABS.COURSE_SCHEDULE);
         
-        const staffMap = createDataMap(staffList, 'StaffID');
-        const shiftMap = createDataMap(shiftData, 'ShiftID');
-        const courseMap = createDataMap(courseData, 'CourseID');
+        const staffMap = createDataMap(staffList, CONFIG.COLUMN_KEYS.STAFF_ID);
+        const shiftMap = createDataMap(shiftData, CONFIG.COLUMN_KEYS.SHIFT_ID);
+        const courseMap = createDataMap(courseData, CONFIG.COLUMN_KEYS.COURSE_ID);
 
         const reportRows = [];
         for (const assignmentRow of staffAssignments) {
@@ -28,23 +28,22 @@ function api_generateStaffReport(startDateString, endDateString) {
             if (!staffDetails) continue;
 
             let context = { description: 'N/A', durationMinutes: 0, dayOfWeek: null, startTime: null, endTime: null };
-            if (assignment.assignmentType === 'Tech Hub') {
+            if (assignment.assignmentType === CONFIG.ASSIGNMENT_TYPES.TECH_HUB) {
                 const shift = shiftMap[assignment.referenceId];
                 if (shift) { context = { description: shift.Description, dayOfWeek: shift.DayOfWeek, startTime: shift.StartTime, endTime: shift.EndTime, durationMinutes: parseTime(shift.EndTime) - parseTime(shift.StartTime) }; }
-            } else if (assignment.assignmentType === 'Course') {
+            } else if (assignment.assignmentType === CONFIG.ASSIGNMENT_TYPES.COURSE) {
                 const course = courseMap[assignment.referenceId];
                 if (course) { context = { description: course.CourseName, dayOfWeek: course.DayOfWeek || 'Monday', startTime: course.StartTime || '10:00', endTime: course.EndTime || '11:00', durationMinutes: 60 }; }
             }
 
-            const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            const targetDayIndex = DAY_NAMES.indexOf(context.dayOfWeek);
+            const targetDayIndex = CONFIG.WEEKDAYS.indexOf(context.dayOfWeek);
             if (targetDayIndex === -1) continue;
             
             let currentDate = new Date(startDate);
             while (currentDate <= endDate) {
                 if (currentDate.getDay() === targetDayIndex) {
-                    const eventDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-                    reportRows.push([eventDate, staffDetails.StaffID, staffDetails.FullName, staffDetails.Roles.split(',')[0], assignment.assignmentType, assignment.referenceId, context.description, context.startTime, context.endTime, context.durationMinutes / 60, 'Planned', 0]);
+                    const eventDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), CONFIG.DATE_FORMATS.ISO);
+                    reportRows.push([eventDate, staffDetails.StaffID, staffDetails.FullName, staffDetails.Roles.split(',')[0], assignment.assignmentType, assignment.referenceId, context.description, context.startTime, context.endTime, context.durationMinutes / 60, CONFIG.STATUS.PLANNED, 0]);
                 }
                 currentDate.setDate(currentDate.getDate() + 1);
             }

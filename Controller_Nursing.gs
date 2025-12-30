@@ -6,7 +6,7 @@
  */
 
 function nursing_getSettingsAndIDs() {
-  const settings = getSettings('nursingExamSettings');
+  const settings = getSettings(CONFIG.SETTINGS_KEYS.NURSING);
   if (!settings.spreadsheetUrl || !settings.targetFolderId) {
     throw new Error('Nursing Settings are incomplete. Please go to Settings > Nursing Exams and save the URLs.');
   }
@@ -53,10 +53,8 @@ function nursing_generateAllDocuments() {
           doc = DocumentApp.openById(file.getId());
           const body = doc.getBody();
           
-          // 1. Preserve Accommodations
           preservedAccommodations = nursing_findSectionText(body, "Accommodations");
           
-          // 2. Clear Body (Safe Method)
           body.setText(''); 
           
           actionType = "Updated";
@@ -72,13 +70,10 @@ function nursing_generateAllDocuments() {
           docsGenerated++;
         }
         
-        // 3. Populate Content
         nursing_populateDocContent(doc.getBody(), docTitle, exam.data, sheet, settings.customNotes);
         
-        // 4. Restore Accommodations (if any)
         if (preservedAccommodations) {
            const b = doc.getBody();
-           // Insert before Notes or at end
            let i = nursing_findInsertionIndex(b, ["General Notes", "Location Rosters"]);
            b.insertParagraph(i, "Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1);
            b.insertParagraph(i+1, preservedAccommodations);
@@ -86,7 +81,6 @@ function nursing_generateAllDocuments() {
 
         doc.saveAndClose();
         
-        // 5. Log Action
         logSystemAction("Nursing", actionType, docTitle, doc.getId(), `Exam Date: ${exam.data.date}`);
       }
       debugLog.push(`Processed ${sheet.getName()}: ${discoveredExams.length} exams.`);
@@ -171,8 +165,8 @@ function nursing_populateDocContent(body, docTitle, data, sheet, customNotes) {
 
   body.appendParagraph('');
   body.appendParagraph('Important Links').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph('').appendText('Red Flag Reporting Form').setLinkUrl('https://docs.google.com/forms/d/e/1FAIpQLSfORKCKol8SsRldNKfvsDy3ILNs9HcFv3gKb8TuxrNrlqxijw/viewform');
-  body.appendParagraph('').appendText('Nursing Protocol').setLinkUrl('https://docs.google.com/document/d/1TgKtmoDFqXLK0lBFPNirOAz_TW4S3E_BFhS934VcjOo/edit');
+  body.appendParagraph('').appendText('Red Flag Reporting Form').setLinkUrl(CONFIG.NURSING.URLS.RED_FLAG_REPORT);
+  body.appendParagraph('').appendText('Nursing Protocol').setLinkUrl(CONFIG.NURSING.URLS.PROTOCOL_DOC);
   body.appendParagraph('');
 
   if (rosterRow !== -1) {
@@ -212,11 +206,9 @@ function nursing_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
         const endDate = new Date(endStr);
         endDate.setHours(23, 59, 59);
 
-        // 1. SAFE OVERWRITE
         if (overwrite) {
             const events = cal.getEvents(startDate, endDate);
             events.forEach(e => {
-                // Only delete if we created it
                 if (e.getTag('AppSource') === 'StaffHub') {
                     e.deleteEvent();
                 }
@@ -233,7 +225,6 @@ function nursing_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
             const allValues = sheet.getDataRange().getValues();
             const discovered = nursing_discoverExamsOnSheet(sheet, allValues);
             
-            // UPDATED: Use Sheet Name directly for Calendar Title
             const sheetTitle = sheet.getName();
 
             for (const exam of discovered) {
@@ -261,9 +252,8 @@ function nursing_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
                 const location = exam.data.room || "TBD";
                 const desc = `Password: ${exam.data.password}\nZoom: ${exam.data.zoomTime}`;
 
-                // CREATE AND TAG
                 const event = cal.createEvent(title, eventStart, eventEnd, { location: location, description: desc });
-                event.setTag('AppSource', 'StaffHub'); // <--- SAFETY TAG
+                event.setTag('AppSource', 'StaffHub');
                 
                 count++;
             }
@@ -276,32 +266,119 @@ function nursing_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
     }
 }
 
-// --- API WRAPPERS ---
-function nursing_getNotes() { try { return { data: getSettings('nursingExamSettings').customNotes || '' }; } catch (e) { return { error: e.message }; } }
-function nursing_saveNotes(t) { try { const s = getSettings('nursingExamSettings'); s.customNotes = t; saveSettings('nursingExamSettings', s); return { success: true }; } catch (e) { return { error: e.message }; } }
-function nursing_getAccommodations(id) { try { return { data: nursing_findSectionText(DocumentApp.openById(id).getBody(), "Accommodations") }; } catch (e) { return { error: e.message }; } }
-function nursing_saveAccommodations(id, t) { try { const d = DocumentApp.openById(id); const b = d.getBody(); nursing_removeSection(b, "Accommodations"); if(t){ const i = nursing_findInsertionIndex(b, ["Important Links"]); b.insertParagraph(i, "Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1); b.insertParagraph(i+1, t); } d.saveAndClose(); return { success: true }; } catch (e) { return { error: e.message }; } }
-function nursing_getActiveDocsList() { try { const { targetFolderId } = nursing_getSettingsAndIDs(); const list = []; const files = DriveApp.getFolderById(targetFolderId).getFiles(); while(files.hasNext()) { const f = files.next(); if(f.getMimeType() === MimeType.GOOGLE_DOCS) list.push({name: f.getName(), id: f.getId(), url: f.getUrl()}); } return { data: list }; } catch(e) { return { error: e.message }; } }
-function nursing_refreshAllActiveDocs() { return { data: "Please use 'Generate All' to refresh content." }; }
-function nursing_getDocsFromFolder() { return nursing_getActiveDocsList(); }
-function nursing_getEmailSettings() { try { const s = getSettings('nursingExamSettings'); return { data: { email: s.reportEmail || '', isAuto: false, reportDays: s.reportDaysForward || '7', autoFrequency: s.autoTriggerFrequency || 'WEEKLY', autoDay: s.autoTriggerDay || 'MONDAY', autoHour: s.autoTriggerHour || '8', reportResolvedComments: s.reportResolvedComments === 'true' } }; } catch (e) { return { error: e.message }; } }
-function nursing_saveEmailSettings(s) { try { const set = getSettings('nursingExamSettings'); set.reportEmail = s.email; set.reportDaysForward = s.reportDays; set.autoTriggerFrequency = s.autoFrequency; set.autoTriggerDay = s.autoDay; set.autoTriggerHour = s.autoHour; set.reportResolvedComments = s.reportResolvedComments; saveSettings('nursingExamSettings', set); return { data: "Saved." }; } catch (e) { return { error: e.message }; } }
+function nursing_getNotes() { 
+    try { 
+        return { data: getSettings(CONFIG.SETTINGS_KEYS.NURSING).customNotes || '' }; 
+    } catch (e) { 
+        return { error: e.message }; 
+    } 
+}
 
-// --- SMART REGENERATION (INDIVIDUAL) ---
+function nursing_saveNotes(t) { 
+    try { 
+        const s = getSettings(CONFIG.SETTINGS_KEYS.NURSING); 
+        s.customNotes = t; 
+        saveSettings(CONFIG.SETTINGS_KEYS.NURSING, s); 
+        return { success: true }; 
+    } catch (e) { 
+        return { error: e.message }; 
+    } 
+}
+
+function nursing_getAccommodations(id) { 
+    try { 
+        return { data: nursing_findSectionText(DocumentApp.openById(id).getBody(), "Accommodations") }; 
+    } catch (e) { 
+        return { error: e.message }; 
+    } 
+}
+
+function nursing_saveAccommodations(id, t) { 
+    try { 
+        const d = DocumentApp.openById(id); 
+        const b = d.getBody(); 
+        nursing_removeSection(b, "Accommodations"); 
+        if(t){ 
+            const i = nursing_findInsertionIndex(b, ["Important Links"]); 
+            b.insertParagraph(i, "Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1); 
+            b.insertParagraph(i+1, t); 
+        } 
+        d.saveAndClose(); 
+        return { success: true }; 
+    } catch (e) { 
+        return { error: e.message }; 
+    } 
+}
+
+function nursing_getActiveDocsList() { 
+    try { 
+        const { targetFolderId } = nursing_getSettingsAndIDs(); 
+        const list = []; 
+        const files = DriveApp.getFolderById(targetFolderId).getFiles(); 
+        while(files.hasNext()) { 
+            const f = files.next(); 
+            if(f.getMimeType() === MimeType.GOOGLE_DOCS) list.push({name: f.getName(), id: f.getId(), url: f.getUrl()}); 
+        } 
+        return { data: list }; 
+    } catch(e) { 
+        return { error: e.message }; 
+    } 
+}
+
+function nursing_refreshAllActiveDocs() { 
+    return { data: "Please use 'Generate All' to refresh content." }; 
+}
+
+function nursing_getDocsFromFolder() { 
+    return nursing_getActiveDocsList(); 
+}
+
+function nursing_getEmailSettings() { 
+    try { 
+        const s = getSettings(CONFIG.SETTINGS_KEYS.NURSING); 
+        return { 
+            data: { 
+                email: s.reportEmail || '', 
+                isAuto: false, 
+                reportDays: s.reportDaysForward || '7', 
+                autoFrequency: s.autoTriggerFrequency || 'WEEKLY', 
+                autoDay: s.autoTriggerDay || 'MONDAY', 
+                autoHour: s.autoTriggerHour || '8', 
+                reportResolvedComments: s.reportResolvedComments === 'true' 
+            } 
+        }; 
+    } catch (e) { 
+        return { error: e.message }; 
+    } 
+}
+
+function nursing_saveEmailSettings(s) { 
+    try { 
+        const set = getSettings(CONFIG.SETTINGS_KEYS.NURSING); 
+        set.reportEmail = s.email; 
+        set.reportDaysForward = s.reportDays; 
+        set.autoTriggerFrequency = s.autoFrequency; 
+        set.autoTriggerDay = s.autoDay; 
+        set.autoTriggerHour = s.autoHour; 
+        set.reportResolvedComments = s.reportResolvedComments; 
+        saveSettings(CONFIG.SETTINGS_KEYS.NURSING, set); 
+        return { data: "Saved." }; 
+    } catch (e) { 
+        return { error: e.message }; 
+    } 
+}
+
 function nursing_regenerateSingleDocById(docId) {
   try {
-    // 1. Identify the Document
     const doc = DocumentApp.openById(docId);
     const targetTitle = doc.getName();
     
-    // 2. Load Data Source
     const { settings, spreadsheetId } = nursing_getSettingsAndIDs();
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheets = spreadsheet.getSheets();
     
     let foundMatch = false;
 
-    // 3. Find the matching data row
     for (const sheet of sheets) {
       const allValues = sheet.getDataRange().getValues();
       if (!allValues || allValues.length === 0) continue;
@@ -312,19 +389,15 @@ function nursing_regenerateSingleDocById(docId) {
       for (const exam of discoveredExams) {
         const generatedTitle = `${sheetTitle} - ${exam.name}`;
         
-        // MATCH FOUND?
         if (generatedTitle === targetTitle) {
           foundMatch = true;
           
-          // A. Preserve Accommodations
           const body = doc.getBody();
           const preservedAccommodations = nursing_findSectionText(body, "Accommodations");
           
-          // B. Clear & Update Content (Safe Method)
           body.setText('');
           nursing_populateDocContent(body, targetTitle, exam.data, sheet, settings.customNotes);
           
-          // C. Restore Accommodations
           if (preservedAccommodations) {
              let i = nursing_findInsertionIndex(body, ["General Notes", "Location Rosters"]);
              body.insertParagraph(i, "Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1);
@@ -350,16 +423,13 @@ function nursing_regenerateSingleDocById(docId) {
   }
 }
 
-// --- HELPERS ---
 function nursing_removeSection(b, h) {
   const p = b.getParagraphs();
   for (let i = 0; i < p.length; i++) {
     if (p[i].getHeading() == DocumentApp.ParagraphHeading.HEADING1 && p[i].getText() == h) {
       let el = p[i];
-      // Loop to remove siblings until next header
       while (el && (el.getType() != DocumentApp.ElementType.PARAGRAPH || el.asParagraph().getHeading() != DocumentApp.ParagraphHeading.HEADING1)) {
         let next = el.getNextSibling();
-        // SAFETY: If this is the last child, append a spacer before removing
         if (b.getNumChildren() === 1) b.appendParagraph(""); 
         b.removeChild(el);
         el = next;
@@ -369,5 +439,24 @@ function nursing_removeSection(b, h) {
   }
 }
 
-function nursing_findSectionText(b,h){ const p=b.getParagraphs(); for(let i=0;i<p.length;i++){ if(p[i].getHeading()==DocumentApp.ParagraphHeading.HEADING1 && p[i].getText()==h){ return (i+1<p.length)?p[i+1].getText():""; }} return ""; }
-function nursing_findInsertionIndex(b,h){ for(const t of h){ for(let i=0;i<b.getNumChildren();i++){ const e=b.getChild(i); if(e.getType()==DocumentApp.ElementType.PARAGRAPH && e.asParagraph().getHeading()==DocumentApp.ParagraphHeading.HEADING1 && e.getText()==t) return i; }} return b.getNumChildren(); }
+function nursing_findSectionText(body, heading) {
+    const paragraphs = body.getParagraphs();
+    for (let i = 0; i < paragraphs.length; i++) {
+        if (paragraphs[i].getHeading() == DocumentApp.ParagraphHeading.HEADING1 && paragraphs[i].getText() == heading) {
+            return (i + 1 < paragraphs.length) ? paragraphs[i + 1].getText() : "";
+        }
+    }
+    return "";
+}
+
+function nursing_findInsertionIndex(body, possibleHeaders) {
+    for (const t of possibleHeaders) {
+        for (let i = 0; i < body.getNumChildren(); i++) {
+            const e = body.getChild(i);
+            if (e.getType() == DocumentApp.ElementType.PARAGRAPH && e.asParagraph().getHeading() == DocumentApp.ParagraphHeading.HEADING1 && e.getText() == t) {
+                return i;
+            }
+        }
+    }
+    return body.getNumChildren();
+}

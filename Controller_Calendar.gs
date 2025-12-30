@@ -24,7 +24,7 @@ function getAllViewableCalendars() {
 
 function api_getCalendarTargetName() {
   try {
-    const settings = getSettings('calendarSettings');
+    const settings = getSettings(CONFIG.SETTINGS_KEYS.CALENDAR);
     if (!settings || !settings.targetCalendarId) return { success: false, message: "No calendar configured." };
     const cal = CalendarApp.getCalendarById(settings.targetCalendarId);
     return cal ? { success: true, name: cal.getName() } : { success: false, message: "Calendar not found." };
@@ -45,7 +45,7 @@ function api_syncSheetToCalendar(templateName, selectedRowIndices, targetCalenda
  */
 function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId) {
   try {
-    const settings = getSettings('calendarSettings');
+    const settings = getSettings(CONFIG.SETTINGS_KEYS.CALENDAR);
     const calId = targetCalendarId || settings.targetCalendarId;
     if (!calId) return { success: false, message: "No Calendar Selected." };
 
@@ -328,7 +328,7 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                          const existEnd = eventToUpdate.getEndTime();
                          const normExistStart = normalizeDateToEpoch(existStart);
                          const normStart = normalizeDateToEpoch(startDt);
-                         const normExistEnd = normalizeDateToEpoch(existEnd);
+                         const normExistEnd = normalizeDate toEpoch(existEnd);
                          const normEnd = normalizeDateToEpoch(endDt);
                          const timeDiff = Math.abs(normExistStart - normStart) > 60000 || 
                                           Math.abs(normExistEnd - normEnd) > 60000;
@@ -508,7 +508,7 @@ function api_syncStaffToCalendar(targetCalendarId) {
         return { success: false, message: "Error: 'Google Calendar API' service is not enabled in the script editor." };
     }
 
-    const settings = getSettings('calendarSettings');
+    const settings = getSettings(CONFIG.SETTINGS_KEYS.CALENDAR);
     const calId = targetCalendarId || settings.targetCalendarId;
     if (!calId) return { success: false, message: "No Calendar Selected." };
 
@@ -522,7 +522,7 @@ function api_syncStaffToCalendar(targetCalendarId) {
     }
 
     const assignmentMap = new Map();
-    for (let i = 1; i < assignData.length; i++) {
+    for (let i = 1; i < assignData..length; i++) {
         if (assignData[i][2] === 'Course') {
             const staffId = String(assignData[i][1]).trim().toLowerCase();
             const eventId = String(assignData[i][3]).trim(); 
@@ -605,7 +605,7 @@ function api_syncStaffToCalendar(targetCalendarId) {
 
 function api_getCalendarEvents(startStr, endStr, calendarId) {
   try {
-    let targetId = calendarId || getSettings('calendarSettings').targetCalendarId;
+    let targetId = calendarId || getSettings(CONFIG.SETTINGS_KEYS.CALENDAR).targetCalendarId;
     if (!targetId) return { success: false, message: "No calendar." };
     const cal = CalendarApp.getCalendarById(targetId);
     if (!cal) return { success: false, message: "Calendar not found." };

@@ -1,0 +1,52 @@
+<script>
+  App.ui = (function() {
+    let modalCallback = null;
+
+    function setStatus(elementId, msg, type) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      el.className = `status-message ${type}`;
+      el.textContent = msg;
+      if (type !== 'loading' && type !== 'error') {
+        setTimeout(() => {
+          el.className = 'status-message';
+        }, 3000);
+      }
+    }
+
+    function showConfirm(message, callback) {
+      modalCallback = callback;
+      document.getElementById('modal-message').textContent = message;
+      document.getElementById('custom-modal-overlay').style.display = 'flex';
+    }
+
+    function handleModalResult(result) {
+      document.getElementById('custom-modal-overlay').style.display = 'none';
+      if (modalCallback) {
+        modalCallback(result);
+      }
+      modalCallback = null;
+    }
+
+    function toggleSidebar() {
+      document.getElementById('app-sidebar').classList.toggle('closed');
+    }
+
+    function toggleNavGroup(header) {
+      header.classList.toggle('open');
+      const subMenu = header.nextElementSibling;
+      if (subMenu && subMenu.classList.contains('nav-sub-menu')) {
+        subMenu.classList.toggle('open');
+      }
+    }
+
+    // --- Public UI Functions ---
+    return {
+      setStatus,
+      showConfirm,
+      handleModalResult,
+      toggleSidebar,
+      toggleNavGroup,
+    };
+  })();
+</script>

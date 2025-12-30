@@ -7,7 +7,7 @@
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
-    .setTitle('University Staff Hub')
+    .setTitle(CONFIG.APP_NAME)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -32,7 +32,7 @@ function api_getAccessControlData() {
     const ss = getMasterDataHub(); 
     
     // 1. Get Permissions Matrix
-    const permSheet = ss.getSheetByName("Permissions_Matrix");
+    const permSheet = ss.getSheetByName(CONFIG.TABS.SETTINGS);
     const matrix = {};
     
     if (permSheet) {
@@ -51,18 +51,17 @@ function api_getAccessControlData() {
     }
 
     // 2. Backfill Missing Pages (Auto-discovery from Config)
-    // This ensures new pages like 'page-mlt-proctoring' appear in the UI even if not in the sheet yet.
     if (CONFIG.PAGES && Array.isArray(CONFIG.PAGES)) {
-      CONFIG.PAGES.forEach(pageId => {
-        if (!matrix[pageId]) {
+      CONFIG.PAGES.forEach(pageInfo => {
+        if (!matrix[pageInfo.id]) {
           // Default to OPEN if not defined in sheet
-          matrix[pageId] = { Admin: true, Lead: true, Staff: true };
+          matrix[pageInfo.id] = { Admin: true, Lead: true, Staff: true };
         }
       });
     }
 
     // 3. Get User Role
-    const staffSheet = ss.getSheetByName("Staff_List");
+    const staffSheet = ss.getSheetByName(CONFIG.TABS.STAFF_LIST);
     let userRole = "Staff"; // Default
     
     if (staffSheet) {
@@ -86,7 +85,8 @@ function api_getAccessControlData() {
     return { 
       userRole: userRole, 
       matrix: matrix,
-      email: userEmail
+      email: userEmail,
+      pages: CONFIG.PAGES
     };
 
   } catch (e) {
@@ -97,9 +97,9 @@ function api_getAccessControlData() {
 function api_savePermissionsMatrix(newMatrix) {
   try {
     const ss = getMasterDataHub();
-    let sheet = ss.getSheetByName("Permissions_Matrix");
+    let sheet = ss.getSheetByName(CONFIG.TABS.SETTINGS);
     if (!sheet) {
-      sheet = ss.insertSheet("Permissions_Matrix");
+      sheet = ss.insertSheet(CONFIG.TABS.SETTINGS);
       sheet.appendRow(["Page Section", "Admin (Locked)", "Lead", "Staff"]);
     }
     
@@ -133,8 +133,8 @@ function api_savePermissionsMatrix(newMatrix) {
 function api_getStaffForRoleAssignment() {
   try {
     const ss = getMasterDataHub();
-    const sheet = ss.getSheetByName("Staff_List");
-    if (!sheet) return { error: "Staff_List tab not found." };
+    const sheet = ss.getSheetByName(CONFIG.TABS.STAFF_LIST);
+    if (!sheet) return { error: `Sheet "${CONFIG.TABS.STAFF_LIST}" not found.` };
     
     const data = sheet.getDataRange().getValues();
     const headers = data[0].map(h => h.toString().toLowerCase());
@@ -144,7 +144,7 @@ function api_getStaffForRoleAssignment() {
     const roleIdx = headers.findIndex(h => h.includes("role"));
 
     if (nameIdx === -1 || idIdx === -1 || roleIdx === -1) {
-      return { error: "Headers (Name, ID, Role) not found in Staff_List." };
+      return { error: `Headers (Name, ID, Role) not found in ${CONFIG.TABS.STAFF_LIST}.` };
     }
 
     const staff = [];
@@ -173,8 +173,8 @@ function api_editStaffMember(oldStaffId, newFullName, newStaffId, row, newRoleSt
   try {
     if (!row) return { success: false, message: "Missing row index." };
     const ss = getMasterDataHub(); 
-    const sheet = ss.getSheetByName("Staff_List"); 
-    if (!sheet) return { success: false, message: "Staff_List tab not found." };
+    const sheet = ss.getSheetByName(CONFIG.TABS.STAFF_LIST); 
+    if (!sheet) return { success: false, message: `Sheet "${CONFIG.TABS.STAFF_LIST}" not found.` };
 
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const getColIndex = (search) => {
@@ -207,8 +207,8 @@ function api_editStaffMember(oldStaffId, newFullName, newStaffId, row, newRoleSt
 function api_staff_create(fullName, staffId, primaryRole) {
   try {
     const ss = getMasterDataHub();
-    const sheet = ss.getSheetByName("Staff_List");
-    if (!sheet) return { success: false, message: "Staff_List tab missing." };
+    const sheet = ss.getSheetByName(CONFIG.TABS.STAFF_LIST);
+    if (!sheet) return { success: false, message: `Sheet "${CONFIG.TABS.STAFF_LIST}" missing.` };
     
     const data = sheet.getDataRange().getValues();
     const headers = data[0].map(h => h.toString().toLowerCase());

@@ -1,0 +1,176 @@
+<script>
+  (function(App) {
+    // --- DESTRUCTURING FOR CONVENIENCE ---
+    const api = App.api;
+    const state = App.state;
+    const {
+      setStatus,
+      showConfirm,
+      handleModalResult,
+      toggleSidebar,
+      toggleNavGroup
+    } = App.ui;
+
+    // --- INITIALIZATION ---
+    function initializeApp() {
+      // Attach modal listeners
+      document.getElementById('modal-confirm-btn')?.addEventListener('click', () => handleModalResult(true));
+      document.getElementById('modal-cancel-btn')?.addEventListener('click', () => handleModalResult(false));
+
+      // Initialize UI components
+      initializeUI();
+
+      // Load initial data
+      loadLogo();
+      loadAllSettings();
+      
+      // Page specific loads that can run on startup
+      if (typeof loadEventTypes === 'function') loadEventTypes(); // This seems to be a global function still
+      if (typeof loadMyAvailability === 'function') loadMyAvailability();
+      if (typeof loadMyPreferences === 'function') loadMyPreferences();
+    }
+
+    function initializeUI() {
+        try {
+            if (typeof nursing_populateHourDropdown === 'function') nursing_populateHourDropdown();
+            
+            const freqDropdown = document.getElementById('nursing-auto-frequency');
+            if (freqDropdown) {
+              freqDropdown.addEventListener('change', function() {
+                document.getElementById('nursing-auto-day-group').style.display = (this.value === 'WEEKLY') ? 'block' : 'none';
+              });
+            }
+            
+            const excludeInput = document.getElementById('filter-exclude');
+            if(excludeInput && typeof applyInspectFilters === 'function') excludeInput.addEventListener('input', applyInspectFilters);
+
+            // Date Defaults
+            const today = new Date();
+            const sixMonthsLater = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate());
+            const formatDate = (date) => date.toISOString().split('T')[0];
+            
+            const startDateInput = document.getElementById('roster-start-date');
+            const endDateInput = document.getElementById('roster-end-date');
+            if(startDateInput) startDateInput.value = formatDate(today);
+            if(endDateInput) endDateInput.value = formatDate(sixMonthsLater);
+
+            const inspStart = document.getElementById('inspect-start-date');
+            const inspEnd = document.getElementById('inspect-end-date');
+            if(inspStart) inspStart.value = formatDate(today);
+            if(inspEnd) {
+                const nextWeek = new Date();
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                inspEnd.value = formatDate(nextWeek);
+            }
+        } catch (e) { console.error("Error initializing UI elements: " + e.message); }
+    }
+
+    // --- DATA LOADING ---
+    async function loadLogo() {
+        try {
+            const settings = await api.getSettings('adminSettings');
+            if (settings && settings.logoFileId) {
+                const response = await api.getImageDataUrl(settings.logoFileId);
+                if (response.data) {
+                    document.getElementById('logo-img').src = response.data;
+                    document.getElementById('logo-img').style.visibility = 'visible';
+                    document.getElementById('logo-loading-text').style.display = 'none';
+                }
+            }
+        } catch (error) {
+            document.getElementById('logo-loading-text').textContent = 'No Logo Set';
+            console.error('Error loading logo:', error);
+        }
+    }
+
+    async function loadAllSettings() {
+        try {
+            const accessData = await api.getAccessControlData();
+            handleAccessControlData(accessData);
+        } catch (e) {
+            console.error("Access Control Failed:", e);
+        }
+
+        api.getAllSettings().then(response => {
+            if (response.success && response.data) {
+                mapSettingsToUI(response.data); // Assuming mapSettingsToUI is a global function for now
+            }
+        });
+        
+        if(typeof loadCalendarOptions === 'function') loadCalendarOptions();
+        if(typeof loadSourceTabOptions === 'function') loadSourceTabOptions(); 
+        
+        api.nursing.getEmailSettings().then(r => {
+            if(r.data){ 
+                document.getElementById('nursing-auto-report-toggle').checked = r.data.isAuto; 
+                document.getElementById('nursing-auto-frequency').dispatchEvent(new Event('change')); 
+            } 
+        });
+    }
+
+    function handleAccessControlData(accessData) {
+        if (accessData.error) {
+            document.querySelector('.main-content').innerHTML = `<h1>Access Error</h1><p>${accessData.error}</p><p>Please contact an Admin.</p>`;
+            document.querySelectorAll('.nav-menu').forEach(menu => menu.style.display = 'none');
+            return;
+        }
+        
+        state.currentUserRole = accessData.userRole; 
+        state.userAccessMatrix = accessData.matrix; 
+        
+        document.querySelectorAll('.nav-item').forEach(item => {
+            const pageIdMatch = item.getAttribute('onclick').match(/navigateTo\('([^']+)'/);
+            if (pageIdMatch && pageIdMatch[1]) {
+                const pageKey = pageIdMatch[1];
+                if (state.userAccessMatrix[pageKey] && !state.userAccessMatrix[pageKey][state.currentUserRole]) {
+                     item.style.display = 'none';
+                }
+            }
+        });
+
+        if (state.currentUserRole === 'Admin' || state.currentUserRole === 'Lead') { 
+            document.getElementById('settings-role-assignment-nav').style.display = 'block'; 
+            document.getElementById('admin-staff-selector-container').style.display = 'block';
+            if(typeof loadStaffSelector === 'function') loadStaffSelector();
+        }
+        if (state.currentUserRole === 'Admin') {
+            document.getElementById('settings-permissions-matrix-nav').style.display = 'block';
+        }
+    }
+
+    // --- NAVIGATION ---
+    function navigateTo(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+        document.getElementById(pageId).classList.add('active-page');
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.getAttribute('onclick') === `navigateTo('${pageId}')`) {
+                item.classList.add('active');
+            }
+        });
+
+        if (pageId === 'page-dashboard') {
+            if(typeof loadMyAvailability === 'function') loadMyAvailability();
+            if(typeof loadMyPreferences === 'function') loadMyPreferences();
+        }
+        // ... other page triggers
+    }
+
+    function navigateToSubTab(element, tabId) {
+        const parent = element.closest('.page');
+        parent.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+        parent.querySelector(`#${tabId}`).classList.add('active');
+        parent.querySelectorAll('.tab-nav-item').forEach(i => i.classList.remove('active'));
+        element.classList.add('active');
+    }
+
+    // --- GLOBAL WIRING ---
+    document.addEventListener('DOMContentLoaded', initializeApp);
+    window.navigateTo = navigateTo;
+    window.navigateToSubTab = navigateToSubTab;
+    window.toggleSidebar = toggleSidebar;
+    window.toggleNavGroup = toggleNavGroup;
+    window.ui_confirm = showConfirm; // Keep old name for now if HTML uses it
+
+  })(window.App);
+</script>

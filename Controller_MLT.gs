@@ -7,7 +7,7 @@
  */
 
 function mlt_getSettingsAndIDs() {
-  const settings = getSettings('mltExamSettings');
+  const settings = getSettings(CONFIG.SETTINGS_KEYS.MLT);
   
   if (!settings.config) {
     settings.config = CONFIG.MLT.DEFAULTS.KEYWORDS;
@@ -139,8 +139,6 @@ function mlt_discoverExamsOnSheet(sheet, allValues, settings) {
         
         if (allFontLines[i][colMap.DATE] === 'line-through') continue;
         
-        // Extract Data using Config Map
-        // UPDATED: Checks START_TIME (new) and falls back to START_SITE (old settings)
         let startTimeVal = '';
         if (colMap.START_TIME > -1) startTimeVal = row[colMap.START_TIME];
         else if (colMap.START_SITE > -1) startTimeVal = row[colMap.START_SITE];
@@ -178,7 +176,6 @@ function mlt_populateDocContent(body, docTitle, data, sheet, settings) {
       let displayVal = val;
       if (!displayVal || displayVal === '') { displayVal = (label === 'Date') ? "TBD" : " "; }
       
-      // Format Date/Time objects if passed directly
       if (displayVal instanceof Date) {
           if (label === 'Start Time') {
              displayVal = displayVal.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -235,11 +232,9 @@ function mlt_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
         const endDate = new Date(endStr);
         endDate.setHours(23, 59, 59);
 
-        // 1. SAFE OVERWRITE
         if (overwrite) {
             const events = cal.getEvents(startDate, endDate);
             events.forEach(e => {
-                // Only delete if we created it
                 if (e.getTag('AppSource') === 'StaffHub') {
                     e.deleteEvent();
                 }
@@ -256,7 +251,6 @@ function mlt_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
             const allValues = sheet.getDataRange().getValues();
             const discovered = mlt_discoverExamsOnSheet(sheet, allValues, settings);
             
-            // UPDATED: Use Sheet Name directly for Calendar Title
             const sheetTitle = sheet.getName();
 
             for (const exam of discovered) {
@@ -264,7 +258,6 @@ function mlt_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
                 const examDate = new Date(exam.data.date);
                 if (examDate < startDate || examDate > endDate) continue;
 
-                // --- TIME PARSING LOGIC ---
                 let hour = 9, min = 0;
                 const rawTime = exam.data.startTime;
                 
@@ -277,25 +270,20 @@ function mlt_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
                     if (timeMatch) {
                         hour = parseInt(timeMatch[1]);
                         min = parseInt(timeMatch[2]);
-                        // Simple PM check
                         if (timeStr.toLowerCase().includes('pm') && hour < 12) hour += 12;
                     }
                 }
 
-                // --- DURATION PARSING LOGIC ---
-                let durationMinutes = 120; // Default 2 hours
+                let durationMinutes = 120;
                 const rawDur = exam.data.duration;
                 if (rawDur) {
                     const durStr = String(rawDur).trim();
                     if (durStr.includes(':')) {
-                        // HH:MM format
                         const parts = durStr.split(':');
                         durationMinutes = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
                     } else if (durStr.toLowerCase().includes('h')) {
-                        // "1.5 hours" or "2h"
                         durationMinutes = parseFloat(durStr) * 60;
                     } else {
-                        // Raw number: assume minutes if > 8, else hours
                         const val = parseFloat(durStr);
                         if (!isNaN(val)) {
                             durationMinutes = (val <= 8) ? val * 60 : val;
@@ -312,9 +300,8 @@ function mlt_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
                 const location = exam.data.room || "TBD";
                 const desc = `Password: ${exam.data.password}\nDuration: ${exam.data.duration}`;
 
-                // CREATE AND TAG
                 const event = cal.createEvent(title, eventStart, eventEnd, { location: location, description: desc });
-                event.setTag('AppSource', 'StaffHub'); // <--- SAFETY TAG
+                event.setTag('AppSource', 'StaffHub');
                 
                 count++;
             }
@@ -327,35 +314,47 @@ function mlt_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
     }
 }
 
-// --- API WRAPPERS ---
-function mlt_getActiveDocsList() { try { const { targetFolderId } = mlt_getSettingsAndIDs(); const list = []; const files = DriveApp.getFolderById(targetFolderId).getFiles(); while(files.hasNext()) { const f = files.next(); if(f.getMimeType() === MimeType.GOOGLE_DOCS) list.push({name: f.getName(), id: f.getId(), url: f.getUrl()}); } return { data: list }; } catch(e) { return { error: e.message }; } }
+function mlt_getActiveDocsList() { 
+    try { 
+        const { targetFolderId } = mlt_getSettingsAndIDs(); 
+        const list = []; 
+        const files = DriveApp.getFolderById(targetFolderId).getFiles(); 
+        while(files.hasNext()) { 
+            const f = files.next(); 
+            if(f.getMimeType() === MimeType.GOOGLE_DOCS) list.push({name: f.getName(), id: f.getId(), url: f.getUrl()}); 
+        } 
+        return { data: list }; 
+    } catch(e) { 
+        return { error: e.message }; 
+    } 
+}
 
-// UPDATED: Now calls the main generator to refresh content
 function mlt_refreshAllActiveDocs() { 
   return mlt_generateAllDocuments(); 
 }
 
-function mlt_getDocsFromFolder() { return mlt_getActiveDocsList(); }
+function mlt_getDocsFromFolder() { 
+    return mlt_getActiveDocsList(); 
+}
 
 function mlt_saveSettings(settingsObj) {
     try {
-        const current = getSettings('mltExamSettings');
+        const current = getSettings(CONFIG.SETTINGS_KEYS.MLT);
         const newSettings = { ...current, ...settingsObj };
-        saveSettings('mltExamSettings', newSettings);
+        saveSettings(CONFIG.SETTINGS_KEYS.MLT, newSettings);
         return { success: true, message: "MLT Settings Saved." };
     } catch (e) { return { success: false, message: e.message }; }
 }
 
 function mlt_getSettingsData() {
     try {
-        const s = getSettings('mltExamSettings');
+        const s = getSettings(CONFIG.SETTINGS_KEYS.MLT);
         if (!s.config) s.config = CONFIG.MLT.DEFAULTS.KEYWORDS;
         if (!s.rosterKeyword) s.rosterKeyword = CONFIG.MLT.DEFAULTS.ROSTER_KEYWORD;
         return { success: true, data: s };
     } catch (e) { return { success: false, message: e.message }; }
 }
 
-// --- SMART REGENERATION (INDIVIDUAL) ---
 function mlt_regenerateSingleDocById(docId) {
   try {
     const doc = DocumentApp.openById(docId);
@@ -432,7 +431,6 @@ function mlt_saveAccommodations(id, t) {
     } catch (e) { return { error: e.message }; } 
 }
 
-// --- DOC HELPERS ---
 function mlt_removeSection(b, h) {
   const p = b.getParagraphs();
   for (let i = 0; i < p.length; i++) {
@@ -449,5 +447,24 @@ function mlt_removeSection(b, h) {
   }
 }
 
-function mlt_findSectionText(b,h){ const p=b.getParagraphs(); for(let i=0;i<p.length;i++){ if(p[i].getHeading()==DocumentApp.ParagraphHeading.HEADING1 && p[i].getText()==h){ return (i+1<p.length)?p[i+1].getText():""; }} return ""; }
-function mlt_findInsertionIndex(b,possibleHeaders){ for(const t of possibleHeaders){ for(let i=0;i<b.getNumChildren();i++){ const e=b.getChild(i); if(e.getType()==DocumentApp.ElementType.PARAGRAPH && e.asParagraph().getHeading()==DocumentApp.ParagraphHeading.HEADING1 && e.getText()==t) return i; }} return b.getNumChildren(); }
+function mlt_findSectionText(body, heading) {
+    const paragraphs = body.getParagraphs();
+    for (let i = 0; i < paragraphs.length; i++) {
+        if (paragraphs[i].getHeading() == DocumentApp.ParagraphHeading.HEADING1 && paragraphs[i].getText() == heading) {
+            return (i + 1 < paragraphs.length) ? paragraphs[i + 1].getText() : "";
+        }
+    }
+    return "";
+}
+
+function mlt_findInsertionIndex(body, possibleHeaders) {
+    for (const t of possibleHeaders) {
+        for (let i = 0; i < body.getNumChildren(); i++) {
+            const e = body.getChild(i);
+            if (e.getType() == DocumentApp.ElementType.PARAGRAPH && e.asParagraph().getHeading() == DocumentApp.ParagraphHeading.HEADING1 && e.getText() == t) {
+                return i;
+            }
+        }
+    }
+    return body.getNumChildren();
+}
