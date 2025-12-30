@@ -181,19 +181,4 @@
           }
       });
   }
-
-  // --- INITIALIZATION ---
-  document.addEventListener('DOMContentLoaded', function() {
-      const mltSettingsTab = document.querySelector('.tab-nav-item[onclick*="tab-mlt-settings"]');
-      if (mltSettingsTab) {
-          mltSettingsTab.addEventListener('click', mlt_loadSettings);
-      }
-      
-      const mltCalTab = document.querySelector('.tab-nav-item[onclick*="tab-mlt-calendar"]');
-      if (mltCalTab) {
-          mltCalTab.addEventListener('click', mlt_loadCalendarOptions);
-      }
-      
-      mlt_loadSettings();
-  });
 </script>

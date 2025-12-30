@@ -1,0 +1,33 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- Nursing Page Event Listeners ---
+    document.getElementById('nursing-tab-generator').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-exam-nursing'));
+    document.getElementById('nursing-tab-calendar').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-exam-calendar'));
+    document.getElementById('nursing-generate-all-btn').addEventListener('click', nursing_handleGenerateAll);
+    document.getElementById('nursing-refresh-all-btn').addEventListener('click', nursing_handleRefreshAll);
+    document.getElementById('nursing-notes-btn').addEventListener('click', nursing_navigateToNotesEditor);
+    document.getElementById('nursing-refresh-active-btn').addEventListener('click', () => nursing_refreshDocList('active'));
+    document.getElementById('nursing-refresh-all-folder-btn').addEventListener('click', () => nursing_refreshDocList('all'));
+    document.getElementById('nursing-calendar-sync-btn').addEventListener('click', nursing_handleCalendarSync);
+    document.getElementById('nursing-save-notes-btn').addEventListener('click', nursing_handleSaveNotes);
+    document.getElementById('nursing-save-accom-btn').addEventListener('click', nursing_handleSaveAccommodations);
+
+    document.getElementById('nursing-calendar-select').addEventListener('change', function() {
+        document.getElementById('nursing-calendar-id-input').value = this.value;
+    });
+
+    // --- MLT Page Event Listeners ---
+    document.getElementById('mlt-tab-generator').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-mlt-generator'));
+    document.getElementById('mlt-tab-calendar').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-mlt-calendar'));
+    document.getElementById('mlt-generate-all-btn').addEventListener('click', mlt_handleGenerateAll);
+    document.getElementById('mlt-refresh-all-btn').addEventListener('click', mlt_handleRefreshAll);
+    document.getElementById('mlt-refresh-active-btn').addEventListener('click', () => mlt_refreshDocList('active'));
+    document.getElementById('mlt-refresh-all-folder-btn').addEventListener('click', () => mlt_refreshDocList('all'));
+    document.getElementById('mlt-calendar-sync-btn').addEventListener('click', mlt_handleCalendarSync);
+    document.getElementById('mlt-save-accom-btn').addEventListener('click', mlt_handleSaveAccommodations);
+
+    document.getElementById('mlt-calendar-select').addEventListener('change', function() {
+        document.getElementById('mlt-calendar-id-input').value = this.value;
+    });
+});
+</script>

@@ -2,21 +2,21 @@
 <div id="page-exams" class="page">
   <h1>Nursing Proctoring</h1>
   <div class="tab-nav">
-      <div class="tab-nav-item active" onclick="navigateToSubTab(this, 'tab-exam-nursing')">Nursing Generator</div>
-      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-exam-calendar')">Calendar Management</div>
+      <div id="nursing-tab-generator" class="tab-nav-item active" data-tab="tab-exam-nursing">Nursing Generator</div>
+      <div id="nursing-tab-calendar" class="tab-nav-item" data-tab="tab-exam-calendar">Calendar Management</div>
   </div>
 
   <div id="tab-exam-nursing" class="tab-page active">
       <div id="nursing-status" class="status-message"></div>
       <div class="button-group">
-        <button class="button" id="nursing-generate-all-btn" onclick="nursing_handleGenerateAll()">Generate All & Report</button>
-        <button class="button" id="nursing-refresh-all-btn" onclick="nursing_handleRefreshAll()">Refresh All</button>
-        <button class="button secondary" id="nursing-notes-btn" onclick="nursing_navigateToNotesEditor()">Edit General Notes</button>
+        <button class="button" id="nursing-generate-all-btn">Generate All & Report</button>
+        <button class="button" id="nursing-refresh-all-btn">Refresh All</button>
+        <button class="button secondary" id="nursing-notes-btn">Edit General Notes</button>
       </div>
       <hr class="divider">
       <div class="button-group">
-        <button class="button" id="nursing-refresh-active-btn" onclick="nursing_refreshDocList('active')">Show Active</button>
-        <button class="button" id="nursing-refresh-all-btn" onclick="nursing_refreshDocList('all')">Show All</button>
+        <button class="button" id="nursing-refresh-active-btn">Show Active</button>
+        <button class="button" id="nursing-refresh-all-folder-btn">Show All</button>
       </div>
       <div id="nursing-doc-list" class="results-container" style="margin-top: 20px;"></div>
   </div>
@@ -28,7 +28,7 @@
       <div style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
            <div class="form-group">
               <label>Select Target Calendar</label>
-              <select id="nursing-calendar-select" onchange="document.getElementById('nursing-calendar-id-input').value = this.value">
+              <select id="nursing-calendar-select">
                   <option value="" disabled selected>Select a Calendar...</option>
               </select>
            </div>
@@ -53,7 +53,7 @@
               </label>
               <label><strong>Overwrite</strong> existing Nursing events in range</label>
           </div>
-          <button class="button" onclick="nursing_handleCalendarSync()">Publish to Calendar</button>
+          <button class="button" id="nursing-calendar-sync-btn">Publish to Calendar</button>
           <div id="nursing-calendar-status" class="status-message"></div>
       </div>
   </div>
@@ -63,21 +63,21 @@
 <div id="page-mlt-proctoring" class="page">
   <h1>MLT Proctoring</h1>
   <div class="tab-nav">
-      <div class="tab-nav-item active" onclick="navigateToSubTab(this, 'tab-mlt-generator')">Document Generator</div>
-      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-mlt-calendar')">Calendar Management</div>
+      <div id="mlt-tab-generator" class="tab-nav-item active" data-tab="tab-mlt-generator">Document Generator</div>
+      <div id="mlt-tab-calendar" class="tab-nav-item" data-tab="tab-mlt-calendar">Calendar Management</div>
   </div>
 
   <!-- GENERATOR TAB -->
   <div id="tab-mlt-generator" class="tab-page active">
       <div id="mlt-status" class="status-message"></div>
       <div class="button-group">
-        <button class="button" onclick="mlt_handleGenerateAll()">Generate All & Report</button>
-        <button class="button" onclick="mlt_handleRefreshAll()">Refresh All</button>
+        <button class="button" id="mlt-generate-all-btn">Generate All & Report</button>
+        <button class="button" id="mlt-refresh-all-btn">Refresh All</button>
       </div>
       <hr class="divider">
       <div class="button-group">
-        <button class="button" onclick="mlt_refreshDocList('active')">Show Active Docs</button>
-        <button class="button" onclick="mlt_refreshDocList('all')">Show All from Folder</button>
+        <button class="button" id="mlt-refresh-active-btn">Show Active Docs</button>
+        <button class="button" id="mlt-refresh-all-folder-btn">Show All from Folder</button>
       </div>
       <div id="mlt-doc-list" class="results-container" style="margin-top: 20px;"></div>
   </div>
@@ -89,7 +89,7 @@
       <div style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
            <div class="form-group">
               <label>Select Target Calendar</label>
-              <select id="mlt-calendar-select" onchange="document.getElementById('mlt-calendar-id-input').value = this.value">
+              <select id="mlt-calendar-select">
                   <option value="" disabled selected>Select a Calendar...</option>
               </select>
            </div>
@@ -114,7 +114,7 @@
               </label>
               <label><strong>Overwrite</strong> existing MLT events in range</label>
           </div>
-          <button class="button" onclick="mlt_handleCalendarSync()">Publish to Calendar</button>
+          <button class="button" id="mlt-calendar-sync-btn">Publish to Calendar</button>
           <div id="mlt-calendar-status" class="status-message"></div>
       </div>
   </div>
@@ -125,7 +125,7 @@
   <h1>Edit General Notes</h1>
   <div class="form-group"><textarea id="nursing-notes-area">Loading...</textarea></div>
   <div id="nursing-notes-status" class="status-message"></div>
-  <button class="button" id="nursing-save-notes-btn" onclick="nursing_handleSaveNotes()">Save Notes</button>
+  <button class="button" id="nursing-save-notes-btn">Save Notes</button>
   <button class="button secondary" onclick="navigateTo('page-exams')">Back</button>
 </div>
 
@@ -135,7 +135,7 @@
   <div class="form-group"><textarea id="nursing-accom-area">Loading...</textarea></div>
   <div id="nursing-accom-status" class="status-message"></div>
   <input type="hidden" id="nursing-accom-doc-id">
-  <button class="button" id="nursing-save-accom-btn" onclick="nursing_handleSaveAccommodations()">Save</button>
+  <button class="button" id="nursing-save-accom-btn">Save</button>
   <button class="button secondary" onclick="navigateTo('page-exams')">Back</button>
 </div>
 
@@ -146,6 +146,6 @@
   <div class="form-group"><textarea id="mlt-accom-area">Loading...</textarea></div>
   <div id="mlt-accom-status" class="status-message"></div>
   <input type="hidden" id="mlt-accom-doc-id">
-  <button class="button" id="mlt-save-accom-btn" onclick="mlt_handleSaveAccommodations()">Save</button>
+  <button class="button" id="mlt-save-accom-btn">Save</button>
   <button class="button secondary" onclick="navigateTo('page-mlt-proctoring')">Back</button>
 </div>

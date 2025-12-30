@@ -61,9 +61,6 @@
                   option.text = cal.name; 
                   select.appendChild(option); 
               }); 
-              
-              // Try to load saved ID from settings if available (optional enhancement)
-              // For now, we rely on manual selection or paste
           }
       }).getWritableCalendars();
   }
@@ -88,12 +85,4 @@
           }
       });
   }
-
-  // --- INITIALIZATION ---
-  document.addEventListener('DOMContentLoaded', function() {
-      const nursingCalTab = document.querySelector('.tab-nav-item[onclick*="tab-exam-calendar"]');
-      if (nursingCalTab) {
-          nursingCalTab.addEventListener('click', nursing_loadCalendarOptions);
-      }
-  });
 </script>
