@@ -83,6 +83,13 @@
     <?!= include('Part_Modals'); ?>
     
     <!-- JAVASCRIPT INCLUDES -->
+    
+    <!-- Core Libraries -->
+    <?!= include('frontend/Api'); ?>
+    <?!= include('frontend/State'); ?>
+    <?!= include('frontend/Ui'); ?>
+
+    <!-- App-Specific Logic -->
     <?!= include('JS_Core'); ?>
     <?!= include('JS_Lookup'); ?>
     <?!= include('JS_Scheduling'); ?>
@@ -94,5 +101,8 @@
     <?!= include('JS_MLT'); ?>
     <?!= include('JS_Dashboard'); ?>
     <?!= include('JS_Proctoring'); ?>
+
+    <!-- Main entry point -->
+    <?!= include('frontend/Main'); ?>
 </body>
 </html>

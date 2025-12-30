@@ -328,7 +328,7 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
                          const existEnd = eventToUpdate.getEndTime();
                          const normExistStart = normalizeDateToEpoch(existStart);
                          const normStart = normalizeDateToEpoch(startDt);
-                         const normExistEnd = normalizeDate toEpoch(existEnd);
+                         const normExistEnd = normalizeDateToEpoch(existEnd);
                          const normEnd = normalizeDateToEpoch(endDt);
                          const timeDiff = Math.abs(normExistStart - normStart) > 60000 || 
                                           Math.abs(normExistEnd - normEnd) > 60000;
@@ -522,7 +522,7 @@ function api_syncStaffToCalendar(targetCalendarId) {
     }
 
     const assignmentMap = new Map();
-    for (let i = 1; i < assignData..length; i++) {
+    for (let i = 1; i < assignData.length; i++) {
         if (assignData[i][2] === 'Course') {
             const staffId = String(assignData[i][1]).trim().toLowerCase();
             const eventId = String(assignData[i][3]).trim(); 
