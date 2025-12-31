@@ -57,6 +57,9 @@
             <li class="nav-item" onclick="navigateTo('page-guide')">
                 <span class="nav-icon">📖</span> User Guide
             </li>
+            <li class="nav-item" onclick="navigateTo('page-zoom')">
+                <span class="nav-icon">📹</span> Zoom Management
+            </li>
             <li class="nav-item" onclick="navigateTo('page-settings')">
                 <span class="nav-icon">⚙️</span> Global Settings
             </li>
@@ -76,6 +79,7 @@
       <?!= include('View_Logistics'); ?>
       <?!= include('View_Proctoring'); ?>
       <?!= include('View_Settings'); ?>
+      <?!= include('View_Zoom'); ?>
 
     </div>
     
@@ -101,6 +105,7 @@
     <?!= include('JS_MLT'); ?>
     <?!= include('JS_Dashboard'); ?>
     <?!= include('JS_Proctoring'); ?>
+    <?!= include('JS_Zoom'); ?>
 
     <!-- Main entry point -->
     <?!= include('frontend/Main'); ?>

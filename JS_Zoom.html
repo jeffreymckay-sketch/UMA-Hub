@@ -1,0 +1,88 @@
+<script>
+  let zoomImportChanges = []; // Store the changes from the preview
+
+  function handlePreviewZoomImport() {
+    const url = document.getElementById('zoom-sheet-url').value;
+    const tab = document.getElementById('zoom-sheet-tab').value;
+    const resultsContainer = document.getElementById('zoom-import-results');
+    const previewContainer = document.getElementById('zoom-preview-container');
+    const confirmBtn = document.getElementById('confirm-zoom-import-btn');
+
+    if (!url || !tab) {
+      resultsContainer.innerHTML = '<div class="alert alert-danger">Please provide both a URL and a Tab Name.</div>';
+      return;
+    }
+
+    resultsContainer.innerHTML = '<div class="alert alert-info">Generating preview...</div>';
+    previewContainer.innerHTML = '';
+    confirmBtn.style.display = 'none';
+
+    google.script.run
+      .withSuccessHandler(response => {
+        resultsContainer.innerHTML = ''; // Clear loading message
+        if (response.success) {
+          zoomImportChanges = response.data;
+          renderZoomPreview(response.data);
+          if(response.data.length > 0) {
+            confirmBtn.style.display = 'inline-block';
+          }
+        } else {
+          resultsContainer.innerHTML = `<div class="alert alert-danger">Error: ${response.message}</div>`;
+        }
+      })
+      .withFailureHandler(error => {
+        resultsContainer.innerHTML = `<div class="alert alert-danger">An unexpected error occurred: ${error.message}</div>`;
+      })
+      .previewZoomImport(url, tab);
+  }
+
+  function renderZoomPreview(changes) {
+    const previewContainer = document.getElementById('zoom-preview-container');
+    if (changes.length === 0) {
+      previewContainer.innerHTML = '<div class="alert alert-warning">No matching courses found to update.</div>';
+      return;
+    }
+
+    let table = '<table class="table"><thead><tr><th>Course</th><th>Faculty</th><th>Day & Time</th><th>Current Link</th><th>New Link</th></tr></thead><tbody>';
+    changes.forEach(change => {
+      table += `<tr>
+                  <td>${change.courseName}</td>
+                  <td>${change.faculty}</td>
+                  <td>${change.day} ${change.time}</td>
+                  <td>${change.oldLink || '<i>None</i>'}</td>
+                  <td>${change.newLink}</td>
+                </tr>`;
+    });
+    table += '</tbody></table>';
+    previewContainer.innerHTML = table;
+  }
+
+  function handleExecuteZoomImport() {
+    const resultsContainer = document.getElementById('zoom-import-results');
+    const confirmBtn = document.getElementById('confirm-zoom-import-btn');
+
+    if (zoomImportChanges.length === 0) {
+      resultsContainer.innerHTML = '<div class="alert alert-warning">No changes to apply.</div>';
+      return;
+    }
+
+    resultsContainer.innerHTML = '<div class="alert alert-info">Saving changes...</div>';
+    confirmBtn.style.display = 'none';
+
+    google.script.run
+      .withSuccessHandler(response => {
+        if (response.success) {
+          resultsContainer.innerHTML = `<div class="alert alert-success">${response.message}</div>`;
+          document.getElementById('zoom-preview-container').innerHTML = ''; // Clear preview
+        } else {
+          resultsContainer.innerHTML = `<div class="alert alert-danger">Error: ${response.message}</div>`;
+          confirmBtn.style.display = 'inline-block'; // Show button again on failure
+        }
+      })
+      .withFailureHandler(error => {
+        resultsContainer.innerHTML = `<div class="alert alert-danger">An unexpected error occurred: ${error.message}</div>`;
+        confirmBtn.style.display = 'inline-block';
+      })
+      .executeZoomImport(zoomImportChanges);
+  }
+</script>

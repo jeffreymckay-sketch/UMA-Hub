@@ -33,6 +33,7 @@ const CONFIG = {
     { id: 'page-proctoring-mlt', title: 'MLT Proctoring' },
     { id: 'page-classrooms', title: 'Classroom Support' },
     { id: 'page-analytics', title: 'Analytics' },
+    { id: 'page-zoom', title: 'Zoom Management' },
     { id: 'page-settings', title: 'Admin Settings' },
   ],
   
