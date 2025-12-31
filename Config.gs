@@ -1,6 +1,6 @@
 const CONFIG = {
   APP_NAME: "University Staff Hub",
-  MASTER_SHEET_ID: "1234567890", // Replace with your actual Master Sheet ID
+  MASTER_SHEET_ID: "1J0bMQamssoKD9OFO5HLVampKYWhWUfaljlUY3O--7us",
 
   TABS: {
     STAFF_LIST: "Staff_List",

@@ -1,3 +1,4 @@
+
 /**
  * -------------------------------------------------------------------
  * CORE UTILITIES & SETTINGS
@@ -6,32 +7,38 @@
 
 /**
  * Gets the Master Spreadsheet instance.
- * RELIABLE METHOD: Defaults to ActiveSpreadsheet (Bound Script).
+ * RELIABLE METHOD: Uses the ID from Config.gs.
  */
 function getMasterDataHub() {
   try {
-    // 1. Primary: Get the sheet this script is attached to
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (ss) return ss;
-
-    // 2. Fallback: Check properties if not bound
-    const props = PropertiesService.getScriptProperties();
-    const settingsStr = props.getProperty('adminSettings');
-    if (settingsStr) {
-      const settings = JSON.parse(settingsStr);
-      if (settings.dataHubUrl) {
-        return settings.dataHubUrl.includes('http') 
-          ? SpreadsheetApp.openByUrl(settings.dataHubUrl) 
-          : SpreadsheetApp.openById(settings.dataHubUrl);
-      }
+    if (!CONFIG || !CONFIG.MASTER_SHEET_ID) {
+      throw new Error("MASTER_SHEET_ID is not defined in the CONFIG object.");
     }
-    
-    throw new Error("Script is not bound to a sheet and no URL is saved in settings.");
+    const ss = SpreadsheetApp.openById(CONFIG.MASTER_SHEET_ID);
+    if (ss) {
+      return ss;
+    } else {
+      throw new Error("Could not open spreadsheet with the provided MASTER_SHEET_ID.");
+    }
   } catch (e) {
     console.error("Connection Error: " + e.message);
-    throw new Error("System Error: Could not connect to Data Hub.");
+    throw new Error("System Error: Could not connect to Data Hub. " + e.message);
   }
 }
+
+function api_getImageDataUrl(fileId) {
+    try {
+        const file = DriveApp.getFileById(fileId);
+        const blob = file.getBlob();
+        const contentType = blob.getContentType();
+        const base64data = Utilities.base64Encode(blob.getBytes());
+        const dataUrl = `data:${contentType};base64,${base64data}`;
+        return { success: true, data: dataUrl };
+    } catch (e) {
+        return { success: false, message: e.message };
+    }
+}
+
 
 /**
  * Fetches data from a tab safely.

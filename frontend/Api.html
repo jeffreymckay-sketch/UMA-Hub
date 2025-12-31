@@ -18,10 +18,47 @@
 
     // --- Public API Functions ---
     return {
+      // Core
       getAccessControlData: () => serverCall('api_getAccessControlData'),
       getAllSettings: () => serverCall('api_getAllSettings'),
-      getSettings: (settings) => serverCall('getSettings', settings),
-      getImageDataUrl: (fileId) => serverCall('getImageDataUrl', fileId),
+      saveSettings: (key, data) => serverCall('saveSettings', key, data),
+      getSettings: (key) => serverCall('getSettings', key),
+      getImageDataUrl: (fileId) => serverCall('api_getImageDataUrl'),
+      getDataHubTabs: () => serverCall('api_getDataHubTabs'),
+      getTabHeaders: (tabName) => serverCall('api_getTabHeaders'),
+
+      // Calendar
+      calendar: {
+        getWritableCalendars: () => serverCall('getWritableCalendars'),
+        getAllViewableCalendars: () => serverCall('getAllViewableCalendars'),
+        getTargetName: () => serverCall('api_getCalendarTargetName'),
+        preview: (template, target) => serverCall('api_previewSheetToCalendar', template, target),
+        sync: (template, rows, target) => serverCall('api_syncSheetToCalendar', template, rows, target),
+        syncStaff: (target) => serverCall('api_syncStaffToCalendar', target),
+        getEvents: (start, end, id) => serverCall('api_getCalendarEvents', start, end, id),
+        exportEvents: (events) => serverCall('api_exportCalendarEvents', events)
+      },
+
+      // Classrooms
+      classrooms: {
+        getHeaders: (url, tab) => serverCall('api_lookup_getHeaders', url, tab),
+        getData: (url, tab) => serverCall('api_lookup_getData', url, tab),
+        fetchData: (url, tab) => serverCall('api_fetchSheetData', url, tab),
+        bulkUpdate: (url, tab, updates) => serverCall('api_bulkUpdateSheet', url, tab, updates),
+        exportToSheet: (headers, rows) => serverCall('exportToSheet', headers, rows),
+      },
+
+      // Reports
+      reports: {
+        getReportData: (start, end, staff) => serverCall('api_getReportData', start, end, staff)
+      },
+
+      // Zoom
+      zoom: {
+        getRecordings: (start, end) => serverCall('api_getZoomRecordings', start, end)
+      },
+
+      // Nursing
       nursing: {
         getEmailSettings: () => serverCall('nursing_getEmailSettings'),
       },
