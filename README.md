@@ -1,2 +1,0 @@
-# UMA-Hub
-Hub script
