@@ -15,11 +15,12 @@
 
   function loadSchedulingRosterData() {
     setSchedulingStatus('Loading assignments...', 'loading');
-    App.api.scheduling.getViewData()
-        .then(renderSchedulingRoster)
-        .catch(function(e) { 
+    google.script.run
+        .withSuccessHandler(renderSchedulingRoster)
+        .withFailureHandler(function(e) { 
             setSchedulingStatus('Error loading data: ' + e.message, 'error'); 
-        });
+        })
+        .getSchedulingData();
   }
 
   function renderSchedulingRoster(response) {
