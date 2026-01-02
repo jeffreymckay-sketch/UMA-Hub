@@ -27,7 +27,7 @@ function getMSTViewData(master) {
 
         // 2. Fetch Data via Scheduling Logic
         // We reuse the logic from Controller_Scheduling to avoid duplication
-        const rosterData = getSchedulingRosterData();
+        const rosterData = getSchedulingRosterData_refactored();
         
         if (rosterData.success) {
             // Map the data to the format expected by the MST View
