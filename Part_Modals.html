@@ -1,13 +1,71 @@
 <!-- MODALS -->
-<div id="custom-modal-overlay">
-    <div id="custom-modal-box">
-        <div id="modal-message">Are you sure?</div>
-        <div id="modal-buttons">
-            <button class="button modal-btn cancel" id="modal-cancel-btn">Cancel</button>
-            <button class="button modal-btn confirm" id="modal-confirm-btn">Confirm</button>
+<div id="confirmation-modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
+    <div id="custom-modal-box" style="background-color: white; border-radius: 8px; width: 90%; max-width: 400px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); text-align: center;">
+        <div id="modal-message" style="margin-bottom: 20px; font-size: 1.1em;">Are you sure?</div>
+        <div id="modal-buttons" style="display: flex; justify-content: center; gap: 15px;">
+            <button class="button modal-btn cancel" id="modal-cancel-btn" onclick="closeConfirmationModal()">Cancel</button>
+            <button class="button modal-btn confirm danger" id="modal-confirm-btn" onclick="confirmModalAction()">Confirm</button>
         </div>
     </div>
 </div>
+
+<div id="add-course-modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
+    <div id="add-course-modal-box" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
+        <h3>Add New Class</h3>
+        <form id="add-course-form">
+            <div id="add-course-status" class="status-message"></div>
+            <div class="form-group"><label>Session</label><select id="add-course-session"></select></div>
+            <div class="form-group inline-group">
+                <div style="width: 48%;"><label>Start Date</label><input type="date" id="add-course-start-date"></div>
+                <div style="width: 48%;"><label>End Date</label><input type="date" id="add-course-end-date"></div>
+            </div>
+            <div class="form-group"><label>Day(s) of Week</label><select id="add-course-day" multiple></select></div>
+            <div class="form-group"><label>Course Title</label><input type="text" id="add-course-title"></div>
+            <div class="form-group"><label>Faculty</label><input type="text" id="add-course-faculty"></div>
+            <div class="form-group inline-group">
+                <div style="width: 48%;"><label>Run Time</label><input type="text" id="add-course-runtime"></div>
+                <div style="width: 48%;"><label>Time of Day</label><select id="add-course-time-of-day"></select></div>
+            </div>
+            <div class="form-group"><label>Classroom</label><select id="add-course-location"></select></div>
+            <div class="form-group"><label>Staff Assigned</label><select id="add-course-staff-assigned"></select></div>
+            <div class="form-group"><label>Zoom Link</label><input type="text" id="add-course-zoom-link"></div>
+        </form>
+        <div class="modal-buttons">
+            <button class="button modal-btn cancel" onclick="closeAddCourseModal()">Cancel</button>
+            <button class="button modal-btn confirm" onclick="handleAddCourse()">Save Class</button>
+        </div>
+    </div>
+</div>
+
+<div id="edit-course-modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
+    <div id="edit-course-modal-box" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
+        <h3>Edit Class</h3>
+        <form id="edit-course-form">
+            <div id="edit-course-status" class_ ="status-message"></div>
+            <input type="hidden" id="edit-course-id">
+            <div class="form-group"><label>Session</label><select id="edit-course-session"></select></div>
+            <div class="form-group inline-group">
+                <div style="width: 48%;"><label>Start Date</label><input type="date" id="edit-course-start-date"></div>
+                <div style="width: 48%;"><label>End Date</label><input type="date" id="edit-course-end-date"></div>
+            </div>
+            <div class="form-group"><label>Day(s) of Week</label><select id="edit-course-day" multiple></select></div>
+            <div class="form-group"><label>Course Title</label><input type="text" id="edit-course-title"></div>
+            <div class="form-group"><label>Faculty</label><input type="text" id="edit-course-faculty"></div>
+            <div class="form-group inline-group">
+                <div style="width: 48%;"><label>Run Time</label><input type="text" id="edit-course-runtime"></div>
+                <div style="width: 48%;"><label>Time of Day</label><select id="edit-course-time-of-day"></select></div>
+            </div>
+            <div class="form-group"><label>Classroom</label><select id="edit-course-location"></select></div>
+            <div class="form-group"><label>Staff Assigned</label><select id="edit-course-staff-assigned"></select></div>
+            <div class="form-group"><label>Zoom Link</label><input type="text" id="edit-course-zoom-link"></div>
+        </form>
+        <div class="modal-buttons">
+            <button class="button modal-btn cancel" onclick="closeEditCourseModal()">Cancel</button>
+            <button class="button modal-btn confirm" onclick="handleUpdateCourse()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
 
 <div id="edit-staff-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
     <div id="edit-staff-modal" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">

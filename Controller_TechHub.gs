@@ -43,7 +43,7 @@ function getTechHubViewData(master) {
                         }
                         smartList.push({ id: staff.id, name: label, available: avail });
                     }
-                    roster.push({ shiftId: row[idx.id], description: row[idx.desc], day: row[idx.day], start: row[idx.start], end: row[idx.end], assignedStaffId: assignmentsMap[row[idx.id]] || "", smartStaffList: smartList });
+                    roster.push({ shiftId: row[idx.id], description: row[idx.desc], day: row[idx.day], start: row[idx.start], end: row[idx.end], assignedStaffId: assignmentsMap[row[idx.id]] || "", smartList: smartList });
                 }
             }
         }
@@ -145,7 +145,7 @@ function addTechHubShift(shiftData) {
             sheet.appendRow(['SH-' + Utilities.getUuid(), shiftData.description, day, shiftData.startTime, shiftData.endTime, zoomVal]);
         });
 
-        return getSchedulingRosterData();
+        return getSchedulingRosterData_refactored();
     } catch (e) { return { error: e.message }; }
 }
 
@@ -170,7 +170,7 @@ function deleteBulkTechHubShifts(shiftIds) {
         
         rowsToDelete.forEach(r => sheet.deleteRow(r));
         
-        return getSchedulingRosterData();
+        return getSchedulingRosterData_refactored();
     } catch (e) { return { error: e.message }; }
 }
 
@@ -200,7 +200,7 @@ function deleteAssignment(assignmentId) {
         for (let i = data.length - 1; i >= 1; i--) { 
             if (data[i][idIndex] === assignmentId) {
                 sheet.deleteRow(i + 1);
-                return getSchedulingRosterData();
+                return getSchedulingRosterData_refactored();
             }
         }
         throw new Error('ID not found.');
@@ -234,138 +234,8 @@ function handleClearAllShifts() {
             }
         }
         resetAllAssignments();
-        return getSchedulingRosterData();
+        return getSchedulingRosterData_refactored();
     } catch (e) { return { error: e.message }; }
-}
-
-function api_syncTechHubToCalendar(startStr, endStr, targetCalendarId, overwrite) {
-  try {
-    let calId = targetCalendarId;
-    if (calId && calId.includes('calendar.google.com')) {
-        const match = calId.match(/src=([^&]+)/);
-        if (match && match[1]) calId = decodeURIComponent(match[1]);
-    }
-
-    if (!calId) throw new Error("No calendar selected.");
-    const cal = CalendarApp.getCalendarById(calId);
-    if (!cal) throw new Error("Calendar not found. Check ID or permissions.");
-
-    const ss = getMasterDataHub();
-    const master = loadAllSchedulingData(ss);
-    
-    const startDate = new Date(startStr);
-    const endDate = new Date(endStr);
-    endDate.setHours(23, 59, 59);
-
-    const shiftMap = {};
-    if (master.shiftsData.length > 1) {
-        const h = master.shiftsData[0].map(normalizeHeader);
-        const idx = { 
-            id: h.indexOf('shiftid'), 
-            desc: h.indexOf('description'), 
-            day: h.indexOf('dayofweek'), 
-            start: h.indexOf('starttime'), 
-            end: h.indexOf('endtime'),
-            zoom: h.indexOf('zoom')
-        };
-        for (let i = 1; i < master.shiftsData.length; i++) {
-            const r = master.shiftsData[i];
-            const hasZoom = (idx.zoom > -1 && r[idx.zoom].toString().toLowerCase() === 'true');
-            shiftMap[r[idx.id]] = { 
-                day: r[idx.day], 
-                start: r[idx.start], 
-                end: r[idx.end], 
-                desc: r[idx.desc],
-                zoom: hasZoom 
-            };
-        }
-    }
-
-    const assignmentMap = {};
-    const staffEmailMap = {}; 
-    
-    if (master.staffData.length > 1) {
-        const h = master.staffData[0].map(normalizeHeader);
-        const idIdx = h.indexOf('staffid');
-        const nameIdx = h.indexOf('fullname');
-        for(let i=1; i<master.staffData.length; i++) {
-            const id = master.staffData[i][idIdx];
-            staffEmailMap[id] = { name: master.staffData[i][nameIdx], email: id }; 
-        }
-    }
-
-    if (master.assignmentsData.length > 1) {
-        const h = master.assignmentsData[0].map(normalizeHeader);
-        const idx = { type: h.indexOf('assignmenttype'), ref: h.indexOf('referenceid'), staff: h.indexOf('staffid') };
-        for (let i = 1; i < master.assignmentsData.length; i++) {
-            if (master.assignmentsData[i][idx.type] === 'Tech Hub') {
-                const sid = master.assignmentsData[i][idx.staff];
-                assignmentMap[master.assignmentsData[i][idx.ref]] = sid;
-            }
-        }
-    }
-
-    const settings = getSettings('schedulingSettings');
-    const masterZoomUrl = settings ? settings.zoomUrl : "";
-
-    let deletedCount = 0;
-    if (overwrite) {
-        const existingEvents = cal.getEvents(startDate, endDate);
-        existingEvents.forEach(e => {
-            if (e.getTitle().startsWith("Tech Hub:") || e.getDescription().includes("[Tech Hub Shift]")) {
-                e.deleteEvent();
-                deletedCount++;
-            }
-        });
-    }
-
-    let createdCount = 0;
-    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const currentDayName = dayNames[d.getDay()];
-        
-        for (const [shiftId, shift] of Object.entries(shiftMap)) {
-            if (shift.day === currentDayName && assignmentMap[shiftId]) {
-                const staffId = assignmentMap[shiftId];
-                const staffInfo = staffEmailMap[staffId] || { name: staffId, email: staffId };
-                
-                const title = shift.desc;
-                
-                const sParts = shift.start.split(':');
-                const eParts = shift.end.split(':');
-                
-                const eventStart = new Date(d);
-                eventStart.setHours(parseInt(sParts[0]), parseInt(sParts[1]), 0);
-                
-                const eventEnd = new Date(d);
-                eventEnd.setHours(parseInt(eParts[0]), parseInt(eParts[1]), 0);
-                
-                const options = { 
-                    description: `Staff: ${staffInfo.name}\n[Tech Hub Shift]`,
-                    guests: "",
-                    sendInvites: false
-                };
-                
-                if (shift.zoom && masterZoomUrl) {
-                    options.location = masterZoomUrl;
-                    options.description += `\n\nZoom Link: ${masterZoomUrl}`;
-                }
-
-                if (staffInfo.email.includes('@')) {
-                    options.guests = staffInfo.email;
-                    options.sendInvites = true;
-                }
-                
-                cal.createEvent(title, eventStart, eventEnd, options);
-                createdCount++;
-            }
-        }
-    }
-
-    return { success: true, message: `Sync Complete. Created ${createdCount} events. (Deleted ${deletedCount} old events).` };
-
-  } catch (e) { return { success: false, message: e.message }; }
 }
 
 function validateUserEditPermission(targetEmail) {
@@ -439,7 +309,7 @@ function api_getMyPreferences(targetEmail) {
 
 function api_savePreference(timeBlock, value, targetEmail) {
     try {
-        const email = validateUserEditPermission(targetEmail);
+        const email = validateUsereditPermission(targetEmail);
         const ss = getMasterDataHub();
         const sheet = getOrCreateSheet(ss, CONFIG.TABS.STAFF_PREFERENCES, CONFIG.HEADERS.PREFERENCES);
         const data = sheet.getDataRange().getValues();

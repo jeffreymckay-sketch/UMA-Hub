@@ -1,3 +1,4 @@
 {
-    "workbench.editor.alwaysShowEditorActions": true
+    "workbench.editor.alwaysShowEditorActions": true,
+    "IDX.agenticWorkspace": true
 }

@@ -1,232 +1,147 @@
-<script>
-  // --- ROSTER & SHIFT MANAGEMENT ---
-  var cachedCourseAssignments = [];
-  var cachedMstStaffList = []; // Store staff list for dropdowns
-  var courseSortState = { field: 'staffName', asc: true };
 
-  // Helper to update status on BOTH pages (Tech Hub & MST)
+<script>
+  // --- Globals ---
+  var cachedCourseAssignments = [];
+  var cachedMstStaffList = [];
+  var cachedFormOptions = {};
+  var courseSortState = { field: 'staffName', asc: true };
+  var _confirmAction;
+
+  // --- Core Functions ---
   function setSchedulingStatus(msg, type) {
-      ui_setStatus('scheduling-status', msg, type); // Tech Hub
-      ui_setStatus('mst-status', msg, type);        // MST
+      App.ui.setStatus('scheduling-status', msg, type);
+      App.ui.setStatus('mst-status', msg, type);
   }
 
   function loadSchedulingRosterData() {
-    setSchedulingStatus('Loading roster...', 'loading');
-    google.script.run.withSuccessHandler(renderSchedulingRoster).withFailureHandler(function(e) { 
-        setSchedulingStatus('Error: ' + e.message, 'error'); 
-    }).getSchedulingRosterData();
+    setSchedulingStatus('Loading assignments...', 'loading');
+    App.api.scheduling.getViewData()
+        .then(renderSchedulingRoster)
+        .catch(function(e) { 
+            setSchedulingStatus('Error loading data: ' + e.message, 'error'); 
+        });
   }
 
   function renderSchedulingRoster(response) {
-    if (response.error) { 
-        setSchedulingStatus(response.error, 'error'); 
+    if (!response || !response.success) {
+        var errorMessage = response && response.error ? response.error : "An unknown error occurred while loading data.";
+        setSchedulingStatus(errorMessage, 'error'); 
         return; 
     }
     
-    const data = response.data;
-    const rosterContainer = document.getElementById('roster-table-container');
-    const manageContainer = document.getElementById('manage-shifts-list');
-    const courseContainer = document.getElementById('sched-assignments-list');
-    
-    // Cache Staff List for In-Line Editing
+    var data = response.data;
     cachedMstStaffList = data.mstStaffList || [];
+    cachedFormOptions = data.formOptions || {};
+    cachedCourseAssignments = data.courseAssignments || [];
 
-    // Helper for sorting days
-    const dayOrder = { "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6, "Sunday": 7 };
-    
-    // Sort Roster (Day -> Start Time)
-    if (data.roster) {
-        data.roster.sort((a, b) => {
-            const d = (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99);
-            if (d !== 0) return d;
-            return a.start.localeCompare(b.start);
-        });
-
-        if (data.roster.length === 0) { 
-            if(rosterContainer) rosterContainer.innerHTML = '<p>No shifts defined. Go to Settings to add shifts.</p>'; 
-        } else { 
-            let html = '<table class="roster-table"><thead><tr><th>Day</th><th>Time</th><th>Staff Assignment</th></tr></thead><tbody>'; 
-            data.roster.forEach(r => { 
-                let options = `<option value="">-- Unassigned --</option>`; 
-                r.smartStaffList.forEach(s => { 
-                    const selected = r.assignedStaffId === s.id ? 'selected' : ''; 
-                    const style = s.available ? '' : 'class="not-available"'; 
-                    options += `<option value="${s.id}" ${selected} ${style}>${s.name}</option>`; 
-                }); 
-                html += `<tr><td><strong>${r.day}</strong><br><span style="font-size:0.8em">${r.description}</span></td><td>${r.start} - ${r.end}</td><td><select class="roster-select" data-shift-id="${r.shiftId}">${options}</select></td></tr>`; 
-            }); 
-            html += '</tbody></table>'; 
-            if(rosterContainer) rosterContainer.innerHTML = html; 
-        }
-    }
-    
-    // Sort Manage Shifts List
-    if (manageContainer && data.manageShifts) { 
-        if (data.manageShifts.length === 0) { 
-            manageContainer.innerHTML = '<p>No shifts found.</p>'; 
-        } else { 
-            data.manageShifts.sort((a, b) => {
-                const d = (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99);
-                if (d !== 0) return d;
-                return a.start.localeCompare(b.start);
-            });
-
-            let mHtml = '<ul style="list-style:none; padding:0;">'; 
-            data.manageShifts.forEach(s => { 
-                const zoomBadge = s.zoom ? '<span style="background:#e3f2fd; color:#003057; padding:2px 4px; border-radius:4px; font-size:0.7em; margin-left:5px;">Zoom</span>' : '';
-                mHtml += `<li style="padding:5px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="display:flex; align-items:center;">
-                        <input type="checkbox" class="shift-delete-check" value="${s.id}" style="margin-right:10px;">
-                        <span><strong>${s.day}</strong> (${s.start}-${s.end}): ${s.desc} ${zoomBadge}</span>
-                    </div>
-                    <button class="button danger" style="padding:2px 6px; font-size:0.8em;" onclick="handleDeleteShift('${s.id}')">Delete</button>
-                </li>`; 
-            }); 
-            mHtml += '</ul>'; 
-            manageContainer.innerHTML = mHtml; 
-        } 
-    }
-    
-    // COURSE ASSIGNMENTS
-    if (courseContainer && data.courseAssignments) { 
-        cachedCourseAssignments = data.courseAssignments;
-        renderCourseTable();
-    }
-    
-    setSchedulingStatus('Data loaded.', 'success');
+    renderCourseTable();
+    setSchedulingStatus(cachedCourseAssignments.length > 0 ? 'Assignments loaded successfully.' : 'No assignments to display.', 'success');
   }
 
   function renderCourseTable() {
-      const container = document.getElementById('sched-assignments-list');
+      var container = document.getElementById('sched-assignments-list');
+      if (!container) return;
+
+      var html = '<div class="table-controls"><button class="button secondary" onclick="handleExportCourses()">Export to Sheet</button></div>';
       
-      // Button Container
-      let html = '<div style="margin-bottom:10px; text-align:right; display:flex; justify-content:flex-end; gap:10px;">';
-      html += '<button class="button" onclick="handleForceRemoteSync()">🔄 Update from Master Schedule</button>';
-      html += '<button class="button secondary" onclick="handleExportCourses()">Export to Sheet</button>';
-      html += '</div>';
-
-      if (!cachedCourseAssignments || cachedCourseAssignments.length === 0) { 
-          container.innerHTML = html + '<p>No course assignments found in Course_Schedule. Click "Update from Master Schedule" to fetch data.</p>';
-          return; 
-      }
-
-      html += '<table class="data-table"><thead><tr>';
-      html += `<th class="sortable-header" onclick="handleSortCourses('staffName')">Assigned Staff</th>`;
-      html += `<th class="sortable-header" onclick="handleSortCourses('itemName')">Course</th>`;
-      html += `<th class="sortable-header" onclick="handleSortCourses('courseFaculty')">Faculty</th>`;
-      html += `<th>Link</th>`; // NEW COLUMN
-      html += `<th class="sortable-header" onclick="handleSortCourses('courseDay')">Day</th>`;
-      html += `<th class="sortable-header" onclick="handleSortCourses('courseTime')">Time</th>`;
-      html += `<th class="sortable-header" onclick="handleSortCourses('duration')">Duration</th>`;
-      html += `<th class="sortable-header" onclick="handleSortCourses('location')">Classroom</th>`;
-      html += '</tr></thead><tbody>';
-
-      cachedCourseAssignments.forEach(c => {
-          // Build In-Line Dropdown
-          let staffOptions = `<option value="">-- Unassigned --</option>`;
-          cachedMstStaffList.forEach(s => {
-              const sel = String(s.id) === String(c.staffId) ? 'selected' : '';
-              staffOptions += `<option value="${s.id}" ${sel}>${s.name}</option>`;
-          });
-
-          const dropdownHtml = `
-            <div style="display:flex; gap:5px; align-items:center;">
-                <select id="assign-select-${c.id}" style="font-size:0.85em; padding:4px; max-width:150px;">${staffOptions}</select>
-                <button class="button btn-sm" style="padding:4px 8px;" onclick="handleInlineAssignmentUpdate('${c.id}')" title="Save Assignment">💾</button>
-            </div>
-          `;
-
-          // Link Icon
-          const linkHtml = c.link ? `<a href="${c.link}" target="_blank" title="Open Zoom Link" style="text-decoration:none; font-size:1.2em;">🔗</a>` : '';
-
-          html += `<tr>
-              <td>${dropdownHtml}</td>
-              <td>${c.itemName}</td>
-              <td>${c.courseFaculty}</td>
-              <td style="text-align:center;">${linkHtml}</td>
-              <td>${c.courseDay}</td>
-              <td>${c.courseTime}</td>
-              <td>${c.duration}</td>
-              <td>${c.location}</td>
-          </tr>`;
-      });
-      html += '</tbody></table>';
-      container.innerHTML = html;
-  }
-
-  // NEW: Handler for Import Links with In-Page Report
-  function handleImportLinks() {
-      const url = document.getElementById('mst-links-url').value;
-      const tab = document.getElementById('mst-links-tab').value;
-      const reportBox = document.getElementById('import-result-container');
-      
-      if (!url || !tab) {
-          setSchedulingStatus('Please enter both URL and Tab Name.', 'error');
+      if (!cachedCourseAssignments || cachedCourseAssignments.length === 0) {
+          container.innerHTML = html + '<p class="info-message">No course assignments found.</p>';
           return;
       }
-      
-      setSchedulingStatus('Importing Links...', 'loading');
-      reportBox.style.display = 'none';
-      reportBox.innerText = '';
-      
-      google.script.run.withSuccessHandler(function(res) {
-          if (res.success) {
-              setSchedulingStatus("Import Complete.", 'success');
-              reportBox.style.display = 'block';
-              reportBox.innerText = res.message;
-              loadSchedulingRosterData(); 
-          } else {
-              setSchedulingStatus('Import Failed.', 'error');
-              reportBox.style.display = 'block';
-              reportBox.innerText = "Error:\n" + res.message;
-          }
-      }).importCourseLinks(url, tab);
+
+      html += '<table class="data-table zebra-stripes"><thead><tr>' +
+          '<th class="sortable-header" onclick="handleSortCourses(\'staffName\')">Assigned Staff</th>' +
+          '<th class="sortable-header" onclick="handleSortCourses(\'itemName\')">Course</th>' +
+          '<th class="sortable-header" onclick="handleSortCourses(\'courseFaculty\')">Faculty</th>' +
+          '<th>Link</th>' +
+          '<th class="sortable-header" onclick="handleSortCourses(\'courseDay\')">Day</th>' +
+          '<th class="sortable-header" onclick="handleSortCourses(\'courseTime\')">Time</th>' +
+          '<th>Duration</th><th>Classroom</th><th>Actions</th></tr></thead><tbody>';
+
+      cachedCourseAssignments.forEach(function(c) {
+          var staffOptions = '<option value="">-- Unassigned --</option>';
+          (cachedMstStaffList || []).forEach(function(s) {
+              var sel = (c.staffId && s.id && String(s.id).toLowerCase() === String(c.staffId).toLowerCase()) ? 'selected' : '';
+              staffOptions += '<option value="' + s.id + '" ' + sel + '>' + s.name + '</option>';
+          });
+
+          var linkHtml = c.link ? '<a href="' + c.link + '" target="_blank" title="Open Zoom Link" class="icon-link">🔗</a>' : '';
+          var encodedItemName = encodeURIComponent(c.itemName || '');
+
+          html += '<tr>' +
+              '<td>' +
+                  '<div class="assignment-control">' +
+                      '<select id="assign-select-' + c.id + '" class="inline-assign-select">' + staffOptions + '</select>' +
+                      '<button class="button icon-only" onclick="handleInlineAssignmentUpdate(\'' + c.id + '\')" title="Save Assignment">💾</button>' +
+                  '</div>' +
+              '</td>' +
+              '<td>' + (c.itemName || '') + '</td>' +
+              '<td>' + (c.courseFaculty || '') + '</td>' +
+              '<td class="centered">' + linkHtml + '</td>' +
+              '<td>' + (c.courseDay || '') + '</td>' +
+              '<td>' + (c.courseTime || '') + '</td>' +
+              '<td>' + (c.duration || '') + '</td>' +
+              '<td>' + (c.location || '') + '</td>' +
+              '<td class="centered">' +
+                  '<button class="button icon-only" onclick="handleEditCourse(\'' + c.id + '\')" title="Edit Course">✏️</button>' +
+                  '<button class="button icon-only danger" onclick="handleDeleteCourse(\'' + c.id + '\', \''+ encodedItemName + '\')" title="Delete Course">🗑️</button>' +
+              '</td>' +
+          '</tr>';
+      });
+      container.innerHTML = html + '</tbody></table>';
   }
 
-  // NEW: Load Saved Settings on Init
-  function loadLinkImportSettings() {
-      google.script.run.withSuccessHandler(function(res) {
-          if(res.url) document.getElementById('mst-links-url').value = res.url;
-          if(res.tab) document.getElementById('mst-links-tab').value = res.tab;
-      }).api_getLinkImportSettings();
-  }
+  // --- Event Handlers ---
+  function handleDeleteCourse(courseId, encodedCourseName) {
+      var courseName = decodeURIComponent(encodedCourseName);
+      var message = 'Are you sure you want to permanently delete the course "' + courseName + '"? This action cannot be undone.';
 
-  // Handler for Manual Sync
-  function handleForceRemoteSync() {
-      if(!confirm("Update local data from the External Master Schedule? This will fetch new classes and fix durations. It may take a few seconds.")) return;
-      
-      setSchedulingStatus('Updating from Master Schedule...', 'loading');
-      
-      google.script.run.withSuccessHandler(function(res) {
-          if (res.success) {
-              setSchedulingStatus(res.message, 'success');
-              loadSchedulingRosterData(); // Reload the view to show changes
-          } else {
-              setSchedulingStatus('Update Failed: ' + res.message, 'error');
-          }
-      }).api_forceRemoteSync();
+      document.getElementById('modal-message').innerHTML = message;
+
+      _confirmAction = function() {
+          setSchedulingStatus('Deleting course...', 'loading');
+          google.script.run
+              .withSuccessHandler(function(res) {
+                  if (res.success) {
+                      setSchedulingStatus('Course deleted successfully.', 'success');
+                      loadSchedulingRosterData();
+                  } else {
+                      setSchedulingStatus('Error deleting course: ' + res.error, 'error');
+                  }
+              })
+              .withFailureHandler(function(e) {
+                  setSchedulingStatus('Error: ' + e.message, 'error');
+              })
+              .api_deleteCourse(courseId);
+      };
+
+      document.getElementById('confirmation-modal-overlay').style.display = 'flex';
   }
 
   function handleInlineAssignmentUpdate(courseId) {
-      const select = document.getElementById(`assign-select-${courseId}`);
-      const newStaffId = select.value;
+      var select = document.getElementById('assign-select-' + courseId);
+      if (!select) return;
+      var newStaffId = select.value;
       
       setSchedulingStatus('Updating assignment...', 'loading');
       
-      google.script.run.withSuccessHandler(renderSchedulingRoster).api_updateCourseAssignment(courseId, newStaffId);
+      google.script.run
+          .withSuccessHandler(function() {
+              loadSchedulingRosterData(); 
+          })
+          .withFailureHandler(function(e) {
+              setSchedulingStatus('Update failed: ' + e.message, 'error');
+          })
+          .api_updateCourseAssignment(courseId, newStaffId);
   }
-
+  
   function handleSortCourses(field) {
-      if (courseSortState.field === field) {
-          courseSortState.asc = !courseSortState.asc;
-      } else {
-          courseSortState.field = field;
-          courseSortState.asc = true;
-      }
-
-      cachedCourseAssignments.sort((a, b) => {
-          const valA = (a[field] || '').toString().toLowerCase();
-          const valB = (b[field] || '').toString().toLowerCase();
+      courseSortState.asc = (courseSortState.field === field) ? !courseSortState.asc : true;
+      courseSortState.field = field;
+      
+      (cachedCourseAssignments || []).sort(function(a, b) {
+          var valA = (a[field] || '').toString().toLowerCase();
+          var valB = (b[field] || '').toString().toLowerCase();
           if (valA < valB) return courseSortState.asc ? -1 : 1;
           if (valA > valB) return courseSortState.asc ? 1 : -1;
           return 0;
@@ -234,138 +149,201 @@
 
       renderCourseTable();
   }
+  
+  // --- Modal & Form Functions ---
+  function closeConfirmationModal() {
+    document.getElementById('confirmation-modal-overlay').style.display = 'none';
+    _confirmAction = null;
+  }
+
+  function confirmModalAction() {
+    if (typeof _confirmAction === 'function') {
+      _confirmAction();
+    }
+    closeConfirmationModal();
+  }
+
+  function _populateSelect(elementId, options, placeholder, selectedValues) {
+    var select = document.getElementById(elementId);
+    if (!select) return;
+
+    var selectedSet = new Set();
+    if (selectedValues) {
+        (Array.isArray(selectedValues) ? selectedValues : [selectedValues]).forEach(function(val) {
+            selectedSet.add(String(val).trim());
+        });
+    }
+
+    var html = '<option value="">-- ' + placeholder + ' --</option>';
+    (options || []).forEach(function(opt) {
+        var value = (typeof opt === 'object' && opt !== null) ? opt.id : opt;
+        var name = (typeof opt === 'object' && opt !== null) ? opt.name : opt;
+        var isSelected = selectedSet.has(String(value).trim());
+        html += '<option value="' + value + '" ' + (isSelected ? 'selected' : '') + '>' + name + '</option>';
+    });
+    select.innerHTML = html;
+  }
+
+  function openAddCourseModal() {
+    document.getElementById('add-course-modal-overlay').style.display = 'flex';
+    _populateSelect('add-course-session', cachedFormOptions.sessions, 'Select Session');
+    _populateSelect('add-course-day', cachedFormOptions.days, 'Select Day(s)');
+    _populateSelect('add-course-time-of-day', cachedFormOptions.timesOfDay, 'Select Time');
+    _populateSelect('add-course-location', cachedFormOptions.locations, 'Select Classroom');
+    _populateSelect('add-course-staff-assigned', cachedMstStaffList, 'Assign Staff');
+  }
+
+  function closeAddCourseModal() {
+    document.getElementById('add-course-modal-overlay').style.display = 'none';
+    App.ui.setStatus('add-course-status', '', 'clear');
+    var form = document.getElementById('add-course-form');
+    if (form) form.reset();
+  }
+
+  function handleAddCourse() {
+      var daysSelected = document.getElementById('add-course-day').selectedOptions;
+      var days = Array.prototype.map.call(daysSelected, function(opt) { return opt.value; });
+
+      var courseDetails = {
+          session: document.getElementById('add-course-session').value,
+          startDate: document.getElementById('add-course-start-date').value,
+          endDate: document.getElementById('add-course-end-date').value,
+          day: days.join(' / '),
+          course: document.getElementById('add-course-title').value,
+          faculty: document.getElementById('add-course-faculty').value,
+          runTime: document.getElementById('add-course-runtime').value,
+          timeOfDay: document.getElementById('add-course-time-of-day').value,
+          bxLocation: document.getElementById('add-course-location').value,
+          mstAssignedByEmail: document.getElementById('add-course-staff-assigned').value,
+          zoomLink: document.getElementById('add-course-zoom-link').value
+      };
+
+      if (!courseDetails.course || !courseDetails.faculty) {
+          App.ui.setStatus('add-course-status', 'Course Title and Faculty are required.', 'error');
+          return;
+      }
+      
+      App.ui.setStatus('add-course-status', 'Adding class...', 'loading');
+
+      google.script.run
+          .withSuccessHandler(function(res) {
+              if (res.success) {
+                  setSchedulingStatus('New class added successfully.', 'success');
+                  closeAddCourseModal();
+                  loadSchedulingRosterData();
+              } else {
+                  App.ui.setStatus('add-course-status', 'Error: ' + res.error, 'error');
+              }
+          })
+          .withFailureHandler(function(e) {
+              App.ui.setStatus('add-course-status', 'Error: ' + e.message, 'error');
+          })
+          .api_addCourse(courseDetails);
+  }
+
+  function handleEditCourse(courseId) {
+    var course = cachedCourseAssignments.find(function(c) { return c.id === courseId; });
+    if (!course) {
+        setSchedulingStatus('Error: Could not find course data to edit.', 'error');
+        return;
+    }
+
+    document.getElementById('edit-course-id').value = course.id;
+    document.getElementById('edit-course-title').value = course.itemName;
+    document.getElementById('edit-course-faculty').value = course.courseFaculty;
+    document.getElementById('edit-course-runtime').value = course.runTime;
+    document.getElementById('edit-course-zoom-link').value = course.link;
+    document.getElementById('edit-course-start-date').value = course.startDate;
+    document.getElementById('edit-course-end-date').value = course.endDate;
+    
+    var courseDays = course.courseDay ? course.courseDay.split(' / ') : [];
+
+    _populateSelect('edit-course-session', cachedFormOptions.sessions, 'Select Session', course.session);
+    _populateSelect('edit-course-day', cachedFormOptions.days, 'Select Day(s)', courseDays);
+    _populateSelect('edit-course-time-of-day', cachedFormOptions.timesOfDay, 'Select Time', course.timeOfDay);
+    _populateSelect('edit-course-location', cachedFormOptions.locations, 'Select Classroom', course.location);
+    _populateSelect('edit-course-staff-assigned', cachedMstStaffList, 'Assign Staff', course.staffId);
+
+    document.getElementById('edit-course-modal-overlay').style.display = 'flex';
+  }
+
+  function handleUpdateCourse() {
+    var daysSelected = document.getElementById('edit-course-day').selectedOptions;
+    var days = Array.prototype.map.call(daysSelected, function(opt) { return opt.value; });
+
+    var courseDetails = {
+        id: document.getElementById('edit-course-id').value,
+        session: document.getElementById('edit-course-session').value,
+        startDate: document.getElementById('edit-course-start-date').value,
+        endDate: document.getElementById('edit-course-end-date').value,
+        day: days.join(' / '),
+        course: document.getElementById('edit-course-title').value,
+        faculty: document.getElementById('edit-course-faculty').value,
+        runTime: document.getElementById('edit-course-runtime').value,
+        timeOfDay: document.getElementById('edit-course-time-of-day').value,
+        bxLocation: document.getElementById('edit-course-location').value,
+        mstAssignedByEmail: document.getElementById('edit-course-staff-assigned').value,
+        zoomLink: document.getElementById('edit-course-zoom-link').value
+    };
+
+    if (!courseDetails.course || !courseDetails.faculty) {
+        App.ui.setStatus('edit-course-status', 'Course Title and Faculty are required.', 'error');
+        return;
+    }
+
+    App.ui.setStatus('edit-course-status', 'Updating class...', 'loading');
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (res.success) {
+                setSchedulingStatus('Class updated successfully.', 'success');
+                closeEditCourseModal();
+                loadSchedulingRosterData();
+            } else {
+                App.ui.setStatus('edit-course-status', 'Error: ' + res.error, 'error');
+            }
+        })
+        .withFailureHandler(function(e) {
+            App.ui.setStatus('edit-course-status', 'Error: ' + e.message, 'error');
+        })
+        .api_updateCourse(courseDetails);
+  }
+
+  function closeEditCourseModal() {
+    document.getElementById('edit-course-modal-overlay').style.display = 'none';
+    App.ui.setStatus('edit-course-status', '', 'clear');
+    var form = document.getElementById('edit-course-form');
+    if (form) form.reset();
+  }
 
   function handleExportCourses() {
-      if (cachedCourseAssignments.length === 0) return;
-      
-      const btn = document.querySelector('#sched-assignments-list button.secondary');
-      if(btn) btn.innerText = "Exporting...";
-      
-      google.script.run.withSuccessHandler(function(res) {
-          if(btn) btn.innerText = "Export to Sheet";
-          if(res.success) { window.open(res.url, '_blank'); }
-          else { alert("Export Failed: " + res.message); }
-      }).api_exportCourseAssignments(cachedCourseAssignments);
-  }
-
-  function handleUnassignCourse(courseId) {
-      if(!confirm("Are you sure you want to unassign this staff member?")) return;
-      setSchedulingStatus('Unassigning...', 'loading');
-      google.script.run.withSuccessHandler(renderSchedulingRoster).api_unassignCourse(courseId);
-  }
-
-  function handleSaveAllRosterAssignments() {
-    const selects = document.querySelectorAll('.roster-select');
-    const assignments = [];
-    selects.forEach(s => { assignments.push({ shiftId: s.getAttribute('data-shift-id'), staffId: s.value }); });
-    const start = document.getElementById('roster-start-date').value;
-    const end = document.getElementById('roster-end-date').value;
-    if (!start || !end) { setSchedulingStatus('Please select Start and End dates.', 'error'); return; }
-    setSchedulingStatus('Saving assignments...', 'loading');
-    google.script.run.withSuccessHandler(function(res) { setSchedulingStatus(res.message, res.success ? 'success' : 'error'); }).saveAllTechHubAssignments(assignments, start, end);
-  }
-
-  function handleResetAssignments() { ui_confirm("Reset all Tech Hub assignments? This cannot be undone.", function(yes) { if(yes) { setSchedulingStatus('Resetting...', 'loading'); google.script.run.withSuccessHandler(function(res){ setSchedulingStatus(res.message, 'success'); loadSchedulingRosterData(); }).resetAllAssignments(); } }); }
-  
-  function handleAddShift() { 
-      const desc = document.getElementById('shift-add-desc').value;
-      const start = document.getElementById('shift-add-start').value;
-      const end = document.getElementById('shift-add-end').value;
-      const zoom = document.getElementById('shift-add-zoom').checked;
-      
-      const days = [];
-      document.querySelectorAll('.shift-day-check:checked').forEach(cb => days.push(cb.value));
-      
-      if (days.length === 0) {
-          setSchedulingStatus('Please select at least one day.', 'error');
-          return;
-      }
-
-      const shiftData = { 
-          description: desc, 
-          days: days, 
-          startTime: start, 
-          endTime: end,
-          zoom: zoom
-      }; 
-      
-      setSchedulingStatus('Adding shifts...', 'loading');
-      google.script.run.withSuccessHandler(renderSchedulingRoster).addTechHubShift(shiftData); 
-  }
-
-  function handleBulkDeleteShifts() {
-      const checks = document.querySelectorAll('.shift-delete-check:checked');
-      if (checks.length === 0) {
-          setSchedulingStatus('No shifts selected.', 'error');
-          return;
-      }
-      
-      if (!confirm(`Delete ${checks.length} shifts? This will also remove any assignments linked to them.`)) return;
-      
-      const ids = Array.from(checks).map(c => c.value);
-      setSchedulingStatus('Deleting...', 'loading');
-      google.script.run.withSuccessHandler(renderSchedulingRoster).deleteBulkTechHubShifts(ids);
-  }
-
-  function handleDeleteShift(id) { if(confirm("Delete this shift?")) { google.script.run.withSuccessHandler(renderSchedulingRoster).deleteTechHubShift(id); } }
-  function handleDeleteAssignment(id) { google.script.run.withSuccessHandler(renderSchedulingRoster).deleteAssignment(id); }
-  function handleClearAllShifts() { ui_confirm("Delete ALL shifts? This clears the roster structure.", function(yes){ if(yes) { google.script.run.withSuccessHandler(renderSchedulingRoster).clearAllShifts(); } }); }
-
-  // --- NEW: TECH HUB SYNC LOGIC ---
-  function loadTechHubSyncOptions() {
-      google.script.run.withSuccessHandler(function(res) {
-          const select = document.getElementById('th-sync-calendar-select');
-          if(!select) return;
-          select.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
-          if (res.success && res.data) { 
-              res.data.forEach(cal => { 
-                  const option = document.createElement('option'); 
-                  option.value = cal.id; 
-                  option.text = cal.name; 
-                  select.appendChild(option); 
-              }); 
-          }
-      }).getWritableCalendars();
-  }
-
-  function handleSyncToCalendar() {
-      const manualId = document.getElementById('th-sync-manual-id').value.trim();
-      const dropdownId = document.getElementById('th-sync-calendar-select').value;
-      const calId = manualId || dropdownId;
-
-      const start = document.getElementById('th-sync-start').value;
-      const end = document.getElementById('th-sync-end').value;
-      const overwrite = document.getElementById('th-sync-overwrite').checked;
-      
-      if (!calId || !start || !end) {
-          setSchedulingStatus('Please select Calendar, Start Date, and End Date.', 'error');
-          return;
-      }
-      
-      const action = overwrite ? "OVERWRITE existing" : "APPEND to";
-      
-      ui_confirm(`Sync Tech Hub shifts to Calendar? This will ${action} 'Tech Hub' events in this range.`, function(yes) {
-          if (yes) {
-              setSchedulingStatus('Syncing to Calendar... (This may take a moment)', 'loading');
-              google.script.run.withSuccessHandler(function(res) {
-                  if (res.success) {
-                      setSchedulingStatus(res.message, 'success');
-                  } else {
-                      setSchedulingStatus('Sync Failed: ' + res.message, 'error');
-                  }
-              }).api_syncTechHubToCalendar(start, end, calId, overwrite);
-          }
-      });
+      if (!cachedCourseAssignments || cachedCourseAssignments.length === 0) return;
+      setSchedulingStatus("Exporting...", 'loading');
+      google.script.run
+        .withSuccessHandler(function(res) {
+            if(res.success && res.url) { 
+                setSchedulingStatus("Export successful.", 'success');
+                window.open(res.url, '_blank'); 
+            } else { 
+                var message = res && res.message ? res.message : 'Unknown error';
+                setSchedulingStatus("Export Failed: " + message, 'error'); 
+            }
+        })
+        .withFailureHandler(function(e) {
+            setSchedulingStatus("Export failed: " + e.message, 'error');
+        })
+        .api_exportCourseAssignments(cachedCourseAssignments);
   }
 
   // --- INIT ---
   document.addEventListener('DOMContentLoaded', function() {
-      // Load settings when MST tab is clicked
-      const mstTab = document.querySelector('.tab-nav-item[onclick*="tab-mst-assign"]');
+      var mstTab = document.querySelector('.tab-nav-item[onclick*="tab-mst-assign"]');
       if (mstTab) {
-          mstTab.addEventListener('click', loadLinkImportSettings);
+          mstTab.addEventListener('click', loadSchedulingRosterData);
       }
-      // Also load immediately if we start on this page (optional)
-      loadLinkImportSettings();
+      
+      if (document.getElementById('sched-assignments-list')) {
+          loadSchedulingRosterData();
+      }
   });
 </script>

@@ -27,6 +27,16 @@
       getDataHubTabs: () => serverCall('api_getDataHubTabs'),
       getTabHeaders: (tabName) => serverCall('api_getTabHeaders'),
 
+      // Scheduling
+      scheduling: {
+        getViewData: () => serverCall('getMSTViewData'),
+        updateAssignment: (courseId, staffId) => serverCall('api_updateCourseAssignment', courseId, staffId),
+        addCourse: (details) => serverCall('api_addCourse', details),
+        updateCourse: (details) => serverCall('api_updateCourse', details),
+        deleteCourse: (id) => serverCall('api_deleteCourse', id),
+        export: (assignments) => serverCall('api_exportCourseAssignments', assignments),
+      },
+
       // Calendar
       calendar: {
         getWritableCalendars: () => serverCall('getWritableCalendars'),

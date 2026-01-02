@@ -8,10 +8,10 @@ const CONFIG = {
     STAFF_AVAILABILITY: "Staff_Availability",
     STAFF_PREFERENCES: "Staff_Preferences",
     COURSE_SCHEDULE: "Course_Schedule",
-    TECH_HUB_SHIFTS: "Tech_Hub_Shifts",
+    TECH_HUB_SHIFTS: "TechHub_Shifts", // Corrected typo
     EVENT_TYPES: "Event_Types",
     SETTINGS: "Permissions_Matrix",
-    LOGS: "Logs",
+    LOGS: "System_Logs", // Corrected name
     REPORT_DATA: "Report_Data"
   },
 

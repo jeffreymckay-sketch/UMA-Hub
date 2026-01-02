@@ -130,7 +130,10 @@
   <div id="tab-mst-assign" class="tab-page active">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
           <h3>Assign Staff to Courses</h3>
-          <button class="button secondary btn-sm" onclick="loadSchedulingRosterData()">🔄 Refresh Data</button>
+          <div>
+            <button class="button success btn-sm" onclick="openAddCourseModal()">+ Add Class</button>
+            <button class="button secondary btn-sm" onclick="loadSchedulingRosterData()">🔄 Refresh Data</button>
+          </div>
       </div>
       
       <!-- Import Links Section -->
@@ -239,7 +242,7 @@
               <button class="button secondary" onclick="lookup_resetToStep2()">Modify Columns</button>
               <button class="button secondary" onclick="handleExportResults()">Export Results</button>
           </div>
-          <div class="filter-bar-container">
+          <div class.="filter-bar-container">
               <h4>Filters</h4>
               <div id="lookup-dynamic-filters" class="filter-flex-row"></div>
               <div class="smart-link-box">
