@@ -94,18 +94,25 @@ function handleFatalError(err) {
  */
 
 /**
- * Sets a status message in a designated status element.
+ * Sets a status message and scrolls it into view.
  * @param {string} elementId - The ID of the status message element.
  * @param {string} message - The text to display.
- * @param {'loading'|'success'|'error'} type - The type of message, for styling.
+ * @param {'loading'|'success'|'error'|'clear'} type - The type of message for styling.
  */
 function setStatus(elementId, message, type) {
     const statusEl = document.getElementById(elementId);
     if (statusEl) {
-        statusEl.textContent = message;
-        statusEl.className = `status-message ${type}`;
+        if (type === 'clear') {
+            statusEl.textContent = '';
+            statusEl.className = 'status-message';
+        } else {
+            statusEl.textContent = message;
+            statusEl.className = `status-message ${type}`;
+            statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 }
+
 
 /**
  * Toggles the visibility of the main sidebar navigation.

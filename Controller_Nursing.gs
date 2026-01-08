@@ -7,8 +7,11 @@
 
 function analyzeNursingSheet(sheetUrl) {
     try {
+        const { settings, targetFolderId } = nursing_getSettingsAndIDs();
+        if (!targetFolderId) throw new Error("Output folder is not defined in Nursing Settings.");
+        const mainOutputFolder = DriveApp.getFolderById(targetFolderId);
+
         if (!sheetUrl) {
-            const settings = getSettings(CONFIG.SETTINGS_KEYS.NURSING);
             sheetUrl = settings.nursingSheetId;
         }
         if (!sheetUrl) throw new Error("No sheet URL was provided, and none is saved in Settings.");
@@ -24,8 +27,13 @@ function analyzeNursingSheet(sheetUrl) {
         for (const sheet of sheets) {
             try {
                 if (sheet.getLastRow() < 5 || sheet.getName().toLowerCase().includes('template') || sheet.getName().toLowerCase().includes('config')) continue;
-                const parsedData = parseSheetForAnalysis_(sheet);
-                if (parsedData && parsedData.exams.length > 0) allSheetsData.push(parsedData);
+                
+                let parsedData = parseSheetForAnalysis_(sheet, spreadsheet);
+                
+                if (parsedData && parsedData.exams.length > 0) {
+                    checkForExistingDocs_(parsedData, mainOutputFolder);
+                    allSheetsData.push(parsedData);
+                }
             } catch (e) {
                 analysisErrors.push(`Sheet '${sheet.getName()}': ${e.message}`);
             }
@@ -34,23 +42,48 @@ function analyzeNursingSheet(sheetUrl) {
         if (allSheetsData.length === 0 && analysisErrors.length > 0) throw new Error(`Analysis failed on all sheets. Errors: ${analysisErrors.join("; ")}`)
         return { success: true, data: { spreadsheetId, sheets: allSheetsData, analysisErrors } };
     } catch (e) {
+        console.error("analyzeNursingSheet Error: " + e.stack);
         return { success: false, message: "ANALYSIS FAILED: " + e.message };
     }
 }
 
+function checkForExistingDocs_(sheetData, mainOutputFolder) {
+    const { course, exams, sheetName } = sheetData;
+    if (!exams || exams.length === 0) return;
+
+    const folderName = sheetName.trim();
+    const existingFolders = mainOutputFolder.getFoldersByName(folderName);
+    const targetFolder = existingFolders.hasNext() ? existingFolders.next() : null;
+
+    if (!targetFolder) {
+        exams.forEach(exam => exam.docUrl = null);
+        return;
+    }
+
+    for (const exam of exams) {
+        const facultyName = course.faculty && course.faculty !== 'N/A' ? ` (${course.faculty})` : '';
+        const docTitle = `${course.code} ${course.name}${facultyName} - ${exam.name}`.replace(/[\/]/g, ' - ');
+        
+        const existingFiles = targetFolder.getFilesByName(docTitle);
+        
+        if (existingFiles.hasNext()) {
+            const file = existingFiles.next();
+            exam.docUrl = file.getUrl();
+        } else {
+            exam.docUrl = null;
+        }
+    }
+}
+
+
 function createNursingProctoringDocuments(approvedData) {
-    return processNursingDocuments_(approvedData, false); // false = not update-only
+    return processNursingDocuments_(approvedData, false);
 }
 
 function updateAllNursingDocuments(approvedData) {
-    return processNursingDocuments_(approvedData, true); // true = update-only mode
+    return processNursingDocuments_(approvedData, true);
 }
 
-/**
- * [UPGRADED] Core document processing engine with a mode for "update-only".
- * @param {object} approvedData The data from the frontend.
- * @param {boolean} updateOnly If true, will only update existing docs and skip creating new ones.
- */
 function processNursingDocuments_(approvedData, updateOnly) {
     try {
         const { settings, targetFolderId } = nursing_getSettingsAndIDs();
@@ -61,6 +94,7 @@ function processNursingDocuments_(approvedData, updateOnly) {
         let docsCreated = 0;
         let docsUpdated = 0;
         let docsSkipped = 0;
+        let docUrl = null; 
 
         for (const sheetData of approvedData.sheets) {
             const { course, exams, rosters, sheetName } = sheetData;
@@ -71,25 +105,33 @@ function processNursingDocuments_(approvedData, updateOnly) {
             const targetFolder = existingFolders.hasNext() ? existingFolders.next() : mainOutputFolder.createFolder(folderName);
 
             for (const exam of exams) {
-                const docTitle = `${course.code} ${course.name} - ${exam.name}`.replace(/[\/]/g, '-');
+                const facultyName = course.faculty && course.faculty !== 'N/A' ? ` (${course.faculty})` : '';
+                const docTitle = `${course.code} ${course.name}${facultyName} - ${exam.name}`.replace(/[\/]/g, ' - ');
                 const existingFiles = targetFolder.getFilesByName(docTitle);
+
+                let finalAccommodations = exam.accommodations || "";
 
                 if (existingFiles.hasNext()) {
                     const file = existingFiles.next();
                     const doc = DocumentApp.openById(file.getId());
+                    docUrl = doc.getUrl();
                     const body = doc.getBody();
-                    const preservedAccommodations = findSectionText_(body, "Accommodations");
+
+                    if (!exam.accommodations) {
+                        finalAccommodations = findSectionText_(body, "Accommodations");
+                    }
+
                     body.clear();
-                    populateDocContent_(body, docTitle, course, exam, rosters, settings.customNotes, preservedAccommodations);
+                    populateDocContent_(body, docTitle, course, exam, rosters, settings.customNotes, finalAccommodations);
                     doc.saveAndClose();
                     logSystemAction("Nursing", `Updated in folder '${folderName}'`, docTitle, doc.getId(), `Exam Date: ${exam.date}`);
                     docsUpdated++;
                 } else {
                     if (updateOnly) {
                         docsSkipped++;
-                        continue; // Skip creating new file in update-only mode
+                        continue;
                     }
-                    // Create new document
+                    
                     let doc;
                     if (templateId) {
                         const newFile = DriveApp.getFileById(templateId).makeCopy(docTitle, targetFolder);
@@ -100,7 +142,8 @@ function processNursingDocuments_(approvedData, updateOnly) {
                         targetFolder.addFile(newFile);
                         DriveApp.getRootFolder().removeFile(newFile);
                     }
-                    populateDocContent_(doc.getBody(), docTitle, course, exam, rosters, settings.customNotes, "");
+                    docUrl = doc.getUrl();
+                    populateDocContent_(doc.getBody(), docTitle, course, exam, rosters, settings.customNotes, finalAccommodations);
                     doc.saveAndClose();
                     logSystemAction("Nursing", `Created in folder '${folderName}'`, docTitle, doc.getId(), `Exam Date: ${exam.date}`);
                     docsCreated++;
@@ -118,7 +161,8 @@ function processNursingDocuments_(approvedData, updateOnly) {
              message = "Analysis complete. No documents needed to be created or updated.";
         }
         
-        return { success: true, message };
+        const isSingleDocOperation = approvedData.sheets.length === 1 && approvedData.sheets[0].exams.length === 1;
+        return { success: true, message, docUrl: isSingleDocOperation ? docUrl : null };
 
     } catch (e) {
         console.error("processNursingDocuments_ Error: " + e.stack);
@@ -127,7 +171,7 @@ function processNursingDocuments_(approvedData, updateOnly) {
 }
 
 
-function populateDocContent_(body, docTitle, course, exam, rosters, customNotes, preservedAccommodations) {
+function populateDocContent_(body, docTitle, course, exam, rosters, customNotes, accommodationsText) {
     body.appendParagraph(docTitle).setHeading(DocumentApp.ParagraphHeading.TITLE);
     body.appendParagraph('Exam Details').setHeading(DocumentApp.ParagraphHeading.HEADING1);
     const addDetail = (label, val, highlight) => {
@@ -137,6 +181,7 @@ function populateDocContent_(body, docTitle, course, exam, rosters, customNotes,
         const text = item.appendText(String(val));
         if (highlight) text.setBackgroundColor('#FFFF00');
     };
+    addDetail('Faculty', course.faculty, false);
     addDetail('Date', exam.date, true);
     addDetail('Start Time (On Site)', exam.siteTime, true);
     addDetail('Start Time (Zoom)', exam.zoomTime, true);
@@ -144,22 +189,32 @@ function populateDocContent_(body, docTitle, course, exam, rosters, customNotes,
     addDetail('Room', exam.room, false);
     addDetail('Password', exam.password, true);
     body.appendParagraph('');
-    if (preservedAccommodations) {
+
+    if (accommodationsText && accommodationsText.trim() !== '') {
         body.appendParagraph('Accommodations').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        body.appendParagraph(preservedAccommodations);
+        body.appendParagraph(accommodationsText);
         body.appendParagraph('');
     }
+
     body.appendParagraph('Important Links').setHeading(DocumentApp.ParagraphHeading.HEADING1);
     body.appendParagraph('').appendText('Red Flag Reporting Form').setLinkUrl(CONFIG.NURSING.URLS.RED_FLAG_REPORT);
     body.appendParagraph('').appendText('Nursing Protocol').setLinkUrl(CONFIG.NURSING.URLS.PROTOCOL_DOC);
     body.appendParagraph('');
+    
     body.appendParagraph('Location Rosters').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    const locations = Object.keys(rosters).sort();
+    const locations = Object.keys(rosters).sort((a, b) => {
+        const aIsUmaal = a.toUpperCase().trim() === 'UMAAL';
+        const bIsUmaal = b.toUpperCase().trim() === 'UMAAL';
+        if (aIsUmaal && !bIsUmaal) return -1;
+        if (!aIsUmaal && bIsUmaal) return 1;
+        return a.localeCompare(b);
+    });
+
     if (locations.length > 0) {
         for (const location of locations) {
+            body.appendParagraph(location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
             const students = rosters[location];
             if (students && students.length > 0) {
-                body.appendParagraph(location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
                 for (const student of students) {
                     const listItem = body.appendListItem(student.name);
                     if (student.color && student.color !== '#000000') {
@@ -172,6 +227,7 @@ function populateDocContent_(body, docTitle, course, exam, rosters, customNotes,
     } else {
         body.appendParagraph("No student rosters were found in the analyzed data.");
     }
+    
     body.appendParagraph('');
     if (customNotes) {
         body.appendParagraph('General Notes').setHeading(DocumentApp.ParagraphHeading.HEADING1);
@@ -183,7 +239,7 @@ function findSectionText_(body, heading) {
     const paragraphs = body.getParagraphs();
     for (let i = 0; i < paragraphs.length; i++) {
         if (paragraphs[i].getHeading() == DocumentApp.ParagraphHeading.HEADING1 && paragraphs[i].getText() == heading) {
-            if (i + 1 < paragraphs.length && paragraphs[i + 1].getHeading() == DocumentApp.ParagraphHeading.NORMAL) {
+            if (i + 1 < paragraphs.length && paragraphs[i + 1].getHeading() == DocumentApp.ParagraphHeading.NORMAL && paragraphs[i+1].getText().trim() !== '') {
                 return paragraphs[i + 1].getText();
             }
         }
@@ -191,7 +247,14 @@ function findSectionText_(body, heading) {
     return "";
 }
 
-function parseSheetForAnalysis_(sheet) {
+function formatTimeValue_(timeValue, timezone) {
+    if (timeValue instanceof Date && !isNaN(timeValue.getTime())) {
+        return Utilities.formatDate(timeValue, timezone, 'h:mm a');
+    }
+    return String(timeValue || '').trim();
+}
+
+function parseSheetForAnalysis_(sheet, spreadsheet) {
     const allValues = sheet.getDataRange().getValues();
     const richTextValues = sheet.getDataRange().getRichTextValues();
     let warnings = [];
@@ -204,7 +267,7 @@ function parseSheetForAnalysis_(sheet) {
     }
     if (examHeaderRowIndex === -1) return null;
     const course = parseCourseInfo_(allValues[0][0]);
-    const exams = parseExamBlock_(allValues, examHeaderRowIndex, rosterHeaderRowIndex, warnings);
+    const exams = parseExamBlock_(allValues, examHeaderRowIndex, rosterHeaderRowIndex, warnings, spreadsheet);
     let rosters = {};
     if (rosterHeaderRowIndex !== -1) {
         rosters = parseRosterBlock_(richTextValues, rosterHeaderRowIndex, warnings);
@@ -229,35 +292,37 @@ function parseCourseInfo_(rawString) {
     return { code, name, faculty };
 }
 
-function parseExamBlock_(allValues, headerRowIndex, endRowIndex, warnings) {
+function parseExamBlock_(allValues, headerRowIndex, endRowIndex, warnings, spreadsheet) {
     const exams = [];
     const headers = allValues[headerRowIndex].map(h => String(h).toLowerCase().trim());
+    const timezone = spreadsheet.getSpreadsheetTimeZone();
     const stopIndex = (endRowIndex !== -1) ? endRowIndex : allValues.length;
     const colMap = { name: headers.indexOf('exam'), date: headers.indexOf('date'), siteTime: headers.indexOf('start time (on site)'), zoomTime: headers.indexOf('start time (zoom)'), duration: headers.indexOf('duration'), room: headers.indexOf('room: on campus'), password: headers.indexOf('password') };
     if (colMap.name === -1 || colMap.date === -1) throw new Error("Crucial 'Exam' or 'Date' column is missing.");
+
     for (let i = headerRowIndex + 1; i < stopIndex; i++) {
         const row = allValues[i];
         const examName = row[colMap.name];
         if (!examName || String(examName).trim().length < 2) continue;
+        
         const dateValue = row[colMap.date];
         let displayDate;
-        if (dateValue) {
-            try {
-                const d = new Date(dateValue);
-                if (d && !isNaN(d.getTime())) {
-                    displayDate = d.toLocaleDateString("en-US", { weekday: 'long', month: 'long', day: 'numeric' });
-                } else {
-                    displayDate = String(dateValue).trim();
-                    if (warnings) warnings.push(`Could not parse date for "${examName}". Using original text.`);
-                }
-            } catch (e) {
-                displayDate = String(dateValue).trim();
-                 if (warnings) warnings.push(`Could not parse date for "${examName}". Using original text.`);
-            }
+        if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+            displayDate = Utilities.formatDate(dateValue, timezone, "EEEE, MMMM d");
         } else {
-            displayDate = "Not Specified";
+            displayDate = String(dateValue || '').trim();
+            if(displayDate) warnings.push(`Could not parse a valid date for "${examName}". Using original text.`);
         }
-        exams.push({ name: String(examName).trim(), date: displayDate, siteTime: colMap.siteTime > -1 ? String(row[colMap.siteTime]).trim() : 'N/A', zoomTime: colMap.zoomTime > -1 ? String(row[colMap.zoomTime]).trim() : 'N/A', duration: colMap.duration > -1 ? String(row[colMap.duration]).trim() : 'N/A', room: colMap.room > -1 ? String(row[colMap.room]).trim() : 'N/A', password: colMap.password > -1 ? String(row[colMap.password]).trim() : 'N/A' });
+
+        exams.push({
+            name: String(examName).trim(),
+            date: displayDate,
+            siteTime: formatTimeValue_(row[colMap.siteTime], timezone),
+            zoomTime: formatTimeValue_(row[colMap.zoomTime], timezone),
+            duration: colMap.duration > -1 ? String(row[colMap.duration]).trim() : 'N/A',
+            room: colMap.room > -1 ? String(row[colMap.room]).trim() : 'N/A',
+            password: colMap.password > -1 ? String(row[colMap.password]).trim() : 'N/A'
+        });
     }
     return exams;
 }

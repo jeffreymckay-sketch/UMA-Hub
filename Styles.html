@@ -3,6 +3,7 @@
     --primary-color: #003057; /* Branding Blue */
     --secondary-color: #f37021; /* Branding Orange */
     --accent-color: #A4D65E; /* Branding Light Green */
+    --success-color: #007934; /* Branding Green */
     --bg-color: #f4f6f8;
     --text-color: #333;
     --sidebar-width: 260px;
@@ -170,6 +171,8 @@
   .button { background-color: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 0.95rem; transition: background 0.2s; white-space: nowrap; text-align: center; }
   .button:hover { background-color: #00203a; }
   .button:disabled { background-color: #ccc; cursor: not-allowed; }
+  .button.primary { background-color: var(--secondary-color); }
+  .button.primary:hover { background-color: #d95f1a; }
   .button.secondary { background-color: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }
   .button.secondary:hover { background-color: #f0f4f8; }
   .button.danger { background-color: #d32f2f; color: white; }
@@ -178,11 +181,12 @@
   .btn-sm { font-size: 0.85rem; padding: 6px 12px; }
 
   /* TABLES - Horizontal Scroll Only */
-  .results-container { margin-top: 15px; overflow-x: auto; border: 1px solid #eee; border-radius: 4px; }
+  .results-container { margin-top: 15px;  border-radius: 4px; }
   .data-table, .roster-table, .preference-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: white; min-width: 600px; /* Forces scroll on small screens */ }
   .data-table th, .roster-table th, .preference-table th { background-color: var(--primary-color); color: white; padding: 12px; text-align: left; position: sticky; top: 0; z-index: 10; }
   .data-table td, .roster-table td, .preference-table td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
   .data-table tr:hover, .roster-table tr:hover { background-color: #f9f9f9; }
+  .data-table tr:nth-child(even) { background-color: #f8f9fa; }
   .not-available { color: #999; font-style: italic; }
   .zebra-stripes tbody tr:nth-child(odd) { background-color: #f8f9fa; }
   .zebra-stripes tbody tr:hover { background-color: #e9ecef; }
@@ -203,111 +207,24 @@
   input:checked + .slider { background-color: var(--accent-color); }
   input:checked + .slider:before { transform: translateX(18px); }
 
-  /* LOOKUP SPECIFIC */
-  .lookup-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
-  .column-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid #eee; margin: 15px 0; }
-  .col-checkbox-item { display: flex; align-items: center; font-size: 0.9rem; }
-  .col-checkbox-item input { width: auto; margin-right: 8px; }
-  .filter-bar-container { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 15px; }
-  .filter-flex-row { display: flex; flex-wrap: wrap; gap: 15px; }
-  .filter-item { flex: 1 1 200px; }
-  .smart-link-box { margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; }
-  .group-a { background-color: #ffffff; }
-  .group-b { background-color: #f4f8fb; } 
-  .sortable-header { cursor: pointer; user-select: none; }
-  .sortable-header:hover { background-color: #004070; }
-  .remove-btn { background: none; border: none; cursor: pointer; font-size: 1.1em; opacity: 0.6; }
-  .remove-btn:hover { opacity: 1; color: red; }
-
-  /* SCHEDULING - INLINE ASSIGNMENT CONTROLS */
-  .assignment-control {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-  }
-
-  .assignment-control select {
-      flex-grow: 1;
-      padding: 6px 8px; /* Slightly smaller padding for in-table select */
-      height: 32px; /* Set a fixed height */
-      font-size: 0.9rem;
-  }
-
-  .assignment-control .button.icon-only {
-      padding: 5px 8px; /* Reduced padding */
-      font-size: 0.9rem; /* Smaller icon/font */
-      flex-shrink: 0; /* Prevents the button from shrinking */
-      height: 32px; /* Match the select height */
-      line-height: 1; /* Center icon vertically */
-  }
-
-  .centered {
-      text-align: center;
-  }
-  
-  .icon-link {
-    font-size: 1.2rem;
-    text-decoration: none;
-  }
-  
-  /* MULTI-SELECT DROPDOWN */
-  .multi-select-button { background-color: white; border: 1px solid #ccc; padding: 8px; cursor: pointer; border-radius: 4px; position: relative; font-size: 0.9rem; }
-  .multi-select-button:after { content: '▼'; float: right; font-size: 0.8em; color: #666; }
-  .multi-select-dropdown { display: none; position: absolute; background-color: white; min-width: 200px; border: 1px solid #ddd; box-shadow: 0 8px 16px rgba(0,0,0,0.2); z-index: 100; max-height: 250px; overflow-y: auto; border-radius: 4px; }
-  .multi-select-dropdown.show { display: block; }
-  .dropdown-option { padding: 8px 12px; display: flex; align-items: center; cursor: pointer; }
-  .dropdown-option:hover { background-color: #f1f1f1; }
-  .dropdown-option input { width: auto; margin-right: 8px; }
-
-  /* MODAL */
-  #custom-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
-  #custom-modal-box { background: white; padding: 25px; border-radius: 8px; width: 300px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-  #modal-message { margin-bottom: 20px; font-size: 1.1rem; }
-  .modal-btn { width: 100px; margin: 0 5px; }
-  .modal-btn.cancel { background-color: #999; }
-  
-  /* DOCUMENT CARDS (Nursing/MLT) */
-  .doc-list-container { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
-  .doc-card { 
-      display: flex; align-items: center; justify-content: space-between; 
-      background: white; padding: 15px 20px; 
-      border-radius: 6px; 
-      border-left: 5px solid var(--primary-color); 
-      box-shadow: 0 2px 5px rgba(0,0,0,0.08); 
-      transition: all 0.2s ease; 
-      flex-wrap: wrap; /* Responsive wrapping */
-      gap: 10px;
-  }
-  .doc-card:hover { 
-      box-shadow: 0 5px 15px rgba(0,0,0,0.12); 
-      transform: translateY(-2px); 
-      background-color: #fcfcfc; 
-  }
-  .doc-card-left { display: flex; align-items: center; gap: 15px; flex-grow: 1; min-width: 200px; }
-  .doc-card-icon { font-size: 1.5rem; color: #888; display: flex; align-items: center; }
-  .doc-card-link { 
-      font-weight: 600; font-size: 1.05rem; color: var(--primary-color); 
-      text-decoration: none; transition: color 0.2s; 
-      word-break: break-word;
-  }
-  .doc-card-link:hover { color: var(--secondary-color); }
-  .doc-card-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .btn-icon-only { 
-      padding: 8px; font-size: 1.1rem; line-height: 1; 
-      background: none; border: 1px solid #ddd; color: #666;
-  }
-  .btn-icon-only:hover { background: #f0f0f0; color: #333; }
-
   /* USER GUIDE ACCORDION */
   details.guide-card { 
       background: white; 
       border: 1px solid #eee; 
+      border-left: 5px solid transparent; /* Default state */
       margin-bottom: 10px; 
       border-radius: 6px; 
       overflow: hidden;
       box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      transition: all 0.3s ease-in-out;
   }
-  details.guide-card[open] { border-color: var(--primary-color); }
+  details.guide-card[open]:not(.completed) { 
+      border-left-color: var(--secondary-color); /* Active state is Orange */
+      box-shadow: 0 4px 12px rgba(0, 48, 87, 0.15);
+  }
+  details.guide-card.completed {
+      border-left-color: var(--success-color); /* Completed state is Green */
+  }
   
   summary.guide-header { 
       padding: 15px 20px; 
@@ -324,8 +241,21 @@
   summary.guide-header:hover { background-color: #f9f9f9; }
   summary.guide-header::-webkit-details-marker { display: none; }
   
-  summary.guide-header::after { content: '+'; font-size: 1.2rem; color: #999; }
-  details[open] summary.guide-header::after { content: '-'; color: var(--primary-color); }
+  summary.guide-header::after { 
+      content: '+'; 
+      font-size: 1.2rem; 
+      color: #999;
+      transition: transform 0.2s ease-in-out;
+  }
+  details[open] summary.guide-header::after { 
+      content: '-'; 
+      color: var(--primary-color); 
+  }
+  details.guide-card.completed summary.guide-header::after {
+      content: '\2713'; /* Checkmark */
+      color: var(--success-color);
+      font-size: 1.3rem;
+  }
 
   .guide-content { 
       padding: 20px; 
@@ -334,23 +264,78 @@
       line-height: 1.6; 
       background-color: #fcfcfc;
   }
-  .guide-content strong { color: var(--primary-color); }
 
-  /* SYNC REPORT STYLES */
-  .sync-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .sync-table th { background: #f4f4f4; color: #333; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
-  .sync-table td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
-  .sync-table tr:hover { background-color: #f9f9f9; }
+  /* SUMMARY CARDS */
+  .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 15px;
+      padding: 15px 0;
+  }
+  .summary-card {
+      background-color: #fff;
+      border: 1px solid #e0e0e0;
+      border-top: 4px solid var(--primary-color);
+      border-radius: 8px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .summary-card.courses { border-top-color: var(--success-color); }
+  .summary-card.exams { border-top-color: var(--secondary-color); }
+
+  .summary-card-icon { font-size: 2rem; color: var(--primary-color); margin-bottom: 10px; }
+  .summary-card-value { font-size: 2.2rem; font-weight: 700; color: var(--primary-color); line-height: 1.1; }
+  .summary-card-title { font-size: 0.9rem; font-weight: 500; color: #666; margin-top: 5px; }
+
+  /* NESTED ACCORDION FOR EXAM PREVIEW */
+  .course-accordion, .exam-accordion {
+      margin-bottom: 5px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid #e0e0e0;
+      border-left: 3px solid transparent; /* Default state */
+      transition: border-left 0.2s ease-in-out;
+  }
+  .course-accordion[open] { border-left-color: var(--success-color); }
+  .exam-accordion[open] { border-left-color: var(--secondary-color); }
+
+  .course-accordion > summary, .exam-accordion > summary {
+      padding: 12px 15px;
+      cursor: pointer;
+      font-weight: 600;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #fff;
+  }
+  .course-accordion > summary { 
+      color: var(--primary-color);
+      background-color: #f5f7fa;
+  }
+   .exam-accordion > summary { 
+      color: #444;
+      font-weight: 500;
+      font-size: 0.9rem;
+      background-color: #fff;
+   }
+  .course-accordion > summary:hover, .exam-accordion > summary:hover { background-color: #eef2f7; }
+  .course-accordion > summary::-webkit-details-marker, 
+  .exam-accordion > summary::-webkit-details-marker { display: none; }
   
-  .diff-old { text-decoration: line-through; color: #d32f2f; background: #ffebee; padding: 0 4px; border-radius: 3px; margin-right: 5px; }
-  .diff-new { color: #2e7d32; background: #e8f5e9; padding: 0 4px; border-radius: 3px; font-weight: 600; }
-  .diff-arrow { color: #999; margin: 0 5px; }
-  
-  .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; }
-  .badge.create { background: #e3f2fd; color: #0d47a1; }
-  .badge.update { background: #fff3e0; color: #e65100; }
-  .badge.recreate { background: #ffebee; color: #c62828; } /* Time changes */
-  .badge.skip { background: #f5f5f5; color: #999; }
-  
-  .sync-actions { margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+  .course-accordion > summary::after, .exam-accordion > summary::after {
+      content: '+';
+      font-size: 1rem;
+      color: #777;
+  }
+  .course-accordion[open] > summary::after, .exam-accordion[open] > summary::after { content: '-'; }
+
+  .exam-details-container { padding: 15px; background-color: #ffffff; border-top: 1px solid #e0e0e0; }
+  .exam-details { display: grid; grid-template-columns: 150px 1fr; gap: 8px; font-size: 0.9rem; }
+  .exam-details-label { font-weight: 600; color: #333; }
+  .exam-details-value { color: #555; word-break: break-word; }
+
 </style>

@@ -10,28 +10,14 @@ let nursing_parsedData = null;
 
 /**
  * Initializes the Nursing Proctoring page listeners. 
- * This function name must match the convention `load_` + pageId suffix.
  */
 function load_exams() {
-    // Check if listeners are already attached to prevent duplication
-    if (window.pageExamsListenersAttached) {
-        return;
-    }
+    if (window.pageExamsListenersAttached) return;
 
-    // Main generator button listeners
     document.getElementById('nursing-analyze-btn').addEventListener('click', handleAnalyzeClick);
     document.getElementById('nursing-confirm-create-btn').addEventListener('click', handleConfirmCreateAllClick);
-    document.getElementById('nursing-update-all-btn').addEventListener('click', handleUpdateAllClick);
     document.getElementById('nursing-cancel-btn').addEventListener('click', resetNursingView);
     
-    // Calendar tab listeners
-    const syncBtn = document.getElementById('nursing-calendar-sync-btn');
-    if(syncBtn) syncBtn.addEventListener('click', nursing_handleCalendarSync);
-
-    const calSelect = document.getElementById('nursing-calendar-select');
-    if(calSelect) calSelect.addEventListener('change', (e) => { document.getElementById('nursing-calendar-id-input').value = e.target.value; });
-
-    // Tab-specific listener for loading calendar data ONCE.
     const calendarTabButton = document.getElementById('nursing-calendar-tab-btn');
     if (calendarTabButton) {
         calendarTabButton.addEventListener('click', function() {
@@ -41,18 +27,49 @@ function load_exams() {
             }
         });
     }
-
+    
+    resetNursingView();
     window.pageExamsListenersAttached = true;
 }
 
 /**
- * Initializes the MLT Proctoring page.
+ * Manages the UI state of a specific step in the accordion guide.
  */
-function load_mlt() {
-    // Currently no dynamic content or listeners for MLT page.
-    console.log('MLT Proctoring page loaded.');
+function setStepState(stepNumber, state) {
+    const step = document.getElementById(`nursing-step-${stepNumber}`);
+    if (!step) return;
+
+    step.classList.remove('completed');
+    step.open = false;
+    step.removeAttribute('disabled');
+
+    switch (state) {
+        case 'active':
+            step.open = true;
+            break;
+        case 'completed':
+            step.classList.add('completed');
+            break;
+        case 'disabled':
+            step.setAttribute('disabled', 'true');
+            break;
+    }
 }
 
+/**
+ * Resets the entire nursing proctoring tool to its initial state.
+ */
+function resetNursingView() {
+    setStepState(1, 'active');
+    setStepState(2, 'disabled');
+    setStepState(3, 'disabled');
+
+    document.getElementById('nursing-summary-output').innerHTML = '';
+    document.getElementById('nursing-preview-output').innerHTML = '';
+    document.getElementById('nursing-sheet-url-input').value = '';
+    setStatus('nursing-status', '', 'clear');
+    nursing_parsedData = null;
+}
 
 /**
  * Handles the click of the "Analyze Sheet" button.
@@ -60,12 +77,17 @@ function load_mlt() {
 function handleAnalyzeClick() {
     const sheetUrl = document.getElementById('nursing-sheet-url-input').value;
     setStatus('nursing-status', 'Analyzing all sheets... This may take a moment.', 'loading');
+
     google.script.run
         .withSuccessHandler(response => {
             if (response.success) {
                 nursing_parsedData = response.data;
                 displayNursingPreview(response.data);
-                showNursingPreviewStep();
+                
+                setStepState(1, 'completed');
+                setStepState(2, 'active');
+                setStepState(3, 'active');
+
                 setStatus('nursing-status', 'Analysis complete. Review the details below.', 'success');
             } else {
                 setStatus('nursing-status', response.message, 'error');
@@ -77,109 +99,214 @@ function handleAnalyzeClick() {
 }
 
 /**
+ * Gathers all data from the UI, including accommodations, and prepares it for the backend.
+ */
+function getPayloadWithAccommodations() {
+    if (!nursing_parsedData) return null;
+
+    const payload = JSON.parse(JSON.stringify(nursing_parsedData));
+
+    payload.sheets.forEach((sheet, sheetIndex) => {
+        sheet.exams.forEach((exam, examIndex) => {
+            const uniqueId = `exam-${sheetIndex}-${examIndex}`;
+            const textarea = document.getElementById(`${uniqueId}-accommodations`);
+            if (textarea) {
+                exam.accommodations = textarea.value; 
+            }
+        });
+    });
+    return payload;
+}
+
+
+/**
  * Handles click for creating all documents from all sheets.
  */
 function handleConfirmCreateAllClick() {
-    if (!nursing_parsedData) return;
+    const payload = getPayloadWithAccommodations();
+    if (!payload) return;
+
     const createEvents = document.getElementById('nursing-create-calendar-events-checkbox').checked;
-    const totalExams = nursing_parsedData.sheets.reduce((acc, sheet) => acc + sheet.exams.length, 0);
+    const totalExams = payload.sheets.reduce((acc, sheet) => acc + sheet.exams.length, 0);
+
     if (!confirm(`This will create or update ${totalExams} document(s) for ALL sheets. Proceed?`)) return;
+
     setStatus('nursing-status', 'Creating all documents... Please wait.', 'loading');
     google.script.run
-        .withSuccessHandler(handleBackendResponse)
+        .withSuccessHandler(response => {
+            setStatus('nursing-status', response.message, response.success ? 'success' : 'error');
+            if (response.success) {
+                setStepState(2, 'completed');
+                setStepState(3, 'completed');
+            }
+        })
         .withFailureHandler(err => setStatus('nursing-status', `An unexpected error: ${err.message}`, 'error'))
-        .createNursingProctoringDocuments(nursing_parsedData, createEvents);
+        .createNursingProctoringDocuments(payload, createEvents);
 }
 
-/**
- * Handles click for creating documents for a single sheet.
- */
-function handleCreateSingleSheetClick(sheetIndex) {
-    if (!nursing_parsedData || !nursing_parsedData.sheets[sheetIndex]) return;
-    const createEvents = document.getElementById('nursing-create-calendar-events-checkbox').checked;
-    const sheet = nursing_parsedData.sheets[sheetIndex];
-    if (!confirm(`This will create or update ${sheet.exams.length} document(s) for the "${sheet.sheetName}" sheet. Proceed?`)) return;
 
-    const singleSheetPayload = {
-        spreadsheetId: nursing_parsedData.spreadsheetId,
-        sheets: [sheet]
+/**
+ * Gets a data payload for a single exam, including its specific accommodation notes.
+ */
+function getSingleExamPayload(sheetIndex, examIndex) {
+    if (!nursing_parsedData || !nursing_parsedData.sheets[sheetIndex]) return null;
+    
+    const payload = getPayloadWithAccommodations();
+    const sheet = payload.sheets[sheetIndex];
+    const exam = sheet.exams[examIndex];
+
+    return {
+        ...payload,
+        sheets: [{
+            ...sheet,
+            exams: [exam]
+        }]
     };
-    setStatus('nursing-status', `Creating documents for "${sheet.sheetName}"...`, 'loading');
-    google.script.run
-        .withSuccessHandler(handleBackendResponse)
-        .withFailureHandler(err => setStatus('nursing-status', `An unexpected error: ${err.message}`, 'error'))
-        .createNursingProctoringDocuments(singleSheetPayload, createEvents);
 }
 
+
 /**
- * Handles click for the non-destructive "Update All" button.
+ * Handles click for creating a document for a single exam.
  */
-function handleUpdateAllClick() {
-    if (!nursing_parsedData) return;
+function handleCreateSingleExamClick(sheetIndex, examIndex) {
+    const singleExamPayload = getSingleExamPayload(sheetIndex, examIndex);
+    if (!singleExamPayload) return;
+
     const createEvents = document.getElementById('nursing-create-calendar-events-checkbox').checked;
-    if (!confirm("This will UPDATE all EXISTING documents based on the preview. It will NOT create new ones. Proceed?")) return;
-    setStatus('nursing-status', 'Updating all existing documents... Please wait.', 'loading');
+    const exam = singleExamPayload.sheets[0].exams[0];
+
+    setStatus('nursing-status', `Creating document for "${exam.name}"...`, 'loading');
     google.script.run
-        .withSuccessHandler(handleBackendResponse)
+        .withSuccessHandler(response => handleSingleDocResponse(response, sheetIndex, examIndex))
         .withFailureHandler(err => setStatus('nursing-status', `An unexpected error: ${err.message}`, 'error'))
-        .updateAllNursingDocuments(nursing_parsedData, createEvents);
+        .createNursingProctoringDocuments(singleExamPayload, createEvents);
 }
 
 /**
- * Generic handler for backend success/error messages.
+ * Handles click for updating a document for a single exam.
  */
-function handleBackendResponse(response) {
-    setStatus('nursing-status', response.message, response.success ? 'success' : 'error');
+function handleUpdateSingleExamClick(sheetIndex, examIndex) {
+    const singleExamPayload = getSingleExamPayload(sheetIndex, examIndex);
+    if (!singleExamPayload) return;
+
+    const createEvents = false; 
+    const exam = singleExamPayload.sheets[0].exams[0];
+
+    setStatus('nursing-status', `Updating document for "${exam.name}"...`, 'loading');
+    google.script.run
+        .withSuccessHandler(response => handleSingleDocResponse(response, sheetIndex, examIndex))
+        .withFailureHandler(err => setStatus('nursing-status', `An unexpected error: ${err.message}`, 'error'))
+        .updateAllNursingDocuments(singleExamPayload, createEvents);
 }
 
+
 /**
- * Renders the preview, now with per-sheet action buttons.
+ * Handles the backend response for a single document creation/update.
+ */
+function handleSingleDocResponse(response, sheetIndex, examIndex) {
+    setStatus('nursing-status', response.message, response.success ? 'success' : 'error');
+
+    if (response.success && response.docUrl) {
+        nursing_parsedData.sheets[sheetIndex].exams[examIndex].docUrl = response.docUrl;
+
+        const examDetailContainer = document.getElementById(`exam-${sheetIndex}-${examIndex}-details`);
+        if (examDetailContainer) {
+             const linkContainer = examDetailContainer.querySelector('.exam-doc-link-container');
+             linkContainer.innerHTML = `<a href="${response.docUrl}" target="_blank" class="button btn-sm">View Document</a>`;
+
+             const createBtn = examDetailContainer.querySelector('.create-btn');
+             if(createBtn) createBtn.hidden = true;
+
+             const updateBtn = examDetailContainer.querySelector('.update-btn');
+             if(updateBtn) updateBtn.disabled = false;
+        }
+    }
+}
+
+
+/**
+ * Renders the entire preview area, including summary cards and the new nested accordions.
  */
 function displayNursingPreview(data) {
-    const container = document.getElementById('nursing-preview-output');
-    let html = '';
-
     if (!data.sheets || data.sheets.length === 0) {
-        container.innerHTML = '<p>No valid exam data found.</p>';
+        document.getElementById('nursing-preview-output').innerHTML = '<p>No valid exam data found.</p>';
         return;
     }
 
-    let totalExams = 0;
-    data.sheets.forEach((sheetData, index) => {
-        totalExams += sheetData.exams.length;
-        html += `<div class="sheet-preview-group">`;
-        html += `<h3>Sheet: ${sheetData.sheetName}</h3>`;
-        html += `<div class="form-actions sheet-actions"><button class="button" onclick="handleCreateSingleSheetClick(${index})">Create/Update ${sheetData.exams.length} Docs for this Sheet</button></div>`;
-        html += `<h4>Course Information</h4><p><strong>Course:</strong> ${sheetData.course.code} ${sheetData.course.name}<br><strong>Faculty:</strong> ${sheetData.course.faculty}</p>`;
-        html += `<h4>Exams Found (${sheetData.exams.length})</h4>`;
-        if (sheetData.exams.length > 0) {
-            html += '<ul>';
-            sheetData.exams.forEach(exam => { html += `<li><strong>${exam.name}</strong> - ${exam.date} (Password: ${exam.password || 'N/A'})</li>`; });
-            html += '</ul>';
+    document.getElementById('nursing-summary-output').innerHTML = renderNursingSummary(data);
+    document.getElementById('nursing-preview-output').innerHTML = renderNursingDetails(data);
+}
+
+/**
+ * Generates the HTML for the summary cards grid.
+ */
+function renderNursingSummary(data) {
+    const totalExams = data.sheets.reduce((acc, sheet) => acc + sheet.exams.length, 0);
+    const totalCourses = data.sheets.length;
+
+    let html = '';
+    html += `<div class="summary-card courses"><div class="summary-card-icon">&#128218;</div><div class="summary-card-value">${totalCourses}</div><div class="summary-card-title">Courses Found</div></div>`;
+    html += `<div class="summary-card exams"><div class="summary-card-icon">&#128221;</div><div class="summary-card-value">${totalExams}</div><div class="summary-card-title">Total Exams</div></div>`;
+    return html;
+}
+
+/**
+ * Generates the HTML for the nested accordion view of courses and exams.
+ */
+function renderNursingDetails(data) {
+    let html = '';
+    data.sheets.forEach((sheet, sheetIndex) => {
+        html += `<details class="course-accordion" open>
+                    <summary>${sheet.course.code || 'Course'} - ${sheet.course.name || sheet.sheetName}</summary>
+                    <div class="guide-content">`;
+
+        if (sheet.exams.length > 0) {
+            sheet.exams.forEach((exam, examIndex) => {
+                const uniqueId = `exam-${sheetIndex}-${examIndex}`;
+                html += `<details class="exam-accordion" open>
+                            <summary>${exam.name || 'Untitled Exam'}</summary>
+                            ${renderExamDetails(exam, sheet.course, uniqueId, sheetIndex, examIndex)}
+                         </details>`;
+            });
+        } else {
+            html += '<p>No exams found in this course tab.</p>';
         }
-        if (sheetData.warnings && sheetData.warnings.length > 0) {
-            html += `<h4>Warnings</h4><ul>${sheetData.warnings.map(w => `<li class="warning-item">${w}</li>`).join('')}</ul>`;
-        }
-        html += `</div>`;
+        html += `</div></details>`;
     });
-
-    document.getElementById('nursing-confirm-create-btn').textContent = `Confirm & Create All ${totalExams} Docs`;
-    container.innerHTML = html;
+    return html;
 }
 
-/** Functions to show/hide the main steps of the generator tool */
-function showNursingPreviewStep() {
-    document.getElementById('nursing-analysis-step').style.display = 'none';
-    document.getElementById('nursing-preview-container').style.display = 'block';
+/**
+ * Generates the key-value HTML for a single exam's details, now including an accommodations textarea.
+ */
+function renderExamDetails(exam, course, uniqueId, sheetIndex, examIndex) {
+    const hasDoc = !!exam.docUrl;
+
+    let detailsHtml = `<div class="exam-details-container" id="${uniqueId}-details">
+                        <div class="exam-details">
+                            <div class="exam-details-label">Exam Name</div><div class="exam-details-value">${exam.name || 'N/A'}</div>
+                            <div class="exam-details-label">Date</div><div class="exam-details-value">${exam.date || 'N/A'}</div>
+                            <div class="exam-details-label">On-Site Time</div><div class="exam-details-value">${exam.siteTime || 'N/A'}</div>
+                            <div class="exam-details-label">Zoom Time</div><div class="exam-details-value">${exam.zoomTime || 'N/A'}</div>
+                            <div class="exam-details-label">Password</div><div class="exam-details-value">${exam.password || 'N/A'}</div>
+                            <div class="exam-details-label">Instructor</div><div class="exam-details-value">${course.faculty || 'N/A'}</div>
+                         </div>
+
+                         <div class="form-group" style="margin-top: 15px;">
+                            <label for="${uniqueId}-accommodations">Accommodations & Special Notes</label>
+                            <textarea id="${uniqueId}-accommodations" class="accommodations-textarea" rows="3" placeholder="Enter any specific accommodations for this exam...">${exam.accommodations || ''}</textarea>
+                        </div>
+
+                         <div class="divider"></div>
+                         <div class="button-group">
+                            <div class="exam-doc-link-container">${hasDoc ? `<a href="${exam.docUrl}" target="_blank" class="button btn-sm">View Document</a>` : ''}</div>
+                            <button class="button btn-sm secondary create-btn" onclick="handleCreateSingleExamClick(${sheetIndex}, ${examIndex})" ${hasDoc ? 'hidden' : ''}>Create Doc</button>
+                            <button class="button btn-sm update-btn" onclick="handleUpdateSingleExamClick(${sheetIndex}, ${examIndex})" ${!hasDoc ? 'disabled' : ''}>Update Doc</button>
+                         </div>
+                       </div>`;
+    return detailsHtml;
 }
-function resetNursingView() {
-    document.getElementById('nursing-analysis-step').style.display = 'block';
-    document.getElementById('nursing-preview-container').style.display = 'none';
-    document.getElementById('nursing-preview-output').innerHTML = '';
-    document.getElementById('nursing-sheet-url-input').value = '';
-    setStatus('nursing-status', '', 'clear');
-    nursing_parsedData = null;
-}
+
 
 /** Calendar-specific functions */
 function nursing_loadCalendarOptions() {
@@ -187,46 +314,33 @@ function nursing_loadCalendarOptions() {
       const select = document.getElementById('nursing-calendar-select');
       if(!select) return;
       select.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
-      if (res.success && res.data) { res.data.forEach(cal => { const opt = document.createElement('option'); opt.value = cal.id; opt.text = cal.name; select.appendChild(opt); }); }
+      if (res.success && res.data) { 
+          res.data.forEach(cal => { 
+              const opt = document.createElement('option'); 
+              opt.value = cal.id; 
+              opt.text = cal.name; 
+              select.appendChild(opt); 
+          }); 
+      }
+      select.disabled = false;
+      document.getElementById('nursing-calendar-id-input').disabled = false;
+      document.getElementById('nursing-calendar-sync-btn').disabled = false;
   }).getWritableCalendars();
 }
+
 function nursing_handleCalendarSync() {
     setStatus('nursing-calendar-status', 'This feature is temporarily disabled.', 'error');
 }
 
-
-/**
- * Handles navigation between sub-tabs within a page (e.g., Generator, Calendar, Settings).
- * @param {HTMLElement} clickedTabElement - The tab button element that was clicked.
- * @param {string} targetPaneId - The ID of the tab content pane to display.
- */
+/** Generic Sub-tab navigation */
 function navigateToSubTab(clickedTabElement, targetPaneId) {
-    // Get the highest-level page container
     const pageContainer = clickedTabElement.closest('.page');
-    if (!pageContainer) {
-        console.error('Could not find parent page container for tabs.');
-        return;
-    }
-
-    // Deactivate all tabs within this page
-    pageContainer.querySelectorAll('.tab-nav-item').forEach(tab => {
-        tab.classList.remove('active');
-    });
-
-    // Deactivate all tab panes within this page
-    pageContainer.querySelectorAll('.tab-page').forEach(pane => {
-        pane.classList.remove('active');
-    });
-
-    // Activate the tab that was clicked
+    if (!pageContainer) return;
+    pageContainer.querySelectorAll('.tab-nav-item').forEach(tab => tab.classList.remove('active'));
+    pageContainer.querySelectorAll('.tab-page').forEach(pane => pane.classList.remove('active'));
     clickedTabElement.classList.add('active');
-
-    // Activate the corresponding content pane
     const targetPane = pageContainer.querySelector('#' + targetPaneId);
-    if (targetPane) {
-        targetPane.classList.add('active');
-    } else {
-        console.error('Could not find target tab pane:', targetPaneId);
-    }
+    if (targetPane) targetPane.classList.add('active');
 }
+
 </script>

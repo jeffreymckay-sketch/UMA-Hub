@@ -16,33 +16,56 @@
         <!-- Generator Tab -->
         <div class="tab-page active" id="nursing-tab-generator">
             <div id="nursing-status" class="status-message"></div>
-            
-            <!-- Step 1: Analysis -->
-            <div id="nursing-analysis-step">
-                <h3>Nursing Proctoring Document Generator</h3>
-                <p>Enter the URL of the master Nursing Exam sheet. The tool will analyze all tabs to find exam and roster information.</p>
-                <div class="input-group">
-                    <label for="nursing-sheet-url-input">Spreadsheet URL</label>
-                    <input type="text" id="nursing-sheet-url-input" class="url-input" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
-                    <button id="nursing-analyze-btn" class="button">Analyze Sheet</button>
-                </div>
-            </div>
 
-            <!-- Step 2: Preview & Confirmation -->
-            <div id="nursing-preview-container" style="display:none;">
-                <h3>Analysis Preview</h3>
-                <p>Review the data found in the spreadsheet. You can create documents for one sheet at a time or for all sheets at once.</p>
-                <div id="nursing-preview-output"></div>
-                <div class="form-actions" id="nursing-preview-actions">
-                    <div class="input-group checkbox-group">
-                        <input type="checkbox" id="nursing-create-calendar-events-checkbox" checked>
-                        <label for="nursing-create-calendar-events-checkbox">Also create calendar events for each exam</label>
+            <!-- Step 1: Upload & Analyze -->
+            <details class="guide-card" id="nursing-step-1" open>
+                <summary class="guide-header">Step 1: Analyze Spreadsheet</summary>
+                <div class="guide-content">
+                    <p>Enter the URL of the master Nursing Exam sheet. The tool will analyze all tabs to find exam and roster information.</p>
+                    <div class="inline-group">
+                        <div style="flex-grow: 3;">
+                          <label for="nursing-sheet-url-input">Spreadsheet URL</label>
+                          <input type="text" id="nursing-sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
+                        </div>
+                        <button id="nursing-analyze-btn" class="button">Analyze Sheet</button>
                     </div>
-                    <button id="nursing-cancel-btn" class="button-secondary">Start Over</button>
-                    <button id="nursing-update-all-btn" class="button">Update All Existing</button>
-                    <button id="nursing-confirm-create-btn" class="button-primary">Confirm & Create All Docs</button>
                 </div>
-            </div>
+            </details>
+
+            <!-- Step 2: Review & Approve -->
+            <details class="guide-card" id="nursing-step-2" disabled>
+                <summary class="guide-header">Step 2: Review and Approve</summary>
+                <div class="guide-content">
+                    <p>Review the summary and detailed data found in the spreadsheet. If everything looks correct, proceed to the final step.</p>
+                    
+                    <!-- Summary Cards Will Go Here -->
+                    <div id="nursing-summary-output" class="summary-grid"></div>
+
+                    <div class="divider"></div>
+
+                    <!-- Detailed Table Will Go Here -->
+                    <div id="nursing-preview-output" class="results-container"></div>
+
+                </div>
+            </details>
+
+            <!-- Step 3: Confirm & Generate -->
+            <details class="guide-card" id="nursing-step-3" disabled>
+                <summary class="guide-header">Step 3: Confirm & Generate Documents</summary>
+                <div class="guide-content">
+                    <p>This final step will create all proctoring documents and calendar events based on the approved data.</p>
+                    <div class="button-group">
+                        <div class="toggle-group">
+                            <input type="checkbox" id="nursing-create-calendar-events-checkbox" class="toggle-switch" checked>
+                            <label for="nursing-create-calendar-events-checkbox">Also create calendar events for each exam</label>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button id="nursing-cancel-btn" class="button secondary">Start Over</button>
+                        <button id="nursing-confirm-create-btn" class="button primary">Confirm & Create All Docs</button>
+                    </div>
+                </div>
+            </details>
         </div>
 
          <!-- Calendar Tab -->
@@ -50,24 +73,28 @@
             <h3>Nursing Calendar Sync</h3>
             <div id="nursing-calendar-status"></div>
             <p>Select a calendar to sync exam events to. This tool is currently disabled pending updates.</p>
-            <div class="input-group">
-                <label for="nursing-calendar-select">Select Calendar</label>
+            <div class="inline-group">
                 <select id="nursing-calendar-select" disabled>
                     <option value="">Loading calendars...</option>
                 </select>
-            </div>
-             <div class="input-group">
-                <label for="nursing-calendar-id-input">Or Enter Calendar ID</label>
-                <input type="text" id="nursing-calendar-id-input" disabled>
-            </div>
-            <div class="form-actions">
+                <input type="text" id="nursing-calendar-id-input" disabled placeholder="Or Enter Calendar ID">
                 <button id="nursing-calendar-sync-btn" class="button" disabled>Sync to Calendar</button>
             </div>
         </div>
 
         <!-- Settings Tab -->
         <div class="tab-page" id="nursing-tab-settings">
-            <?!= include('Settings_Nursing'); ?>
+             <h3>Nursing Proctoring Settings</h3>
+             <p>Configure the settings for the Nursing Proctoring tool.</p>
+             <div class="form-group">
+                <label for="nursing-template-doc-id">Template Doc ID</label>
+                <input type="text" id="nursing-template-doc-id" placeholder="Enter the Google Doc template ID">
+             </div>
+             <div class="form-group">
+                <label for="nursing-output-folder-id">Output Folder ID</label>
+                <input type="text" id="nursing-output-folder-id" placeholder="Enter the Google Drive folder ID for generated docs">
+             </div>
+             <button class="button" onclick="saveNursingSettings()">Save Settings</button>
         </div>
     </div>
     
