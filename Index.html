@@ -46,7 +46,7 @@
             <li class="nav-item" onclick="navigateTo('page-exams')">
                 <span class="nav-icon">⚕️</span> Nursing Proctoring
             </li>
-            <li class="nav-item" onclick="navigateTo('page-mlt-proctoring')">
+            <li class="nav-item" onclick="navigateTo('page-mlt')">
                 <span class="nav-icon">🧪</span> MLT Proctoring
             </li>
         </ul>
@@ -88,17 +88,11 @@
     
     <!-- JAVASCRIPT INCLUDES -->
     
-    <!-- Core Libraries -->
-    <?!= include('frontend/Api'); ?>
-    <?!= include('frontend/State'); ?>
-    <?!= include('frontend/Ui'); ?>
-
     <!-- App-Specific Logic -->
     <?!= include('JS_Core'); ?>
     <?!= include('JS_Lookup'); ?>
     <?!= include('JS_Scheduling'); ?>
     <?!= include('JS_Calendar'); ?>
-    <?!= include('JS_Nursing'); ?>
     <?!= include('JS_Settings'); ?>
     <?!= include('JS_Discovery'); ?>
     <?!= include('JS_Analytics'); ?>
@@ -107,7 +101,5 @@
     <?!= include('JS_Proctoring'); ?>
     <?!= include('JS_Zoom'); ?>
 
-    <!-- Main entry point -->
-    <?!= include('frontend/Main'); ?>
 </body>
 </html>

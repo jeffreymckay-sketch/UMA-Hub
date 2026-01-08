@@ -6,12 +6,24 @@
    * -------------------------------------------------------------------
    */
 
+  /**
+   * Main entry point for the dashboard page.
+   * This is called by the core navigation logic.
+   */
+  function load_dashboard() {
+      loadStaffSelector();
+      loadMyAvailability();
+      loadMyPreferences();
+  }
+
   // --- STAFF SELECTOR (Admin/Lead View) ---
   function loadStaffSelector() {
+      // Only run this if the selector element exists on the page
+      const sel = document.getElementById('dashboard-staff-select');
+      if(!sel) return;
+
       google.script.run.withSuccessHandler(function(res) {
           if(res.data) {
-              const sel = document.getElementById('dashboard-staff-select');
-              if(!sel) return;
               sel.innerHTML = '<option value="">-- Myself --</option>';
               res.data.forEach(s => {
                   const opt = document.createElement('option');
@@ -31,7 +43,7 @@
   // --- AVAILABILITY ---
   function loadMyAvailability() {
       const container = document.getElementById('my-availability-list');
-      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
       
       if(!container) return;
       container.innerHTML = '<p>Loading...</p>';
@@ -62,30 +74,30 @@
       const day = document.getElementById('avail-day').value;
       const start = document.getElementById('avail-start-time').value;
       const end = document.getElementById('avail-end-time').value;
-      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
       
-      ui_setStatus('my-availability-status', 'Adding...', 'loading');
+      setStatus('my-availability-status', 'Adding...', 'loading');
       
       google.script.run.withSuccessHandler(function(res) { 
           if(res.success) { 
-              ui_setStatus('my-availability-status', 'Added.', 'success'); 
+              setStatus('my-availability-status', 'Added.', 'success'); 
               loadMyAvailability(); 
           } else { 
-              ui_setStatus('my-availability-status', res.message, 'error'); 
+              setStatus('my-availability-status', res.message, 'error'); 
           } 
       }).api_addNotAvailable(day, start, end, targetEmail);
   }
 
   function handleDeleteAvailability(id) {
-      const targetEmail = document.getElementById('dashboard-staff-select').value;
-      ui_setStatus('my-availability-status', 'Removing...', 'loading');
+      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
+      setStatus('my-availability-status', 'Removing...', 'loading');
       
       google.script.run.withSuccessHandler(function(res) { 
           if(res.success) { 
-              ui_setStatus('my-availability-status', 'Removed.', 'success'); 
+              setStatus('my-availability-status', 'Removed.', 'success'); 
               loadMyAvailability(); 
           } else { 
-              ui_setStatus('my-availability-status', res.message, 'error'); 
+              setStatus('my-availability-status', res.message, 'error'); 
           } 
       }).api_deleteAvailability(id, targetEmail);
   }
@@ -93,7 +105,7 @@
   // --- PREFERENCES ---
   function loadMyPreferences() {
       const container = document.getElementById('my-preferences-list');
-      const targetEmail = document.getElementById('dashboard-staff-select').value;
+      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
       
       if(!container) return;
       container.innerHTML = '<p>Loading...</p>';
@@ -134,12 +146,12 @@
   }
 
   function handleSavePreference(key, value) {
-      const targetEmail = document.getElementById('dashboard-staff-select').value;
-      ui_setStatus('my-preferences-status', 'Saving...', 'loading');
+      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
+      setStatus('my-preferences-status', 'Saving...', 'loading');
       
       google.script.run.withSuccessHandler(function(res) { 
-          if(res.success) ui_setStatus('my-preferences-status', 'Saved.', 'success'); 
-          else ui_setStatus('my-preferences-status', res.message, 'error'); 
+          if(res.success) setStatus('my-preferences-status', 'Saved.', 'success'); 
+          else setStatus('my-preferences-status', res.message, 'error'); 
       }).api_savePreference(key, value, targetEmail);
   }
 </script>

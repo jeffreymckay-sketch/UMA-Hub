@@ -1,0 +1,163 @@
+<script>
+/**
+ * ===================================================================
+ * CORE APPLICATION LOGIC
+ * Handles navigation, permissions, and main UI interactions.
+ * ===================================================================
+ */
+
+document.addEventListener('DOMContentLoaded', initializeCoreApp);
+
+/**
+ * Main entry point on page load. Fetches essential data to render the UI.
+ */
+function initializeCoreApp() {
+    google.script.run
+        .withSuccessHandler(handleAccessControlData)
+        .withFailureHandler(handleFatalError)
+        .getAccessControlData();
+
+    // The loadAllSettings function from JS_Settings will handle loading the logo
+    loadAllSettings();
+}
+
+/**
+ * Handles the response from getAccessControlData. This is the primary function
+ * that controls what a user can see and do in the application.
+ * @param {object} accessData - An object containing user role and permissions matrix.
+ */
+function handleAccessControlData(accessData) {
+    if (accessData.error) {
+        handleFatalError({ message: accessData.error });
+        return;
+    }
+
+    const userRole = accessData.userRole;
+    const accessMatrix = accessData.matrix;
+
+    // Dynamically hide navigation items based on user's role and permissions
+    document.querySelectorAll('.nav-item').forEach(item => {
+        const onclickAttr = item.getAttribute('onclick');
+        const pageIdMatch = onclickAttr ? onclickAttr.match(/navigateTo\('([^']+)'/) : null;
+        
+        if (pageIdMatch && pageIdMatch[1]) {
+            const pageKey = pageIdMatch[1];
+            if (accessMatrix[pageKey] && accessMatrix[pageKey][userRole] === false) {
+                item.style.display = 'none';
+            }
+        }
+    });
+
+    // Special visibility rules for admin/lead roles
+    if (userRole === 'Admin' || userRole === 'Lead') {
+        const roleAssignmentNav = document.getElementById('settings-role-assignment-nav');
+        if(roleAssignmentNav) roleAssignmentNav.style.display = 'block';
+    }
+    if (userRole === 'Admin') {
+        const permissionsMatrixNav = document.getElementById('settings-permissions-matrix-nav');
+        if(permissionsMatrixNav) permissionsMatrixNav.style.display = 'block';
+    }
+
+    // After setting up permissions, load the content for the initially active page.
+    const activePage = document.querySelector('.page.active-page');
+    if (activePage) {
+        const pageId = activePage.id;
+        const loadFunctionName = `load_${pageId.replace('page-', '')}`;
+        if(typeof window[loadFunctionName] === 'function') {
+            window[loadFunctionName]();
+        } else {
+          console.log(`Initial load function ${loadFunctionName} not found.`);
+        }
+    }
+}
+
+/**
+ * Displays a fatal error message when the application cannot load.
+ * @param {Error} err - The error object.
+ */
+function handleFatalError(err) {
+    const contentArea = document.querySelector('.main-content');
+    contentArea.innerHTML = `
+        <div class="fatal-error-container">
+            <h1>Access Error</h1>
+            <p>${err.message || 'Could not load application data.'}</p>
+            <p>Please contact an administrator if this problem persists.</p>
+        </div>`;
+    const sidebar = document.getElementById('app-sidebar');
+    if (sidebar) sidebar.style.display = 'none';
+}
+
+/**
+ * ===================================================================
+ * UI INTERACTION & NAVIGATION
+ * ===================================================================
+ */
+
+/**
+ * Sets a status message in a designated status element.
+ * @param {string} elementId - The ID of the status message element.
+ * @param {string} message - The text to display.
+ * @param {'loading'|'success'|'error'} type - The type of message, for styling.
+ */
+function setStatus(elementId, message, type) {
+    const statusEl = document.getElementById(elementId);
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = `status-message ${type}`;
+    }
+}
+
+/**
+ * Toggles the visibility of the main sidebar navigation.
+ */
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    const mainContent = document.querySelector('.main-content');
+    sidebar.classList.toggle('closed');
+    mainContent.classList.toggle('sidebar-closed');
+}
+
+/**
+ * Expands or collapses a navigation group (accordion style).
+ * @param {HTMLElement} element - The header element that was clicked.
+ */
+function toggleNavGroup(element) {
+    const subMenu = element.nextElementSibling;
+    const arrow = element.querySelector('.nav-arrow');
+    
+    if (subMenu.classList.contains('open')) {
+        subMenu.classList.remove('open');
+        arrow.textContent = '▼';
+    } else {
+        subMenu.classList.add('open');
+        arrow.textContent = '▲';
+    }
+}
+
+/**
+ * Navigates to a specific page view.
+ * @param {string} pageId - The ID of the page element to display.
+ */
+function navigateTo(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+    const targetPage = document.getElementById(pageId);
+    if (targetPage) {
+        targetPage.classList.add('active-page');
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+        const onclickAttr = item.getAttribute('onclick');
+        if (onclickAttr === `navigateTo('${pageId}')`) {
+            item.classList.add('active');
+        }
+    });
+
+    const loadFunctionName = `load_${pageId.replace('page-', '')}`;
+    if(typeof window[loadFunctionName] === 'function') {
+        window[loadFunctionName]();
+    } else {
+        console.log(`Navigation load function ${loadFunctionName} not found.`);
+    }
+}
+</script>

@@ -1,151 +1,82 @@
-<!-- 5. NURSING PROCTORING -->
-<div id="page-exams" class="page">
-  <h1>Nursing Proctoring</h1>
-  <div class="tab-nav">
-      <div id="nursing-tab-generator" class="tab-nav-item active" data-tab="tab-exam-nursing">Nursing Generator</div>
-      <div id="nursing-tab-calendar" class="tab-nav-item" data-tab="tab-exam-calendar">Calendar Management</div>
-  </div>
+<!-- 
+  - The Nursing Proctoring tool page container.
+  - This is controlled by the main navigateTo('page-exams') function.
+-->
+<div class="page" id="page-exams">
+    
+    <!-- NURSING TAB NAVIGATION -->
+    <div class="tab-nav">
+        <div class="tab-nav-item active" onclick="navigateToSubTab(this, 'nursing-tab-generator')">Generator</div>
+        <div class="tab-nav-item" onclick="navigateToSubTab(this, 'nursing-tab-calendar')" id="nursing-calendar-tab-btn">Calendar Sync</div>
+        <div class="tab-nav-item" onclick="navigateToSubTab(this, 'nursing-tab-settings')">Settings</div>
+    </div>
 
-  <div id="tab-exam-nursing" class="tab-page active">
-      <div id="nursing-status" class="status-message"></div>
-      <div class="button-group">
-        <button class="button" id="nursing-generate-all-btn">Generate All & Report</button>
-        <button class="button" id="nursing-refresh-all-btn">Refresh All</button>
-        <button class="button secondary" id="nursing-notes-btn">Edit General Notes</button>
-      </div>
-      <hr class="divider">
-      <div class="button-group">
-        <button class="button" id="nursing-refresh-active-btn">Show Active</button>
-        <button class="button" id="nursing-refresh-all-folder-btn">Show All</button>
-      </div>
-      <div id="nursing-doc-list" class="results-container" style="margin-top: 20px;"></div>
-  </div>
+    <!-- NURSING TAB CONTENT CONTAINER -->
+    <div class="tab-content-container">
+        <!-- Generator Tab -->
+        <div class="tab-page active" id="nursing-tab-generator">
+            <div id="nursing-status" class="status-message"></div>
+            
+            <!-- Step 1: Analysis -->
+            <div id="nursing-analysis-step">
+                <h3>Nursing Proctoring Document Generator</h3>
+                <p>Enter the URL of the master Nursing Exam sheet. The tool will analyze all tabs to find exam and roster information.</p>
+                <div class="input-group">
+                    <label for="nursing-sheet-url-input">Spreadsheet URL</label>
+                    <input type="text" id="nursing-sheet-url-input" class="url-input" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
+                    <button id="nursing-analyze-btn" class="button">Analyze Sheet</button>
+                </div>
+            </div>
 
-  <!-- NEW: NURSING CALENDAR TAB -->
-  <div id="tab-exam-calendar" class="tab-page">
-      <h3>Manage Nursing Calendar</h3>
-      <p>Publish Nursing exams to a specific Google Calendar.</p>
-      <div style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-           <div class="form-group">
-              <label>Select Target Calendar</label>
-              <select id="nursing-calendar-select">
-                  <option value="" disabled selected>Select a Calendar...</option>
-              </select>
-           </div>
-           <div class="form-group">
-              <label>Or Paste Calendar ID</label>
-              <input type="text" id="nursing-calendar-id-input" placeholder="Enter Calendar ID (e.g. c_...group.calendar.google.com)">
-           </div>
-           <div class="form-group inline-group">
-              <div style="width: 150px;">
-                  <label>Start Date</label>
-                  <input type="date" id="nursing-cal-start">
-              </div>
-              <div style="width: 150px;">
-                  <label>End Date</label>
-                  <input type="date" id="nursing-cal-end">
-              </div>
-           </div>
-           <div class="toggle-group" style="margin-top: 20px;">
-              <label class="toggle-switch">
-                  <input type="checkbox" id="nursing-cal-overwrite" checked>
-                  <span class="slider"></span>
-              </label>
-              <label><strong>Overwrite</strong> existing Nursing events in range</label>
-          </div>
-          <button class="button" id="nursing-calendar-sync-btn">Publish to Calendar</button>
-          <div id="nursing-calendar-status" class="status-message"></div>
-      </div>
-  </div>
+            <!-- Step 2: Preview & Confirmation -->
+            <div id="nursing-preview-container" style="display:none;">
+                <h3>Analysis Preview</h3>
+                <p>Review the data found in the spreadsheet. You can create documents for one sheet at a time or for all sheets at once.</p>
+                <div id="nursing-preview-output"></div>
+                <div class="form-actions" id="nursing-preview-actions">
+                    <div class="input-group checkbox-group">
+                        <input type="checkbox" id="nursing-create-calendar-events-checkbox" checked>
+                        <label for="nursing-create-calendar-events-checkbox">Also create calendar events for each exam</label>
+                    </div>
+                    <button id="nursing-cancel-btn" class="button-secondary">Start Over</button>
+                    <button id="nursing-update-all-btn" class="button">Update All Existing</button>
+                    <button id="nursing-confirm-create-btn" class="button-primary">Confirm & Create All Docs</button>
+                </div>
+            </div>
+        </div>
+
+         <!-- Calendar Tab -->
+        <div class="tab-page" id="nursing-tab-calendar">
+            <h3>Nursing Calendar Sync</h3>
+            <div id="nursing-calendar-status"></div>
+            <p>Select a calendar to sync exam events to. This tool is currently disabled pending updates.</p>
+            <div class="input-group">
+                <label for="nursing-calendar-select">Select Calendar</label>
+                <select id="nursing-calendar-select" disabled>
+                    <option value="">Loading calendars...</option>
+                </select>
+            </div>
+             <div class="input-group">
+                <label for="nursing-calendar-id-input">Or Enter Calendar ID</label>
+                <input type="text" id="nursing-calendar-id-input" disabled>
+            </div>
+            <div class="form-actions">
+                <button id="nursing-calendar-sync-btn" class="button" disabled>Sync to Calendar</button>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div class="tab-page" id="nursing-tab-settings">
+            <?!= include('Settings_Nursing'); ?>
+        </div>
+    </div>
+    
 </div>
 
-<!-- 6. NEW: MLT PROCTORING -->
-<div id="page-mlt-proctoring" class="page">
-  <h1>MLT Proctoring</h1>
-  <div class="tab-nav">
-      <div id="mlt-tab-generator" class="tab-nav-item active" data-tab="tab-mlt-generator">Document Generator</div>
-      <div id="mlt-tab-calendar" class="tab-nav-item" data-tab="tab-mlt-calendar">Calendar Management</div>
-  </div>
-
-  <!-- GENERATOR TAB -->
-  <div id="tab-mlt-generator" class="tab-page active">
-      <div id="mlt-status" class="status-message"></div>
-      <div class="button-group">
-        <button class="button" id="mlt-generate-all-btn">Generate All & Report</button>
-        <button class="button" id="mlt-refresh-all-btn">Refresh All</button>
-      </div>
-      <hr class="divider">
-      <div class="button-group">
-        <button class="button" id="mlt-refresh-active-btn">Show Active Docs</button>
-        <button class="button" id="mlt-refresh-all-folder-btn">Show All from Folder</button>
-      </div>
-      <div id="mlt-doc-list" class="results-container" style="margin-top: 20px;"></div>
-  </div>
-
-  <!-- CALENDAR TAB -->
-  <div id="tab-mlt-calendar" class="tab-page">
-      <h3>Manage MLT Calendar</h3>
-      <p>Publish MLT exams to a specific Google Calendar.</p>
-      <div style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-           <div class="form-group">
-              <label>Select Target Calendar</label>
-              <select id="mlt-calendar-select">
-                  <option value="" disabled selected>Select a Calendar...</option>
-              </select>
-           </div>
-           <div class="form-group">
-              <label>Or Paste Calendar ID</label>
-              <input type="text" id="mlt-calendar-id-input" placeholder="Enter Calendar ID (e.g. c_...group.calendar.google.com)">
-           </div>
-           <div class="form-group inline-group">
-              <div style="width: 150px;">
-                  <label>Start Date</label>
-                  <input type="date" id="mlt-cal-start">
-              </div>
-              <div style="width: 150px;">
-                  <label>End Date</label>
-                  <input type="date" id="mlt-cal-end">
-              </div>
-           </div>
-           <div class="toggle-group" style="margin-top: 20px;">
-              <label class="toggle-switch">
-                  <input type="checkbox" id="mlt-cal-overwrite" checked>
-                  <span class="slider"></span>
-              </label>
-              <label><strong>Overwrite</strong> existing MLT events in range</label>
-          </div>
-          <button class="button" id="mlt-calendar-sync-btn">Publish to Calendar</button>
-          <div id="mlt-calendar-status" class="status-message"></div>
-      </div>
-  </div>
-</div>
-
-<!-- HIDDEN PAGES -->
-<div id="page-nursing-notes-editor" class="page">
-  <h1>Edit General Notes</h1>
-  <div class="form-group"><textarea id="nursing-notes-area">Loading...</textarea></div>
-  <div id="nursing-notes-status" class="status-message"></div>
-  <button class="button" id="nursing-save-notes-btn">Save Notes</button>
-  <button class="button secondary" onclick="navigateTo('page-exams')">Back</button>
-</div>
-
-<div id="page-nursing-accom-editor" class="page">
-  <h1>Edit Accommodations</h1>
-  <p>For: <strong id="nursing-accom-doc-name">...</strong></p>
-  <div class="form-group"><textarea id="nursing-accom-area">Loading...</textarea></div>
-  <div id="nursing-accom-status" class="status-message"></div>
-  <input type="hidden" id="nursing-accom-doc-id">
-  <button class="button" id="nursing-save-accom-btn">Save</button>
-  <button class="button secondary" onclick="navigateTo('page-exams')">Back</button>
-</div>
-
-<!-- MLT Accommodations Editor -->
-<div id="page-mlt-accom-editor" class="page">
-  <h1>Edit Accommodations (MLT)</h1>
-  <p>For: <strong id="mlt-accom-doc-name">...</strong></p>
-  <div class="form-group"><textarea id="mlt-accom-area">Loading...</textarea></div>
-  <div id="mlt-accom-status" class="status-message"></div>
-  <input type="hidden" id="mlt-accom-doc-id">
-  <button class="button" id="mlt-save-accom-btn">Save</button>
-  <button class="button secondary" onclick="navigateTo('page-mlt-proctoring')">Back</button>
+<!-- 
+  - The MLT Proctoring tool page container.
+-->
+<div class="page" id="page-mlt">
+     <h3>MLT Proctoring Document Generator</h3>
+     <p>This feature is not yet available.</p>
 </div>

@@ -46,30 +46,26 @@
   }
 
   function mlt_handleGenerateAll() { 
-      ui_confirm("Generate ALL MLT documents? This will overwrite existing files.", function(yes) { 
-          if(yes) { 
-              ui_setStatus('mlt-status', 'Generating documents...', 'loading'); 
-              google.script.run.withSuccessHandler(function(res) { 
-                  ui_setStatus('mlt-status', res.data || res.error, res.error ? 'error' : 'success'); 
-                  mlt_refreshDocList('active'); 
-              }).mlt_generateAllDocuments(); 
-          } 
-      }); 
+      if (confirm("Generate ALL MLT documents? This will overwrite existing files.")) { 
+          setStatus('mlt-status', 'Generating documents...', 'loading'); 
+          google.script.run.withSuccessHandler(function(res) { 
+              setStatus('mlt-status', res.data || res.error, res.error ? 'error' : 'success'); 
+              mlt_refreshDocList('active'); 
+          }).mlt_generateAllDocuments(); 
+      } 
   }
 
   function mlt_handleRefreshAll() {
-      ui_setStatus('mlt-status', 'Refreshing active documents...', 'loading');
+      setStatus('mlt-status', 'Refreshing active documents...', 'loading');
       google.script.run.withSuccessHandler(function(res) {
-          ui_setStatus('mlt-status', res.data || res.error, res.error ? 'error' : 'success');
+          setStatus('mlt-status', res.data || res.error, res.error ? 'error' : 'success');
       }).mlt_refreshAllActiveDocs();
   }
   
-  // --- INDIVIDUAL DOC ACTIONS ---
-
   function mlt_regenerateDoc(id) {
-      ui_setStatus('mlt-status', 'Regenerating document...', 'loading');
+      setStatus('mlt-status', 'Regenerating document...', 'loading');
       google.script.run.withSuccessHandler(function(res) {
-          ui_setStatus('mlt-status', res.data || res.error, res.error ? 'error' : 'success');
+          setStatus('mlt-status', res.data || res.error, res.error ? 'error' : 'success');
       }).mlt_regenerateSingleDocById(id);
   }
 
@@ -87,14 +83,12 @@
   function mlt_handleSaveAccommodations() {
       const docId = document.getElementById('mlt-accom-doc-id').value;
       const text = document.getElementById('mlt-accom-area').value;
-      ui_setStatus('mlt-accom-status', 'Saving...', 'loading');
+      setStatus('mlt-accom-status', 'Saving...', 'loading');
       
       google.script.run.withSuccessHandler(function(res) {
-          ui_setStatus('mlt-accom-status', 'Saved.', 'success');
+          setStatus('mlt-accom-status', 'Saved.', 'success');
       }).mlt_saveAccommodations(docId, text);
   }
-
-  // --- MLT SETTINGS ---
 
   function mlt_loadSettings() {
       google.script.run.withSuccessHandler(function(res) {
@@ -119,7 +113,7 @@
       try {
           configObj = JSON.parse(jsonStr);
       } catch (e) {
-          ui_setStatus('mltSettings-status', 'Invalid JSON in Configuration.', 'error');
+          setStatus('mltSettings-status', 'Invalid JSON in Configuration.', 'error');
           return;
       }
 
@@ -128,17 +122,15 @@
           targetFolderId: document.getElementById('mlt-folder-url').value,
           reportEmail: document.getElementById('mlt-report-email').value,
           customNotes: document.getElementById('mlt-custom-notes').value,
-          calendarId: document.getElementById('mlt-calendar-id-input').value, // Also save here
+          calendarId: document.getElementById('mlt-calendar-id-input').value,
           config: configObj
       };
 
-      ui_setStatus('mltSettings-status', 'Saving...', 'loading');
+      setStatus('mltSettings-status', 'Saving...', 'loading');
       google.script.run.withSuccessHandler(function(res) {
-          ui_setStatus('mltSettings-status', res.message, res.success ? 'success' : 'error');
+          setStatus('mltSettings-status', res.message, res.success ? 'success' : 'error');
       }).mlt_saveSettings(settings);
   }
-
-  // --- MLT CALENDAR ---
   
   function mlt_loadCalendarOptions() {
       google.script.run.withSuccessHandler(function(res) {
@@ -168,17 +160,15 @@
       const overwrite = document.getElementById('mlt-cal-overwrite').checked;
 
       if (!calId || !start || !end) {
-          ui_setStatus('mlt-calendar-status', 'Please enter Calendar ID and Date Range.', 'error');
+          setStatus('mlt-calendar-status', 'Please enter Calendar ID and Date Range.', 'error');
           return;
       }
 
-      ui_confirm("Publish MLT exams to Calendar? This may delete existing events if Overwrite is checked.", function(yes) {
-          if (yes) {
-              ui_setStatus('mlt-calendar-status', 'Publishing...', 'loading');
-              google.script.run.withSuccessHandler(function(res) {
-                  ui_setStatus('mlt-calendar-status', res.message, res.success ? 'success' : 'error');
-              }).mlt_syncExamsToCalendar(calId, start, end, overwrite);
-          }
-      });
+      if(confirm("Publish MLT exams to Calendar? This may delete existing events if Overwrite is checked.")) {
+          setStatus('mlt-calendar-status', 'Publishing...', 'loading');
+          google.script.run.withSuccessHandler(function(res) {
+              setStatus('mlt-calendar-status', res.message, res.success ? 'success' : 'error');
+          }).mlt_syncExamsToCalendar(calId, start, end, overwrite);
+      }
   }
 </script>

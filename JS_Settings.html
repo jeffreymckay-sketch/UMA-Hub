@@ -1,299 +1,510 @@
 <script>
-  // --- SETTINGS MAPPING ---
-  function mapSettingsToUI(allSettings) {
-    // 1. Admin Settings
-    const admin = allSettings.adminSettings || {};
-    if(document.getElementById('data-hub-url')) document.getElementById('data-hub-url').value = admin.dataHubUrl || '';
-    if(document.getElementById('logo-file-id')) document.getElementById('logo-file-id').value = admin.logoFileId || '';
-    
-    // 2. Course Import Settings (MST)
-    const course = allSettings.courseImportSettings || {};
-    if(document.getElementById('course-sheet-url')) document.getElementById('course-sheet-url').value = course.sheetUrl || '';
-    if(document.getElementById('course-tab-name')) document.getElementById('course-tab-name').value = course.tabName || '';
-    
-    // 3. Exam Settings
-    const exam = allSettings.examSettings || {};
-    if(document.getElementById('exam-calendar-id')) document.getElementById('exam-calendar-id').value = exam.calendarId || '';
-    if(document.getElementById('proctor-capability')) document.getElementById('proctor-capability').value = exam.proctorTag || '';
-    
-    // 4. Scheduling Settings (Tech Hub)
-    const scheduling = allSettings.schedulingSettings || {};
-    if(document.getElementById('tech-hub-zoom-url')) document.getElementById('tech-hub-zoom-url').value = scheduling.zoomUrl || '';
-    // Note: Calendar ID for Tech Hub is handled in the Sync tab, but we map it here if it exists in the DOM
-    
-    // 5. Nursing Settings
-    const nursing = allSettings.nursingExamSettings || {};
-    if(document.getElementById('nursing-sheet-url')) document.getElementById('nursing-sheet-url').value = nursing.spreadsheetUrl || '';
-    if(document.getElementById('nursing-folder-url')) document.getElementById('nursing-folder-url').value = nursing.targetFolderId || '';
-    if(document.getElementById('nursing-report-email')) document.getElementById('nursing-report-email').value = nursing.reportEmail || '';
-    if(document.getElementById('nursing-report-days')) document.getElementById('nursing-report-days').value = nursing.reportDaysForward || '7';
-    if(document.getElementById('nursing-report-resolved-toggle')) document.getElementById('nursing-report-resolved-toggle').checked = nursing.reportResolvedComments === true;
-    if(document.getElementById('nursing-auto-frequency')) document.getElementById('nursing-auto-frequency').value = nursing.autoTriggerFrequency || 'WEEKLY';
-    if(document.getElementById('nursing-auto-day')) document.getElementById('nursing-auto-day').value = nursing.autoTriggerDay || 'MONDAY';
-    if(document.getElementById('nursing-auto-hour')) document.getElementById('nursing-auto-hour').value = nursing.autoTriggerHour || '8';
-    
-    // 6. MLT Settings
-    const mlt = allSettings.mltExamSettings || {};
-    if(document.getElementById('mlt-sheet-url')) document.getElementById('mlt-sheet-url').value = mlt.spreadsheetUrl || '';
-    if(document.getElementById('mlt-folder-url')) document.getElementById('mlt-folder-url').value = mlt.targetFolderId || '';
-    if(document.getElementById('mlt-report-email')) document.getElementById('mlt-report-email').value = mlt.reportEmail || '';
-    if(document.getElementById('mlt-custom-notes')) document.getElementById('mlt-custom-notes').value = mlt.customNotes || '';
-    if(document.getElementById('mlt-config-json') && mlt.config) document.getElementById('mlt-config-json').value = JSON.stringify(mlt.config, null, 2);
+/**
+ * ===================================================================
+ * SETTINGS PAGE LOGIC
+ * ===================================================================
+ */
 
-    // 7. Reporting Settings
-    const reporting = allSettings.reportingSettings || {};
-    if(document.getElementById('reporting-url-input')) document.getElementById('reporting-url-input').value = reporting.lookerStudioUrl || '';
-    if (reporting.lookerStudioUrl && document.getElementById('looker-studio-link')) { 
-        document.getElementById('looker-studio-link').href = reporting.lookerStudioUrl; 
-        document.getElementById('looker-studio-link').style.display = 'inline-block'; 
-    }
-  }
+/**
+ * Main loader function for the entire settings page.
+ * This is called by the core navigation logic when the page is first shown.
+ */
+function load_settings() {
+    // Use a flag to ensure listeners are only attached once.
+    if (window.settingsListenersAttached) return;
 
-  function handleSaveSettings(key) {
-    var statusId = key + '-status';
-    ui_setStatus(statusId, 'Saving...', 'loading');
-    var settings = {};
+    // Attach listeners to the main setting tabs.
+    document.getElementById('settings-tab-general').addEventListener('click', () => {
+        settings_navigateToTab(document.getElementById('settings-tab-general'), 'tab-set-general');
+        loadGeneralSettings();
+        loadPermissionsMatrix();
+    });
+    document.getElementById('settings-tab-staff').addEventListener('click', () => {
+        settings_navigateToTab(document.getElementById('settings-tab-staff'), 'tab-set-staff');
+        loadRoleAssignmentData();
+    });
+    document.getElementById('settings-tab-scheduling').addEventListener('click', () => {
+        settings_navigateToTab(document.getElementById('settings-tab-scheduling'), 'tab-set-scheduling');
+        loadSchedulingRosterData();
+    });
+    document.getElementById('settings-tab-proctoring').addEventListener('click', () => {
+        settings_navigateToTab(document.getElementById('settings-tab-proctoring'), 'tab-set-proctoring');
+        loadProctoringSettings();
+    });
+    document.getElementById('settings-tab-reporting').addEventListener('click', () => {
+        settings_navigateToTab(document.getElementById('settings-tab-reporting'), 'tab-set-reporting');
+        loadReportingSettings();
+    });
+
+    window.settingsListenersAttached = true;
+
+    // Initially, load the content for the default tab.
+    loadGeneralSettings();
+    loadPermissionsMatrix();
+}
+
+/**
+ * Handles switching between the main tabs on the Settings page.
+ * @param {HTMLElement} clickedTab - The tab element that was clicked.
+ * @param {string} targetTabId - The ID of the content element to show.
+ */
+function settings_navigateToTab(clickedTab, targetTabId) {
+    const tabContainer = clickedTab.closest('.tab-nav');
+    const pageContainer = tabContainer.parentElement;
+
+    tabContainer.querySelectorAll('.tab-nav-item').forEach(item => item.classList.remove('active'));
+    clickedTab.classList.add('active');
+
+    pageContainer.querySelectorAll('.tab-page').forEach(content => content.classList.remove('active'));
+    document.getElementById(targetTabId).classList.add('active');
+}
+
+// ... (rest of the functions: loadGeneralSettings, loadPermissionsMatrix, etc. remain the same)
+
+
+/**
+ * ===================================================================
+ * 1. GENERAL & ACCESS PANEL
+ * ===================================================================
+ */
+
+function loadGeneralSettings() {
+    loadAllSettings();
+}
+
+function loadPermissionsMatrix() {
+    const container = document.getElementById('permissions-matrix-table');
+    container.innerHTML = '<p>Loading permissions...</p>';
+    google.script.run.withSuccessHandler(res => {
+        if (res.error) {
+            container.innerHTML = `<p class="status-message error">${res.error}</p>`;
+            return;
+        }
+        const { matrix, roles, pages } = res.data;
+        let html = '<table class="permission-table"><thead><tr><th>Page Access</th>';
+        roles.forEach(role => { html += `<th>${role}</th>`; });
+        html += '</tr></thead><tbody>';
+
+        pages.forEach(page => {
+            html += `<tr><td>${page.name}</td>`;
+            roles.forEach(role => {
+                const isChecked = matrix[page.id] && matrix[page.id][role];
+                html += `<td><input type="checkbox" data-page="${page.id}" data-role="${role}" ${isChecked ? 'checked' : ''}></td>`;
+            });
+            html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }).getAccessControlData();
+}
+
+function handleSavePermissions() {
+    const matrix = {};
+    document.querySelectorAll('#permissions-matrix-table input[type="checkbox"]').forEach(input => {
+        const page = input.dataset.page;
+        const role = input.dataset.role;
+        if (!matrix[page]) {
+            matrix[page] = {};
+        }
+        matrix[page][role] = input.checked;
+    });
     
-    // --- NURSING ---
-    if (key === 'nursingExamSettings') {
-        settings = { 
-            spreadsheetUrl: document.getElementById('nursing-sheet-url').value.trim(), 
-            targetFolderId: document.getElementById('nursing-folder-url').value.trim(), 
-            reportEmail: document.getElementById('nursing-report-email').value.trim(), 
-            reportDaysForward: document.getElementById('nursing-report-days').value, 
-            reportResolvedComments: document.getElementById('nursing-report-resolved-toggle').checked, 
-            autoTriggerFrequency: document.getElementById('nursing-auto-frequency').value, 
-            autoTriggerDay: document.getElementById('nursing-auto-day').value, 
-            autoTriggerHour: document.getElementById('nursing-auto-hour').value 
-        };
-        // Save Core
-        google.script.run.withSuccessHandler(function(r){ if(r.success) ui_setStatus(statusId, 'Core saved.', 'success'); }).saveSettings(key, settings);
-        // Save Email Trigger
-        var emailSettings = { email: settings.reportEmail, reportDays: settings.reportDaysForward, reportResolvedComments: settings.reportResolvedComments, isAuto: document.getElementById('nursing-auto-report-toggle').checked, autoFrequency: settings.autoTriggerFrequency, autoDay: settings.autoTriggerDay, autoHour: settings.autoTriggerHour };
-        google.script.run.withSuccessHandler(function(r){ if(r.error) ui_setStatus(statusId, r.error, 'error'); else ui_setStatus(statusId, 'Settings Saved!', 'success'); }).nursing_saveEmailSettings(emailSettings);
+    setStatus('permissions-status', 'Saving...', 'loading');
+    google.script.run.withSuccessHandler(res => {
+        setStatus('permissions-status', res.message, res.success ? 'success' : 'error');
+    }).savePermissionsMatrix(matrix);
+}
+
+
+/**
+ * ===================================================================
+ * 2. STAFF MANAGEMENT PANEL
+ * ===================================================================
+ */
+
+function loadRoleAssignmentData() {
+    const container = document.getElementById('role-assignment-list');
+    container.innerHTML = '<p>Loading staff...</p>';
+    google.script.run.withSuccessHandler(res => {
+        if (res.error) {
+            container.innerHTML = `<p class="status-message error">${res.error}</p>`;
+            return;
+        }
+        let html = '<table class="data-table"><thead><tr><th>Name</th><th>Email / ID</th><th>Role</th><th>Action</th></tr></thead><tbody>';
+        res.data.forEach(staff => {
+            html += `<tr>
+                <td>${staff.name}</td>
+                <td>${staff.id}</td>
+                <td>
+                    <select data-staff-id="${staff.id}" class="role-select">
+                        <option value="Staff" ${staff.role === 'Staff' ? 'selected' : ''}>Staff</option>
+                        <option value="Lead" ${staff.role === 'Lead' ? 'selected' : ''}>Lead</option>
+                        <option value="Admin" ${staff.role === 'Admin' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </td>
+                <td><button class="button danger btn-sm" onclick="handleDeleteStaff('${staff.id}', this)">Remove</button></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }).api_getStaffForRoleAssignment();
+}
+
+function handleAddStaff() {
+    const name = document.getElementById('new-staff-name').value;
+    const id = document.getElementById('new-staff-id').value;
+    const role = document.getElementById('new-staff-role').value;
+
+    if (!name || !id) {
+        setStatus('add-staff-status', 'Name and ID are required.', 'error');
         return;
     }
-    
-    // --- ADMIN ---
-    if (key === 'adminSettings') { 
-        settings.dataHubUrl = document.getElementById('data-hub-url').value.trim(); 
-        settings.logoFileId = document.getElementById('logo-file-id').value.trim(); 
-    } 
-    
-    // --- COURSE IMPORT (MST) ---
-    else if (key === 'courseImportSettings') { 
-        settings.sheetUrl = document.getElementById('course-sheet-url').value.trim(); 
-        settings.tabName = document.getElementById('course-tab-name').value.trim(); 
-    } 
-    
-    // --- EXAM BOOKING ---
-    else if (key === 'examSettings') { 
-        settings.calendarId = document.getElementById('exam-calendar-id').value.trim(); 
-        settings.proctorTag = document.getElementById('proctor-capability').value.trim(); 
-    } 
-    
-    // --- SCHEDULING (TECH HUB) ---
-    else if (key === 'schedulingSettings') { 
-        settings.zoomUrl = document.getElementById('tech-hub-zoom-url').value.trim(); 
-        // Calendar ID is handled in the Sync tab, but we preserve it if we were to load/save it here
-    } 
-    
-    // --- REPORTING ---
-    else if (key === 'reportingSettings') { 
-        settings.lookerStudioUrl = document.getElementById('reporting-url-input').value.trim(); 
-    } 
-    
-    // --- CALENDAR (GENERIC) ---
-    else if (key === 'calendarSettings') {
-        var manualId = document.getElementById('setting-manual-calendar-id').value.trim();
-        var dropdownId = document.getElementById('setting-target-calendar').value;
-        var finalId = manualId ? manualId : dropdownId;
-        settings.targetCalendarId = finalId;
-        settings.sourceTabName = document.getElementById('setting-source-tab').value;
-        settings.savedTemplates = currentTemplates; 
-    }
 
-    // Generic Save Handler
-    google.script.run.withSuccessHandler(function(res) { 
-        if (res.success) { 
-            ui_setStatus(statusId, res.message, 'success'); 
-            if(key==='adminSettings') { setTimeout(() => window.top.location.reload(), 1000); } 
-            if(key==='reportingSettings') { updateLookerStudioLink(); } 
-            if(key==='calendarSettings') { updateConfigStatus(true); loadCurrentCalendarSettings(); } 
-        } else { 
-            ui_setStatus(statusId, res.message, 'error'); 
-        } 
-    }).saveSettings(key, settings);
-  }
-
-  // --- ROLE ASSIGNMENT ---
-  function loadRoleAssignmentData() {
-    ui_setStatus('role-assignment-status', 'Loading staff list...', 'loading');
-    google.script.run.withSuccessHandler(renderRoleAssignmentTable).withFailureHandler(function(e){ ui_setStatus('role-assignment-status', e.message, 'error'); }).api_getStaffForRoleAssignment();
-  }
-
-  function renderRoleAssignmentTable(response) {
-    if (response.error) { ui_setStatus('role-assignment-status', response.error, 'error'); return; }
-    allStaffList = response.data; 
-    const validRoles = response.validRoles;
-    const container = document.getElementById('role-assignment-list');
-    if (allStaffList.length === 0) { container.innerHTML = '<p>No staff members found in the Staff_List tab.</p>'; return; }
-    allStaffList.sort((a, b) => a.name.localeCompare(b.name));
-    let html = '<table class="data-table"><thead><tr><th>Full Name</th><th>Staff ID</th><th>Current Role</th><th>New Role</th><th>Actions</th></tr></thead><tbody>';
-    allStaffList.forEach(staff => {
-        let options = '';
-        let primaryRole = 'Staff';
-        if (staff.currentRole.includes('Admin')) primaryRole = 'Admin';
-        else if (staff.currentRole.includes('Lead')) primaryRole = 'Lead';
-        
-        validRoles.forEach(role => { const isSelected = primaryRole === role ? 'selected' : ''; options += `<option value="${role}" ${isSelected}>${role}</option>`; });
-        
-        html += `<tr><td id="staff-name-${staff.row}">${staff.name}</td><td id="staff-id-${staff.row}">${staff.id}</td><td>${staff.currentRole}</td><td><select id="role-select-${staff.row}" data-staff-id="${staff.id}" data-row-id="${staff.row}">${options}</select></td><td><button class="button secondary" onclick="handleEditStaffDetails('${staff.id}', '${staff.name}', ${staff.row}, '${staff.currentRole}')">Edit</button></td></tr>`;
-    });
-    html += '</tbody></table>';
-    container.innerHTML = html;
-    ui_setStatus('role-assignment-status', 'Staff list loaded.', 'success');
-  }
-
-  function handleSaveRoleAssignments() {
-    ui_setStatus('role-assignment-status', 'Saving role changes...', 'loading');
-    const roleSelectors = document.querySelectorAll('#role-assignment-list select');
-    const promises = [];
-    let changesMade = 0;
-    let hasError = false;
-    roleSelectors.forEach(select => {
-        const newPrimaryRole = select.value;
-        const staffId = select.getAttribute('data-staff-id');
-        const rowId = select.getAttribute('data-row-id');
-        const originalStaff = allStaffList.find(s => s.id === staffId);
-        
-        let currentPrimary = 'Staff';
-        if (originalStaff.currentRole.includes('Admin')) currentPrimary = 'Admin';
-        else if (originalStaff.currentRole.includes('Lead')) currentPrimary = 'Lead';
-
-        if (originalStaff && currentPrimary !== newPrimaryRole) {
-            changesMade++;
-            let parts = originalStaff.currentRole.split(',').map(s => s.trim());
-            parts = parts.filter(p => p !== 'Admin' && p !== 'Lead' && p !== 'Staff');
-            parts.unshift(newPrimaryRole);
-            const newFullRoleString = parts.join(', ');
-
-            const savePromise = new Promise((resolve, reject) => {
-                google.script.run.withSuccessHandler(function(res) { if (res.success) { resolve(res); } else { hasError = true; reject(new Error(res.message)); } }).withFailureHandler(function(err) { hasError = true; reject(new Error(`Server failed for ${staffId}: ${err}`)); }).api_editStaffMember(staffId, originalStaff.name, staffId, parseInt(rowId), newFullRoleString);
-            });
-            promises.push(savePromise);
+    setStatus('add-staff-status', 'Adding...', 'loading');
+    google.script.run.withSuccessHandler(res => {
+        setStatus('add-staff-status', res.message, res.success ? 'success' : 'error');
+        if (res.success) {
+            loadRoleAssignmentData();
+            document.getElementById('new-staff-name').value = '';
+            document.getElementById('new-staff-id').value = '';
         }
-    });
-    if (changesMade === 0) { ui_setStatus('role-assignment-status', 'No changes detected.', 'success'); return; }
-    Promise.allSettled(promises).then(() => { if (hasError) { ui_setStatus('role-assignment-status', `Errors occurred during batch save. Check console.`, 'error'); } else { ui_setStatus('role-assignment-status', `${changesMade} roles updated! Reloading...`, 'success'); } loadRoleAssignmentData(); }).catch(e => { ui_setStatus('role-assignment-status', `Critical failure during save.`, 'error'); loadRoleAssignmentData(); });
-  }
+    }).api_addNewStaff(name, id, role);
+}
 
-  function handleEditStaffDetails(oldStaffId, oldFullName, row, currentRoleStr) {
-    document.getElementById('edit-staff-modal-old-id').value = oldStaffId;
-    document.getElementById('edit-staff-modal-row').value = row;
-    document.getElementById('edit-staff-modal-name').value = oldFullName;
-    document.getElementById('edit-staff-modal-id').value = oldStaffId;
-    
-    let primary = 'Staff';
-    if (currentRoleStr && currentRoleStr.includes('Admin')) primary = 'Admin';
-    else if (currentRoleStr && currentRoleStr.includes('Lead')) primary = 'Lead';
-    document.getElementById('edit-staff-modal-primary-role').value = primary;
-
-    document.querySelectorAll('.sub-role-check').forEach(cb => cb.checked = false);
-    
-    if (currentRoleStr) {
-        const parts = currentRoleStr.split(',').map(s => s.trim());
-        parts.forEach(p => {
-            const cb = document.querySelector(`.sub-role-check[value="${p}"]`);
-            if(cb) cb.checked = true;
+function handleSaveRoleAssignments() {
+    const assignments = [];
+    document.querySelectorAll('.role-select').forEach(select => {
+        assignments.push({
+            id: select.dataset.staffId,
+            role: select.value
         });
+    });
+
+    setStatus('role-assignment-status', 'Saving roles...', 'loading');
+    google.script.run.withSuccessHandler(res => {
+        setStatus('role-assignment-status', res.message, res.success ? 'success' : 'error');
+    }).api_saveAllRoleAssignments(assignments);
+}
+
+function handleDeleteStaff(staffId, buttonElement) {
+    if (confirm(`Are you sure you want to remove this staff member?`)) {
+        buttonElement.closest('tr').style.backgroundColor = '#ffdddd';
+        setStatus('role-assignment-status', 'Deleting...', 'loading');
+        google.script.run.withSuccessHandler(res => {
+            setStatus('role-assignment-status', res.message, res.success ? 'success' : 'error');
+            if (res.success) {
+                loadRoleAssignmentData();
+            }
+        }).api_deleteStaff(staffId);
+    }
+}
+
+/**
+ * ===================================================================
+ * 3. SCHEDULING CONFIG PANEL
+ * ===================================================================
+ */
+
+function loadSchedulingRosterData() {
+    const container = document.getElementById('manage-shifts-list');
+    container.innerHTML = '<p>Loading shifts...</p>';
+    google.script.run.withSuccessHandler(res => {
+        if (res.error) {
+            container.innerHTML = `<p class="status-message error">${res.error}</p>`;
+            return;
+        }
+        let html = '<table class="data-table"><thead><tr><th><input type="checkbox" onchange="toggleAllShiftCheckboxes(this)"></th><th>Day</th><th>Time</th><th>Description</th><th>Zoom?</th></tr></thead><tbody>';
+        res.data.forEach(shift => {
+            html += `<tr>
+                <td><input type="checkbox" class="shift-checkbox" value="${shift.id}"></td>
+                <td>${shift.day}</td>
+                <td>${shift.start} - ${shift.end}</td>
+                <td>${shift.desc}</td>
+                <td>${shift.zoom ? '✔️' : '✖️'}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }).api_getShifts(); 
+}
+
+function handleAddShift() {
+    const days = Array.from(document.querySelectorAll('.shift-day-check:checked')).map(cb => cb.value);
+    const shift = {
+      desc: document.getElementById('shift-add-desc').value,
+      start: document.getElementById('shift-add-start').value,
+      end: document.getElementById('shift-add-end').value,
+      zoom: document.getElementById('shift-add-zoom').checked
+    };
+
+    if (days.length === 0 || !shift.desc || !shift.start || !shift.end) {
+        alert('Please select at least one day and fill in all fields.');
+        return;
     }
 
-    document.getElementById('edit-staff-status').textContent = '';
-    document.getElementById('edit-staff-overlay').style.display = 'flex';
-  }
+    google.script.run.withSuccessHandler(res => {
+        if(res.success) {
+            loadSchedulingRosterData(); // Refresh list
+        } else {
+            alert('Error adding shifts: ' + res.message);
+        }
+    }).api_addShifts(days, shift);
+}
 
-  function handleSaveStaffEdit() {
-    const oldStaffId = document.getElementById('edit-staff-modal-old-id').value;
-    const row = parseInt(document.getElementById('edit-staff-modal-row').value);
-    const newFullName = document.getElementById('edit-staff-modal-name').value.trim();
-    const newStaffId = document.getElementById('edit-staff-modal-id').value.trim();
-    const primaryRole = document.getElementById('edit-staff-modal-primary-role').value;
-    
-    const subRoles = [];
-    document.querySelectorAll('.sub-role-check:checked').forEach(cb => subRoles.push(cb.value));
-    
-    const fullRoleParts = [primaryRole, ...subRoles];
-    const newRoleString = fullRoleParts.join(', ');
+function handleBulkDeleteShifts() {
+    const ids = Array.from(document.querySelectorAll('.shift-checkbox:checked')).map(cb => cb.value);
+    if(ids.length === 0) return;
 
-    const statusId = 'edit-staff-status';
-    if (!newFullName || !newStaffId) { ui_setStatus(statusId, 'Name and Staff ID are required.', 'error'); return; }
-    
-    ui_setStatus(statusId, 'Saving changes...', 'loading');
-    google.script.run.withSuccessHandler(function(res) { 
-        if (res.success) { 
-            document.getElementById('edit-staff-overlay').style.display = 'none'; 
-            ui_setStatus('role-assignment-status', res.message, 'success'); 
-            loadRoleAssignmentData(); 
-        } else { 
-            ui_setStatus(statusId, res.message, 'error'); 
-        } 
-    }).withFailureHandler(function(err) { 
-        ui_setStatus(statusId, 'Server Error: ' + err.message, 'error'); 
-    }).api_editStaffMember(oldStaffId, newFullName, newStaffId, row, newRoleString);
-  }
+    if(confirm(`Are you sure you want to delete ${ids.length} selected shift(s)?`)) {
+        google.script.run.withSuccessHandler(res => {
+            if(res.success) {
+                loadSchedulingRosterData();
+            } else {
+                alert('Error deleting shifts: ' + res.message);
+            }
+        }).api_deleteShifts(ids);
+    }
+}
 
-  function handleCancelStaffEdit() { document.getElementById('edit-staff-overlay').style.display = 'none'; }
-  
-  function handleAddStaff() {
-    const fullName = document.getElementById('new-staff-name').value.trim();
-    const staffId = document.getElementById('new-staff-id').value.trim();
-    const primaryRole = document.getElementById('new-staff-role').value;
-    const statusId = 'add-staff-status';
-    if (!fullName || !staffId) { ui_setStatus(statusId, 'Name and Staff ID are required.', 'error'); return; }
-    ui_setStatus(statusId, 'Adding new staff...', 'loading');
-    google.script.run.withSuccessHandler(function(res) { if (res.success) { ui_setStatus(statusId, res.message, 'success'); document.getElementById('new-staff-name').value = ''; document.getElementById('new-staff-id').value = ''; loadRoleAssignmentData(); } else { ui_setStatus(statusId, res.message, 'error'); } }).withFailureHandler(function(err) { ui_setStatus(statusId, 'Server Error: ' + err.message, 'error'); }).api_staff_create(fullName, staffId, primaryRole); 
-  }
+function handleClearAllShifts() {
+    if(confirm('Are you sure you want to delete ALL shifts? This cannot be undone.')) {
+        google.script.run.withSuccessHandler(res => {
+            if(res.success) {
+                loadSchedulingRosterData();
+            } else {
+                alert('Error clearing shifts: ' + res.message);
+            }
+        }).api_deleteAllShifts();
+    }
+}
 
-  // --- PERMISSIONS MATRIX ---
-  function loadPermissionsMatrix() {
-    ui_setStatus('permissions-status', 'Loading matrix...', 'loading');
-    google.script.run.withSuccessHandler(function(response) {
-       if (response.error) { ui_setStatus('permissions-status', response.error, 'error'); return; }
-       const matrix = response.matrix; 
-       const container = document.getElementById('permissions-matrix-table');
-       let html = '<table class="data-table" id="perm-table"><thead><tr><th>Page Section</th><th>Admin</th><th>Lead</th><th>Staff</th></tr></thead><tbody>';
-       for (const [pageId, perms] of Object.entries(matrix)) {
-           const adminChecked = perms.Admin ? 'checked' : '';
-           const leadChecked = perms.Lead ? 'checked' : '';
-           const staffChecked = perms.Staff ? 'checked' : '';
-           html += `<tr><td>${pageId}</td><td><input type="checkbox" checked disabled title="Admin always has access"></td><td><input type="checkbox" class="perm-check" data-page="${pageId}" data-role="Lead" ${leadChecked}></td><td><input type="checkbox" class="perm-check" data-page="${pageId}" data-role="Staff" ${staffChecked}></td></tr>`;
-       }
-       html += '</tbody></table>';
-       container.innerHTML = html;
-       ui_setStatus('permissions-status', 'Matrix loaded.', 'success');
-    }).withFailureHandler(function(e) { ui_setStatus('permissions-status', e.message, 'error'); }).api_getAccessControlData();
-  }
+function toggleAllShiftCheckboxes(master) {
+    document.querySelectorAll('.shift-checkbox').forEach(cb => cb.checked = master.checked);
+}
 
-  function handleSavePermissions() {
-    ui_confirm('WARNING: Modifying permissions affects all users immediately. Proceed?', function(result) {
-      if (result) {
-        ui_setStatus('permissions-status', 'Saving permissions...', 'loading');
-        const checkboxes = document.querySelectorAll('.perm-check');
-        const newMatrix = {};
-        checkboxes.forEach(cb => {
-            const pageId = cb.getAttribute('data-page');
-            const role = cb.getAttribute('data-role');
-            const isChecked = cb.checked;
-            if (!newMatrix[pageId]) { newMatrix[pageId] = { Admin: true }; }
-            newMatrix[pageId][role] = isChecked;
+
+/**
+ * ===================================================================
+ * 4. PROCTORING CONFIG PANEL
+ * ===================================================================
+ */
+function loadProctoringSettings() {
+    mlt_loadSettings(); 
+    // nursing_loadSettings(); // This would be added for the Nursing side
+}
+
+/**
+ * ===================================================================
+ * 5. REPORTING & DATA PANEL
+ * ===================================================================
+ */
+function loadReportingSettings() {
+    google.script.run.withSuccessHandler(calendars => {
+        const select = document.getElementById('setting-target-calendar');
+        select.innerHTML = '<option value="">Select a calendar</option>';
+        calendars.data.forEach(cal => {
+            select.innerHTML += `<option value="${cal.id}">${cal.name}</option>`;
         });
-        google.script.run.withSuccessHandler(function(res){ if(res.success) { ui_setStatus('permissions-status', 'Permissions updated.', 'success'); loadAllSettings(); } else { ui_setStatus('permissions-status', res.message, 'error'); } }).withFailureHandler(function(e){ ui_setStatus('permissions-status', e.message, 'error'); }).api_savePermissionsMatrix(newMatrix);
-      }
-    });
-  }
+    }).getWritableCalendars();
 
-  // --- REPORTING ---
-  function handleGenerateReportData() { ui_setStatus('reporting-status', 'Report generation triggered (Server logic not provided in snippet).', 'success'); }
-  function updateLookerStudioLink() { }
+    google.script.run.withSuccessHandler(tabs => {
+        const select = document.getElementById('setting-source-tab');
+        select.innerHTML = '<option value="">Select a tab</option>';
+        tabs.forEach(tab => {
+            select.innerHTML += `<option value="${tab}">${tab}</option>`;
+        });
+    }).getSheetNames();
+
+    loadCalendarTemplates();
+}
+
+function loadCalendarTemplates() {
+     const container = document.getElementById('saved-templates-list');
+     container.innerHTML = 'Loading templates...';
+     google.script.run.withSuccessHandler(res => {
+        container.innerHTML = '';
+        if(res.success && res.data) {
+            res.data.forEach(t => {
+                container.innerHTML += `<div class="template-chip">${t.name}<span onclick="handleDeleteTemplate('${t.id}')">✖️</span></div>`;
+            });
+        }
+     }).getCalendarTemplates();
+}
+
+function handleAddTemplate() {
+    const name = document.getElementById('template-name-input').value;
+    const pattern = document.getElementById('template-pattern-input').value;
+    if(!name || !pattern) return;
+
+    google.script.run.withSuccessHandler(res => {
+        if(res.success) loadCalendarTemplates();
+    }).addCalendarTemplate(name, pattern);
+}
+
+function handleDeleteTemplate(id) {
+    if(confirm('Delete this template?')) {
+        google.script.run.withSuccessHandler(res => {
+            if(res.success) loadCalendarTemplates();
+        }).deleteCalendarTemplate(id);
+    }
+}
+
+function loadTabHeaders(tabName) {
+    const container = document.getElementById('available-headers-list');
+    container.innerHTML = 'Loading headers...';
+    google.script.run.withSuccessHandler(headers => {
+        container.innerHTML = '';
+        headers.forEach(h => {
+            container.innerHTML += `<div class="header-chip" onclick="addHeaderToTemplate('${h}')">${h}</div>`;
+        });
+    }).getSheetHeaders(tabName);
+}
+
+function addHeaderToTemplate(header) {
+    const input = document.getElementById('template-pattern-input');
+    input.value += `{{${header}}}`;
+}
+
+function saveCalendarSettings() {
+    const settings = {
+        calendarId: document.getElementById('setting-manual-calendar-id').value,
+        sourceTab: document.getElementById('setting-source-tab').value,
+    };
+    setStatus('calendarSettings-status', 'Saving...', 'loading');
+    google.script.run.withSuccessHandler(res => {
+        setStatus('calendarSettings-status', res.message, res.success ? 'success' : 'error');
+    }).saveSettings(settingsKey, settings);
+}
+
+/**
+ * ===================================================================
+ * X. GLOBAL SETTINGS SAVER & LOADER
+ * ===================================================================
+ */
+
+function handleSaveSettings(settingsKey) {
+    let settings = {};
+    let statusId = `${settingsKey}-status`;
+
+    switch (settingsKey) {
+        case 'adminSettings':
+            settings = {
+                dataHubId: document.getElementById('data-hub-id').value,
+                logoFileId: document.getElementById('logo-file-id').value
+            };
+            break;
+        case 'courseImportSettings':
+            settings = {
+                courseSheetId: document.getElementById('course-sheet-id').value,
+                courseTabName: document.getElementById('course-tab-name').value
+            };
+            break;
+        case 'schedulingSettings':
+            settings = {
+                techHubZoomUrl: document.getElementById('tech-hub-zoom-url').value
+            };
+            break;
+        case 'nursingExamSettings':
+             const aliasInputs = document.querySelectorAll('#nursing-header-aliases-container input');
+             const aliases = {};
+             aliasInputs.forEach(input => { aliases[input.dataset.key] = input.value; });
+             settings = {
+                nursingSheetId: document.getElementById('nursing-sheet-id').value,
+                nursingFolderId: document.getElementById('nursing-folder-id').value,
+                nursingHeaderAliases: aliases
+             };
+             break;
+        case 'examSettings':
+             settings = {
+                examCalendarId: document.getElementById('exam-calendar-id').value,
+                proctorCapability: document.getElementById('proctor-capability').value
+             };
+             break;
+        case 'reportingSettings':
+            settings = {
+                lookerStudioUrl: document.getElementById('reporting-url-input').value
+            };
+            break;
+    }
+
+    setStatus(statusId, 'Saving...', 'loading');
+    google.script.run.withSuccessHandler(res => {
+        setStatus(statusId, res.message, res.success ? 'success' : 'error');
+        if(res.success && settingsKey === 'adminSettings') {
+             google.script.run.withSuccessHandler(loadLogo).getSetting('logoFileId');
+        }
+    }).saveSettings(settingsKey, settings);
+}
+
+function loadAllSettings() {
+    google.script.run.withSuccessHandler(response => {
+        if (!response.success || !response.data) {
+            console.error('Failed to load settings:', response.message);
+            return;
+        }
+
+        const allSettings = response.data;
+
+        // Helper function to safely access nested properties
+        const getSetting = (key, property) => {
+            return allSettings[key] && allSettings[key][property] ? allSettings[key][property] : '';
+        };
+
+        // --- Populate General & Admin Settings ---
+        document.getElementById('data-hub-id').value = getSetting('adminSettings', 'dataHubId');
+        document.getElementById('logo-file-id').value = getSetting('adminSettings', 'logoFileId');
+
+        // --- Populate Course Import Settings ---
+        document.getElementById('course-sheet-id').value = getSetting('courseImportSettings', 'courseSheetId');
+        document.getElementById('course-tab-name').value = getSetting('courseImportSettings', 'courseTabName');
+        
+        // --- Populate Scheduling Settings ---
+        document.getElementById('tech-hub-zoom-url').value = getSetting('schedulingSettings', 'techHubZoomUrl');
+
+        // --- Populate Nursing Exam Settings ---
+        document.getElementById('nursing-sheet-id').value = getSetting('nursingExamSettings', 'nursingSheetId');
+        document.getElementById('nursing-folder-id').value = getSetting('nursingExamSettings', 'nursingFolderId');
+        const aliases = allSettings.nursingExamSettings ? allSettings.nursingExamSettings.nursingHeaderAliases : null;
+        if (aliases) {
+            const container = document.getElementById('nursing-header-aliases-container');
+            container.innerHTML = '';
+            for (const key in aliases) {
+                container.innerHTML += `<div class="form-group inline-group"><label>${key}</label><input type="text" data-key="${key}" value="${aliases[key]}"></div>`;
+            }
+        }
+
+        // --- Populate General Exam Settings ---
+        document.getElementById('exam-calendar-id').value = getSetting('examSettings', 'examCalendarId');
+        document.getElementById('proctor-capability').value = getSetting('examSettings', 'proctorCapability');
+
+        // --- Populate Reporting Settings ---
+        document.getElementById('reporting-url-input').value = getSetting('reportingSettings', 'lookerStudioUrl');
+
+        // --- Populate Manual Calendar/Tab Settings (Legacy or Specific Use) ---
+        const calendarSettings = allSettings.calendarSettings || {};
+        document.getElementById('setting-manual-calendar-id').value = calendarSettings.calendarId || '';
+        if (calendarSettings.calendarId) document.getElementById('setting-target-calendar').value = calendarSettings.calendarId;
+        if (calendarSettings.sourceTab) document.getElementById('setting-source-tab').value = calendarSettings.sourceTab;
+
+        // --- Load the Logo ---
+        const logoFileId = getSetting('adminSettings', 'logoFileId');
+        if (logoFileId) {
+            loadLogo(logoFileId);
+        }
+
+    }).api_getAllSettings();
+}
+
+function loadLogo(fileId) {
+    const logoContainer = document.getElementById('app-logo');
+    if (logoContainer && fileId) {
+        logoContainer.innerHTML = '<div class="spinner-tiny"></div>';
+        google.script.run.withSuccessHandler(dataUrl => {
+            if (dataUrl) {
+                logoContainer.innerHTML = `<img src="${dataUrl}" alt="App Logo">`;
+            }
+        }).getImageDataUrl(fileId);
+    }
+}
 </script>

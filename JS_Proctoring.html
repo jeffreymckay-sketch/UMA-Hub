@@ -1,33 +1,232 @@
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // --- Nursing Page Event Listeners ---
-    document.getElementById('nursing-tab-generator').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-exam-nursing'));
-    document.getElementById('nursing-tab-calendar').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-exam-calendar'));
-    document.getElementById('nursing-generate-all-btn').addEventListener('click', nursing_handleGenerateAll);
-    document.getElementById('nursing-refresh-all-btn').addEventListener('click', nursing_handleRefreshAll);
-    document.getElementById('nursing-notes-btn').addEventListener('click', nursing_navigateToNotesEditor);
-    document.getElementById('nursing-refresh-active-btn').addEventListener('click', () => nursing_refreshDocList('active'));
-    document.getElementById('nursing-refresh-all-folder-btn').addEventListener('click', () => nursing_refreshDocList('all'));
-    document.getElementById('nursing-calendar-sync-btn').addEventListener('click', nursing_handleCalendarSync);
-    document.getElementById('nursing-save-notes-btn').addEventListener('click', nursing_handleSaveNotes);
-    document.getElementById('nursing-save-accom-btn').addEventListener('click', nursing_handleSaveAccommodations);
+/**
+ * ===================================================================
+ * PROCTORING TOOL LOGIC (NURSING & MLT)
+ * ===================================================================
+ */
 
-    document.getElementById('nursing-calendar-select').addEventListener('change', function() {
-        document.getElementById('nursing-calendar-id-input').value = this.value;
+// Store for the data returned from the analysis step
+let nursing_parsedData = null;
+
+/**
+ * Initializes the Nursing Proctoring page listeners. 
+ * This function name must match the convention `load_` + pageId suffix.
+ */
+function load_exams() {
+    // Check if listeners are already attached to prevent duplication
+    if (window.pageExamsListenersAttached) {
+        return;
+    }
+
+    // Main generator button listeners
+    document.getElementById('nursing-analyze-btn').addEventListener('click', handleAnalyzeClick);
+    document.getElementById('nursing-confirm-create-btn').addEventListener('click', handleConfirmCreateAllClick);
+    document.getElementById('nursing-update-all-btn').addEventListener('click', handleUpdateAllClick);
+    document.getElementById('nursing-cancel-btn').addEventListener('click', resetNursingView);
+    
+    // Calendar tab listeners
+    const syncBtn = document.getElementById('nursing-calendar-sync-btn');
+    if(syncBtn) syncBtn.addEventListener('click', nursing_handleCalendarSync);
+
+    const calSelect = document.getElementById('nursing-calendar-select');
+    if(calSelect) calSelect.addEventListener('change', (e) => { document.getElementById('nursing-calendar-id-input').value = e.target.value; });
+
+    // Tab-specific listener for loading calendar data ONCE.
+    const calendarTabButton = document.getElementById('nursing-calendar-tab-btn');
+    if (calendarTabButton) {
+        calendarTabButton.addEventListener('click', function() {
+            if (!this.hasAttribute('data-loaded')) {
+                nursing_loadCalendarOptions();
+                this.setAttribute('data-loaded', 'true');
+            }
+        });
+    }
+
+    window.pageExamsListenersAttached = true;
+}
+
+/**
+ * Initializes the MLT Proctoring page.
+ */
+function load_mlt() {
+    // Currently no dynamic content or listeners for MLT page.
+    console.log('MLT Proctoring page loaded.');
+}
+
+
+/**
+ * Handles the click of the "Analyze Sheet" button.
+ */
+function handleAnalyzeClick() {
+    const sheetUrl = document.getElementById('nursing-sheet-url-input').value;
+    setStatus('nursing-status', 'Analyzing all sheets... This may take a moment.', 'loading');
+    google.script.run
+        .withSuccessHandler(response => {
+            if (response.success) {
+                nursing_parsedData = response.data;
+                displayNursingPreview(response.data);
+                showNursingPreviewStep();
+                setStatus('nursing-status', 'Analysis complete. Review the details below.', 'success');
+            } else {
+                setStatus('nursing-status', response.message, 'error');
+                nursing_parsedData = null;
+            }
+        })
+        .withFailureHandler(err => setStatus('nursing-status', `An unexpected error occurred: ${err.message}`, 'error'))
+        .analyzeNursingSheet(sheetUrl);
+}
+
+/**
+ * Handles click for creating all documents from all sheets.
+ */
+function handleConfirmCreateAllClick() {
+    if (!nursing_parsedData) return;
+    const createEvents = document.getElementById('nursing-create-calendar-events-checkbox').checked;
+    const totalExams = nursing_parsedData.sheets.reduce((acc, sheet) => acc + sheet.exams.length, 0);
+    if (!confirm(`This will create or update ${totalExams} document(s) for ALL sheets. Proceed?`)) return;
+    setStatus('nursing-status', 'Creating all documents... Please wait.', 'loading');
+    google.script.run
+        .withSuccessHandler(handleBackendResponse)
+        .withFailureHandler(err => setStatus('nursing-status', `An unexpected error: ${err.message}`, 'error'))
+        .createNursingProctoringDocuments(nursing_parsedData, createEvents);
+}
+
+/**
+ * Handles click for creating documents for a single sheet.
+ */
+function handleCreateSingleSheetClick(sheetIndex) {
+    if (!nursing_parsedData || !nursing_parsedData.sheets[sheetIndex]) return;
+    const createEvents = document.getElementById('nursing-create-calendar-events-checkbox').checked;
+    const sheet = nursing_parsedData.sheets[sheetIndex];
+    if (!confirm(`This will create or update ${sheet.exams.length} document(s) for the "${sheet.sheetName}" sheet. Proceed?`)) return;
+
+    const singleSheetPayload = {
+        spreadsheetId: nursing_parsedData.spreadsheetId,
+        sheets: [sheet]
+    };
+    setStatus('nursing-status', `Creating documents for "${sheet.sheetName}"...`, 'loading');
+    google.script.run
+        .withSuccessHandler(handleBackendResponse)
+        .withFailureHandler(err => setStatus('nursing-status', `An unexpected error: ${err.message}`, 'error'))
+        .createNursingProctoringDocuments(singleSheetPayload, createEvents);
+}
+
+/**
+ * Handles click for the non-destructive "Update All" button.
+ */
+function handleUpdateAllClick() {
+    if (!nursing_parsedData) return;
+    const createEvents = document.getElementById('nursing-create-calendar-events-checkbox').checked;
+    if (!confirm("This will UPDATE all EXISTING documents based on the preview. It will NOT create new ones. Proceed?")) return;
+    setStatus('nursing-status', 'Updating all existing documents... Please wait.', 'loading');
+    google.script.run
+        .withSuccessHandler(handleBackendResponse)
+        .withFailureHandler(err => setStatus('nursing-status', `An unexpected error: ${err.message}`, 'error'))
+        .updateAllNursingDocuments(nursing_parsedData, createEvents);
+}
+
+/**
+ * Generic handler for backend success/error messages.
+ */
+function handleBackendResponse(response) {
+    setStatus('nursing-status', response.message, response.success ? 'success' : 'error');
+}
+
+/**
+ * Renders the preview, now with per-sheet action buttons.
+ */
+function displayNursingPreview(data) {
+    const container = document.getElementById('nursing-preview-output');
+    let html = '';
+
+    if (!data.sheets || data.sheets.length === 0) {
+        container.innerHTML = '<p>No valid exam data found.</p>';
+        return;
+    }
+
+    let totalExams = 0;
+    data.sheets.forEach((sheetData, index) => {
+        totalExams += sheetData.exams.length;
+        html += `<div class="sheet-preview-group">`;
+        html += `<h3>Sheet: ${sheetData.sheetName}</h3>`;
+        html += `<div class="form-actions sheet-actions"><button class="button" onclick="handleCreateSingleSheetClick(${index})">Create/Update ${sheetData.exams.length} Docs for this Sheet</button></div>`;
+        html += `<h4>Course Information</h4><p><strong>Course:</strong> ${sheetData.course.code} ${sheetData.course.name}<br><strong>Faculty:</strong> ${sheetData.course.faculty}</p>`;
+        html += `<h4>Exams Found (${sheetData.exams.length})</h4>`;
+        if (sheetData.exams.length > 0) {
+            html += '<ul>';
+            sheetData.exams.forEach(exam => { html += `<li><strong>${exam.name}</strong> - ${exam.date} (Password: ${exam.password || 'N/A'})</li>`; });
+            html += '</ul>';
+        }
+        if (sheetData.warnings && sheetData.warnings.length > 0) {
+            html += `<h4>Warnings</h4><ul>${sheetData.warnings.map(w => `<li class="warning-item">${w}</li>`).join('')}</ul>`;
+        }
+        html += `</div>`;
     });
 
-    // --- MLT Page Event Listeners ---
-    document.getElementById('mlt-tab-generator').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-mlt-generator'));
-    document.getElementById('mlt-tab-calendar').addEventListener('click', (e) => navigateToSubTab(e.target, 'tab-mlt-calendar'));
-    document.getElementById('mlt-generate-all-btn').addEventListener('click', mlt_handleGenerateAll);
-    document.getElementById('mlt-refresh-all-btn').addEventListener('click', mlt_handleRefreshAll);
-    document.getElementById('mlt-refresh-active-btn').addEventListener('click', () => mlt_refreshDocList('active'));
-    document.getElementById('mlt-refresh-all-folder-btn').addEventListener('click', () => mlt_refreshDocList('all'));
-    document.getElementById('mlt-calendar-sync-btn').addEventListener('click', mlt_handleCalendarSync);
-    document.getElementById('mlt-save-accom-btn').addEventListener('click', mlt_handleSaveAccommodations);
+    document.getElementById('nursing-confirm-create-btn').textContent = `Confirm & Create All ${totalExams} Docs`;
+    container.innerHTML = html;
+}
 
-    document.getElementById('mlt-calendar-select').addEventListener('change', function() {
-        document.getElementById('mlt-calendar-id-input').value = this.value;
+/** Functions to show/hide the main steps of the generator tool */
+function showNursingPreviewStep() {
+    document.getElementById('nursing-analysis-step').style.display = 'none';
+    document.getElementById('nursing-preview-container').style.display = 'block';
+}
+function resetNursingView() {
+    document.getElementById('nursing-analysis-step').style.display = 'block';
+    document.getElementById('nursing-preview-container').style.display = 'none';
+    document.getElementById('nursing-preview-output').innerHTML = '';
+    document.getElementById('nursing-sheet-url-input').value = '';
+    setStatus('nursing-status', '', 'clear');
+    nursing_parsedData = null;
+}
+
+/** Calendar-specific functions */
+function nursing_loadCalendarOptions() {
+  google.script.run.withSuccessHandler(res => {
+      const select = document.getElementById('nursing-calendar-select');
+      if(!select) return;
+      select.innerHTML = '<option value="" disabled selected>Select a Calendar...</option>';
+      if (res.success && res.data) { res.data.forEach(cal => { const opt = document.createElement('option'); opt.value = cal.id; opt.text = cal.name; select.appendChild(opt); }); }
+  }).getWritableCalendars();
+}
+function nursing_handleCalendarSync() {
+    setStatus('nursing-calendar-status', 'This feature is temporarily disabled.', 'error');
+}
+
+
+/**
+ * Handles navigation between sub-tabs within a page (e.g., Generator, Calendar, Settings).
+ * @param {HTMLElement} clickedTabElement - The tab button element that was clicked.
+ * @param {string} targetPaneId - The ID of the tab content pane to display.
+ */
+function navigateToSubTab(clickedTabElement, targetPaneId) {
+    // Get the highest-level page container
+    const pageContainer = clickedTabElement.closest('.page');
+    if (!pageContainer) {
+        console.error('Could not find parent page container for tabs.');
+        return;
+    }
+
+    // Deactivate all tabs within this page
+    pageContainer.querySelectorAll('.tab-nav-item').forEach(tab => {
+        tab.classList.remove('active');
     });
-});
+
+    // Deactivate all tab panes within this page
+    pageContainer.querySelectorAll('.tab-page').forEach(pane => {
+        pane.classList.remove('active');
+    });
+
+    // Activate the tab that was clicked
+    clickedTabElement.classList.add('active');
+
+    // Activate the corresponding content pane
+    const targetPane = pageContainer.querySelector('#' + targetPaneId);
+    if (targetPane) {
+        targetPane.classList.add('active');
+    } else {
+        console.error('Could not find target tab pane:', targetPaneId);
+    }
+}
 </script>

@@ -2,19 +2,19 @@
 <div id="page-settings" class="page">
   <h1>Global Settings</h1>
   <div class="tab-nav">
-      <div class="tab-nav-item active" onclick="navigateToSubTab(this, 'tab-set-general')">General & Access</div>
-      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-staff'); loadRoleAssignmentData();" id="settings-role-assignment-nav">Staff Management</div>
-      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-scheduling'); loadSchedulingRosterData();">Scheduling Config</div>
-      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-proctoring'); mlt_loadSettings();">Proctoring Config</div>
-      <div class="tab-nav-item" onclick="navigateToSubTab(this, 'tab-set-reporting')">Reporting & Data</div>
+      <div id="settings-tab-general" class="tab-nav-item active">General & Access</div>
+      <div id="settings-tab-staff" class="tab-nav-item">Staff Management</div>
+      <div id="settings-tab-scheduling" class="tab-nav-item">Scheduling Config</div>
+      <div id="settings-tab-proctoring" class="tab-nav-item">Proctoring Config</div>
+      <div id="settings-tab-reporting" class="tab-nav-item">Reporting & Data</div>
   </div>
 
   <!-- 1. GENERAL & ACCESS -->
   <div id="tab-set-general" class="tab-page active">
       <h3>Database Connection</h3>
       <p class="setting-description">Controls the connection to the Master Google Sheet and the branding logo.</p>
-      <div class="form-group"><label>Data Hub Master Sheet URL</label><input type="text" id="data-hub-url"></div>
-      <div class="form-group"><label>Logo Google Drive URL</label><input type="text" id="logo-file-id"></div>
+      <div class="form-group"><label>Data Hub Master Sheet ID</label><input type="text" id="data-hub-id"></div>
+      <div class="form-group"><label>Logo Google Drive File ID</label><input type="text" id="logo-file-id"></div>
       <button class="button" onclick="handleSaveSettings('adminSettings')">Save Admin Settings</button>
       <div id="adminSettings-status" class="status-message"></div>
       
@@ -53,7 +53,7 @@
   <div id="tab-set-scheduling" class="tab-page">
       <h3>Course Data Connection (MST)</h3>
       <p class="setting-description">Connect to an external spreadsheet to import the Course Schedule. Leave blank to use local data only.</p>
-      <div class="form-group"><label>External Sheet URL</label><input type="text" id="course-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+      <div class="form-group"><label>External Sheet ID</label><input type="text" id="course-sheet-id" placeholder="Enter Google Sheet ID here"></div>
       <div class="form-group"><label>Tab Name</label><input type="text" id="course-tab-name" placeholder="e.g. Master_Schedule"></div>
       <button class="button" onclick="handleSaveSettings('courseImportSettings')">Save Connection</button>
       <div id="courseImportSettings-status" class="status-message"></div>
@@ -120,21 +120,16 @@
   <div id="tab-set-proctoring" class="tab-page">
       <h3>Nursing Exam Settings</h3>
       <p class="setting-description">Configure the source data and output folder for Nursing Exam Documents.</p>
-      <div class="form-group"><label>Nursing Sheet URL</label><input type="text" id="nursing-sheet-url"></div>
-      <div class="form-group"><label>Target Folder URL</label><input type="text" id="nursing-folder-url"></div>
-      <div class="form-group"><label>Report Email(s)</label><input type="text" id="nursing-report-email"></div>
-      <div class="form-group"><label>Report Days</label><input type="number" id="nursing-report-days" min="1" max="90"></div>
-      <div class="toggle-group">
-          <label class="toggle-switch"><input type="checkbox" id="nursing-report-resolved-toggle"><span class="slider"></span></label>
-          <label>Include Resolved Comments</label>
+      <div class="form-group"><label>Nursing Sheet ID</label><input type="text" id="nursing-sheet-id"></div>
+      <div class="form-group"><label>Target Folder ID</label><input type="text" id="nursing-folder-id"></div>
+      
+      <!-- Header Alias Section -->
+      <div class="setting-section" style="margin-top:20px;">
+        <h4>Header Aliases</h4>
+        <p class="setting-description">Define possible column names from the source sheet. The script will search for these (top to bottom) to find the correct data.</p>
+        <div id="nursing-header-aliases-container"></div>
       </div>
-      <div class="toggle-group">
-          <label class="toggle-switch"><input type="checkbox" id="nursing-auto-report-toggle"><span class="slider"></span></label>
-          <label>Enable Automated Report</label>
-      </div>
-      <div class="form-group"><label>Freq</label><select id="nursing-auto-frequency"><option value="WEEKLY">Weekly</option><option value="DAILY">Daily</option></select></div>
-      <div class="form-group" id="nursing-auto-day-group"><label>Day</label><select id="nursing-auto-day"><option value="MONDAY">Monday</option></select></div>
-      <div class="form-group"><label>Hour</label><select id="nursing-auto-hour"></select></div>
+
       <button class="button" onclick="handleSaveSettings('nursingExamSettings')">Save Nursing Settings</button>
       <div id="nursingExamSettings-status" class="status-message"></div>
 
@@ -142,9 +137,8 @@
 
       <h3>MLT Exam Settings</h3>
       <p class="setting-description">Configure the source data and output folder for MLT Exam Documents.</p>
-      <div class="form-group"><label>Source Sheet URL</label><input type="text" id="mlt-sheet-url"></div>
-      <div class="form-group"><label>Target Folder URL</label><input type="text" id="mlt-folder-url"></div>
-      <div class="form-group"><label>Report Email(s)</label><input type="text" id="mlt-report-email"></div>
+      <div class="form-group"><label>Source Sheet ID</label><input type="text" id="mlt-sheet-id"></div>
+      <div class="form-group"><label>Target Folder ID</label><input type="text" id="mlt-folder-id"></div>
       
       <div style="display:flex; gap:20px; margin-top:15px;">
           <div style="flex:1;">
@@ -207,102 +201,4 @@
       <div id="calendarSettings-status" class="status-message"></div>
   </div>
 
-</div>
-
-<!-- 8. USER GUIDE -->
-<div id="page-guide" class="page">
-  <h1>User Guide & Help</h1>
-  <p>Welcome to the Staff Portal! Don't panic. This robot is here to help you manage schedules, exams, and data without losing your mind.</p>
-
-  <details class="guide-card">
-      <summary class="guide-header">🏠 My Dashboard</summary>
-      <div class="guide-content">
-          <p>This is your home base. It's all about <strong>YOU</strong>.</p>
-          <ul>
-              <li><strong>Availability:</strong> Tell the system when you absolutely <em>cannot</em> work (e.g., "I have class on Tuesdays at 9am"). The scheduler will yell at the Admin if they try to book you then.</li>
-              <li><strong>Preferences:</strong> Tell the system when you <em>hate</em> working (e.g., "I prefer not to work Friday evenings"). The scheduler will see this, but might book you anyway if they are desperate.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">🖥️ Tech Hub Management</summary>
-      <div class="guide-content">
-          <p>This tool manages the physical (and digital) shifts at the Tech Hub.</p>
-          <h4>1. Roster Management</h4>
-          <p>This is where you put people in seats. Select a date range, and use the dropdowns to assign staff. If a staff member is red/unavailable, the system will warn you.</p>
-          <h4>2. Shift Configuration</h4>
-          <p>Use this to create the empty slots (e.g., "Morning Shift 8am-12pm"). You can bulk-create shifts for the whole week at once.</p>
-          <h4>3. Calendar Sync</h4>
-          <p><strong>The "Publish" Button.</strong> This takes your roster and pushes it to Google Calendar.</p>
-          <ul>
-              <li><strong>Overwrite Toggle:</strong> ⚠️ <strong>Careful!</strong> If checked, this deletes ALL Tech Hub events in the date range and rebuilds them. Use this if you made a mess and want to start over.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">🎓 MST Support (The Big One)</summary>
-      <div class="guide-content">
-          <p>This tool manages Academic Support classes. It connects to the University Master Schedule.</p>
-          
-          <h4>Step 1: Course Assignments</h4>
-          <p>This is your master list of classes.</p>
-          <ul>
-              <li><strong>🔄 Update from Master Schedule:</strong> Click this button to fetch the latest classes, times, and Zoom links from the external spreadsheet. It fixes bad data (like "21 hour" classes) automatically.</li>
-              <li><strong>Assign Staff:</strong> Use the dropdowns in the table to pick who teaches what.</li>
-              <li><strong>Import Zoom Links:</strong> Paste the URL of the "Links Spreadsheet" to auto-match Zoom links to classes.</li>
-          </ul>
-
-          <h4>Step 2: Calendar Sync (The Two-Step)</h4>
-          <p>We separated this into two steps so you don't spam people with emails while you are working.</p>
-          <ol>
-              <li><strong>👁️ Preview Changes:</strong> Always click this first! It shows you exactly what will change (e.g., "Title changed," "Time moved").</li>
-              <li><strong>🛠️ Create/Update Events (Silent):</strong> This builds the calendar. It fixes times, updates rooms, and adds Zoom links. <strong>It does NOT send emails.</strong> Use this freely.</li>
-              <li><strong>📧 Send Invites to Staff (Loud):</strong> Click this ONLY when you are done. It looks at the calendar, sees who is assigned, and sends the official Google Calendar email invitation.</li>
-          </ol>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">🗃️ Data Management</summary>
-      <div class="guide-content">
-          <p>Tools for the data nerds.</p>
-          <ul>
-              <li><strong>Course Lookup:</strong> A search engine for your spreadsheet. Filter by Faculty, Day, or Time to find specific records.</li>
-              <li><strong>Bulk Editor:</strong> ⚠️ <strong>Danger Zone.</strong> This allows you to change 100 rows at once (e.g., "Change all 'TBD' to 'Staff'"). Use with extreme caution.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">⚕️ & 🧪 Proctoring (Nursing & MLT)</summary>
-      <div class="guide-content">
-          <p>These tools generate the paperwork for exams.</p>
-          <ul>
-              <li><strong>Generate All:</strong> Reads the spreadsheet and creates a Google Doc for every exam. It's magic.</li>
-              <li><strong>Accommodations:</strong> You can edit the "Accommodations" text for a specific exam directly in the app. The system remembers your edits even if you regenerate the doc!</li>
-              <li><strong>Calendar Sync:</strong> Pushes the exam times to the Proctoring Calendar so you know when the room is booked.</li>
-          </ul>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">📊 Analytics</summary>
-      <div class="guide-content">
-          <p><strong>Calendar Inspector:</strong> Sherlock Holmes mode. Select a calendar and a date range to see a raw list of everything on it. Great for finding "Ghost Events" or duplicates.</p>
-      </div>
-  </details>
-
-  <details class="guide-card">
-      <summary class="guide-header">⚙️ Global Settings</summary>
-      <div class="guide-content">
-          <p>The Engine Room. Only Admins should touch this.</p>
-          <ul>
-              <li><strong>General:</strong> Connects the app to the Master Spreadsheet.</li>
-              <li><strong>Staff Management:</strong> Add new employees here. If they aren't in this list, they can't be assigned to anything.</li>
-              <li><strong>Permissions:</strong> Decide who gets to be an Admin, a Lead, or just Staff.</li>
-          </ul>
-      </div>
-  </details>
 </div>
