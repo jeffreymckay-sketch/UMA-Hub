@@ -1,0 +1,41 @@
+<script>
+/**
+ * ===================================================================
+ *  APP-SPECIFIC INITIALIZATION (IGNITION) FUNCTIONS
+ * ===================================================================
+ * 
+ * This file acts as a bridge between the generic core navigation
+ * and the specific initialization functions for each page.
+ */
+
+/**
+ * Initializes the MST Support page by calling its primary data load function.
+ */
+function load_mst_support() {
+    // The JS_Scheduling.html file contains the function `loadSchedulingRosterData()`,
+    // which is the correct entry point for this page.
+    if (typeof loadSchedulingRosterData === 'function') {
+        loadSchedulingRosterData();
+    }
+}
+
+/**
+ * Placeholder initializer for the Tech Hub page.
+ * The logic in `JS_Scheduling.html` seems to be mostly for MST, so we will
+ * leave this empty for now until we analyze `Controller_TechHub.gs`.
+ */
+function load_tech_hub() {
+    // Intentionally empty. The functionality for this page is likely handled 
+    // by event listeners within the page itself.
+}
+
+/**
+ * Placeholder initializer for the Data Management page.
+ * The logic in `JS_Lookup.html` is all event-driven (e.g., clicking
+ * "Connect to Sheet"). There is no single function to call on page load.
+ */
+function load_data_mgmt() {
+    // Intentionally empty. Functionality is user-initiated.
+}
+
+</script>

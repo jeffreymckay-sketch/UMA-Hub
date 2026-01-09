@@ -1,11 +1,20 @@
 /**
  * -------------------------------------------------------------------
- * NURSING EXAM CONTROLLER (REFACTORED for Multi-Sheet Support)
- * Features: Interactive analysis, robust parsing, and controlled document generation.
+ * NURSING EXAM CONTROLLER (OPTIMIZED for Warp 9 Performance)
+ * Features: Caching, Bulk-Manifest lookups, and robust document generation.
  * -------------------------------------------------------------------
  */
 
 function analyzeNursingSheet(sheetUrl) {
+    const cache = CacheService.getScriptCache();
+    const cacheKey = `nursing_analysis_${sheetUrl.trim()}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+        const data = JSON.parse(cachedData);
+        data.fromCache = true; // Let the front-end know it was a cached response
+        return { success: true, data: data };
+    }
+
     try {
         const { settings, targetFolderId } = nursing_getSettingsAndIDs();
         if (!targetFolderId) throw new Error("Output folder is not defined in Nursing Settings.");
@@ -31,7 +40,7 @@ function analyzeNursingSheet(sheetUrl) {
                 let parsedData = parseSheetForAnalysis_(sheet, spreadsheet);
                 
                 if (parsedData && parsedData.exams.length > 0) {
-                    checkForExistingDocs_(parsedData, mainOutputFolder);
+                    checkForExistingDocs_Optimized_(parsedData, mainOutputFolder);
                     allSheetsData.push(parsedData);
                 }
             } catch (e) {
@@ -40,41 +49,43 @@ function analyzeNursingSheet(sheetUrl) {
         }
 
         if (allSheetsData.length === 0 && analysisErrors.length > 0) throw new Error(`Analysis failed on all sheets. Errors: ${analysisErrors.join("; ")}`)
-        return { success: true, data: { spreadsheetId, sheets: allSheetsData, analysisErrors } };
+        
+        const finalData = { spreadsheetId, sheets: allSheetsData, analysisErrors };
+        cache.put(cacheKey, JSON.stringify(finalData), 600); // Cache for 10 minutes
+
+        return { success: true, data: finalData };
     } catch (e) {
         console.error("analyzeNursingSheet Error: " + e.stack);
         return { success: false, message: "ANALYSIS FAILED: " + e.message };
     }
 }
 
-function checkForExistingDocs_(sheetData, mainOutputFolder) {
+function checkForExistingDocs_Optimized_(sheetData, mainOutputFolder) {
     const { course, exams, sheetName } = sheetData;
     if (!exams || exams.length === 0) return;
 
     const folderName = sheetName.trim();
     const existingFolders = mainOutputFolder.getFoldersByName(folderName);
-    const targetFolder = existingFolders.hasNext() ? existingFolders.next() : null;
 
-    if (!targetFolder) {
+    if (!existingFolders.hasNext()) {
         exams.forEach(exam => exam.docUrl = null);
         return;
+    }
+
+    const targetFolder = existingFolders.next();
+    const docMap = {};
+    const files = targetFolder.getFiles();
+    while (files.hasNext()) {
+        const file = files.next();
+        docMap[file.getName()] = file.getUrl();
     }
 
     for (const exam of exams) {
         const facultyName = course.faculty && course.faculty !== 'N/A' ? ` (${course.faculty})` : '';
         const docTitle = `${course.code} ${course.name}${facultyName} - ${exam.name}`.replace(/[\/]/g, ' - ');
-        
-        const existingFiles = targetFolder.getFilesByName(docTitle);
-        
-        if (existingFiles.hasNext()) {
-            const file = existingFiles.next();
-            exam.docUrl = file.getUrl();
-        } else {
-            exam.docUrl = null;
-        }
+        exam.docUrl = docMap[docTitle] || null;
     }
 }
-
 
 function createNursingProctoringDocuments(approvedData) {
     return processNursingDocuments_(approvedData, false);
@@ -104,16 +115,22 @@ function processNursingDocuments_(approvedData, updateOnly) {
             const existingFolders = mainOutputFolder.getFoldersByName(folderName);
             const targetFolder = existingFolders.hasNext() ? existingFolders.next() : mainOutputFolder.createFolder(folderName);
 
+            const existingDocsMap = {};
+            const files = targetFolder.getFiles();
+            while (files.hasNext()) {
+                const file = files.next();
+                existingDocsMap[file.getName()] = file.getId();
+            }
+
             for (const exam of exams) {
                 const facultyName = course.faculty && course.faculty !== 'N/A' ? ` (${course.faculty})` : '';
                 const docTitle = `${course.code} ${course.name}${facultyName} - ${exam.name}`.replace(/[\/]/g, ' - ');
-                const existingFiles = targetFolder.getFilesByName(docTitle);
+                const existingFileId = existingDocsMap[docTitle];
 
                 let finalAccommodations = exam.accommodations || "";
 
-                if (existingFiles.hasNext()) {
-                    const file = existingFiles.next();
-                    const doc = DocumentApp.openById(file.getId());
+                if (existingFileId) {
+                    const doc = DocumentApp.openById(existingFileId);
                     docUrl = doc.getUrl();
                     const body = doc.getBody();
 
@@ -169,7 +186,6 @@ function processNursingDocuments_(approvedData, updateOnly) {
         return { success: false, message: `DOCUMENT PROCESSING FAILED: ${e.message}` };
     }
 }
-
 
 function populateDocContent_(body, docTitle, course, exam, rosters, customNotes, accommodationsText) {
     body.appendParagraph(docTitle).setHeading(DocumentApp.ParagraphHeading.TITLE);

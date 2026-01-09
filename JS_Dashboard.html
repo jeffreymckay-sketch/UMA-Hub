@@ -1,157 +1,97 @@
 <script>
-  /**
-   * -------------------------------------------------------------------
-   * DASHBOARD CLIENT LOGIC
-   * Handles Availability, Preferences, and Staff Selection
-   * -------------------------------------------------------------------
-   */
+/**
+ * ===================================================================
+ * DASHBOARD UI FUNCTIONS
+ * ===================================================================
+ */
 
-  /**
-   * Main entry point for the dashboard page.
-   * This is called by the core navigation logic.
-   */
-  function load_dashboard() {
-      loadStaffSelector();
-      loadMyAvailability();
-      loadMyPreferences();
-  }
+/**
+ * NEW: The missing orchestrator function.
+ * This function is called by JS_Core.html after the initial data load.
+ * It finds the correct containers and calls the rendering functions.
+ */
+function populateDashboard(dashboardData) {
+    if (!dashboardData) {
+        console.error("populateDashboard was called with no data.");
+        return;
+    }
 
-  // --- STAFF SELECTOR (Admin/Lead View) ---
-  function loadStaffSelector() {
-      // Only run this if the selector element exists on the page
-      const sel = document.getElementById('dashboard-staff-select');
-      if(!sel) return;
+    const availabilityContainer = document.getElementById('availability-container');
+    const preferencesContainer = document.getElementById('preferences-container');
 
-      google.script.run.withSuccessHandler(function(res) {
-          if(res.data) {
-              sel.innerHTML = '<option value="">-- Myself --</option>';
-              res.data.forEach(s => {
-                  const opt = document.createElement('option');
-                  opt.value = s.id; // This is the email/ID
-                  opt.text = s.name;
-                  sel.appendChild(opt);
-              });
-          }
-      }).api_getStaffForRoleAssignment();
-  }
+    if (availabilityContainer) {
+        renderAvailability(availabilityContainer, dashboardData.availability);
+    } else {
+        console.warn("Could not find 'availability-container' to render data.");
+    }
 
-  function handleDashboardStaffChange() {
-      loadMyAvailability();
-      loadMyPreferences();
-  }
+    if (preferencesContainer) {
+        renderPreferences(preferencesContainer, dashboardData.preferences);
+    } else {
+        console.warn("Could not find 'preferences-container' to render data.");
+    }
+}
 
-  // --- AVAILABILITY ---
-  function loadMyAvailability() {
-      const container = document.getElementById('my-availability-list');
-      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
-      
-      if(!container) return;
-      container.innerHTML = '<p>Loading...</p>';
-      
-      google.script.run.withSuccessHandler(function(res) {
-          if(res.success) {
-              if(res.data.length === 0) { 
-                  container.innerHTML = '<p>No unavailable times set.</p>'; 
-              } else { 
-                  let html = '<table class="data-table"><thead><tr><th>Day</th><th>Time</th><th>Action</th></tr></thead><tbody>'; 
-                  res.data.forEach(item => { 
-                      html += `<tr>
-                          <td>${item.day}</td>
-                          <td>${item.start} - ${item.end}</td>
-                          <td><button class="button danger" style="padding:2px 6px; font-size:0.8em;" onclick="handleDeleteAvailability('${item.id}')">Remove</button></td>
-                      </tr>`; 
-                  }); 
-                  html += '</tbody></table>'; 
-                  container.innerHTML = html; 
-              }
-          } else { 
-              container.innerHTML = `<p style="color:red">${res.message}</p>`; 
-          }
-      }).api_getMyAvailability(targetEmail);
-  }
+/**
+ * This function is triggered when the dashboard page is navigated to.
+ */
+function load_dashboard() {
+    showDashboardView('my-dashboard');
+}
 
-  function handleAddNotAvailable() {
-      const day = document.getElementById('avail-day').value;
-      const start = document.getElementById('avail-start-time').value;
-      const end = document.getElementById('avail-end-time').value;
-      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
-      
-      setStatus('my-availability-status', 'Adding...', 'loading');
-      
-      google.script.run.withSuccessHandler(function(res) { 
-          if(res.success) { 
-              setStatus('my-availability-status', 'Added.', 'success'); 
-              loadMyAvailability(); 
-          } else { 
-              setStatus('my-availability-status', res.message, 'error'); 
-          } 
-      }).api_addNotAvailable(day, start, end, targetEmail);
-  }
+/**
+ * Handles switching between the main dashboard view and the admin view.
+ */
+function showDashboardView(viewName) {
+    document.getElementById('my-dashboard').style.display = 'none';
+    document.getElementById('admin-dashboard').style.display = 'none';
 
-  function handleDeleteAvailability(id) {
-      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
-      setStatus('my-availability-status', 'Removing...', 'loading');
-      
-      google.script.run.withSuccessHandler(function(res) { 
-          if(res.success) { 
-              setStatus('my-availability-status', 'Removed.', 'success'); 
-              loadMyAvailability(); 
-          } else { 
-              setStatus('my-availability-status', res.message, 'error'); 
-          } 
-      }).api_deleteAvailability(id, targetEmail);
-  }
+    const view = document.getElementById(viewName);
+    if (view) {
+        view.style.display = 'block';
+    }
+}
 
-  // --- PREFERENCES ---
-  function loadMyPreferences() {
-      const container = document.getElementById('my-preferences-list');
-      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
-      
-      if(!container) return;
-      container.innerHTML = '<p>Loading...</p>';
-      
-      google.script.run.withSuccessHandler(function(res) {
-          if(res.success) {
-              const prefs = res.data;
-              const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-              const blocks = ['Morning', 'Afternoon', 'Evening'];
-              
-              let html = '<table class="preference-table"><thead><tr><th>Day</th><th>Morning</th><th>Afternoon</th><th>Evening</th></tr></thead><tbody>';
-              
-              days.forEach(day => {
-                  html += `<tr><td><strong>${day}</strong></td>`;
-                  blocks.forEach(block => {
-                      const key = `${day}_${block}`;
-                      const val = prefs[key] || 'Neutral';
-                      const selP = val === 'Preferred' ? 'selected' : '';
-                      const selN = val === 'Neutral' ? 'selected' : '';
-                      const selNP = val === 'Not Preferred' ? 'selected' : '';
-                      
-                      html += `<td>
-                          <select onchange="handleSavePreference('${key}', this.value)" style="font-size:0.85em; padding:4px;">
-                              <option value="Preferred" ${selP}>Preferred</option>
-                              <option value="Neutral" ${selN}>Neutral</option>
-                              <option value="Not Preferred" ${selNP}>Not Preferred</option>
-                          </select>
-                      </td>`;
-                  });
-                  html += '</tr>';
-              });
-              html += '</tbody></table>';
-              container.innerHTML = html;
-          } else { 
-              container.innerHTML = `<p style="color:red">${res.message}</p>`; 
-          }
-      }).api_getMyPreferences(targetEmail);
-  }
+/**
+ * Renders the availability data into the specified container.
+ */
+function renderAvailability(container, data) {
+    if (!container) return;
 
-  function handleSavePreference(key, value) {
-      const targetEmail = document.getElementById('dashboard-staff-select')?.value || '';
-      setStatus('my-preferences-status', 'Saving...', 'loading');
-      
-      google.script.run.withSuccessHandler(function(res) { 
-          if(res.success) setStatus('my-preferences-status', 'Saved.', 'success'); 
-          else setStatus('my-preferences-status', res.message, 'error'); 
-      }).api_savePreference(key, value, targetEmail);
-  }
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p class="not-available">No availability data has been recorded for the upcoming schedule.</p>';
+        return;
+    }
+
+    // Create a more structured and readable table for availability
+    let content = '<h5>Your Recorded Availability</h5><table class="data-table zebra-stripes"><thead><tr><th>Day</th><th>Start Time</th><th>End Time</th></tr></thead><tbody>';
+    data.forEach(row => {
+        // Assuming availability data is [StaffID, Day, Start, End]
+        content += `<tr><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td></tr>`;
+    });
+    content += '</tbody></table>';
+    container.innerHTML = content;
+}
+
+/**
+ * Renders the preferences data into the specified container.
+ */
+function renderPreferences(container, data) {
+    if (!container) return;
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p class="not-available">No work preferences have been recorded.</p>';
+        return;
+    }
+    
+    // Create a simple list for preferences
+    let content = '<h5>Your Work Preferences</h5><ul>';
+    data.forEach(row => {
+        // Assuming preference data is [StaffID, PreferenceType, Value]
+        content += `<li><strong>${row[1]}:</strong> ${row[2]}</li>`;
+    });
+    content += '</ul>';
+    container.innerHTML = content;
+}
+
 </script>

@@ -1,105 +1,59 @@
 <!DOCTYPE html>
 <html>
   <head>
-  <base target="_top">
-  <?!= include('Styles'); ?> 
-</head>
+    <base target="_top">
+    <?!= include('Styles'); ?>
+  </head>
   <body>
-
-    <div class="sidebar closed" id="app-sidebar">
+    <!-- Main application container -->
+    <div class="sidebar" id="app-sidebar">
       <div class="sidebar-header">
-        <img id="logo-img" class="header-logo" src="" alt="Logo">
-        <div id="logo-loading-text" class="logo-loading">...</div>
-        <span class="sidebar-title">Staff Portal</span>
+        <img class="header-logo" id="logo-img" src="" alt="Logo" style="display:none;"/>
+        <div class="logo-loading" id="logo-placeholder">Loading Logo...</div>
+        <h2 class="sidebar-title" id="app-title-text">Staff Hub</h2>
       </div>
-
-      <div class="nav-menu">
-        
-        <!-- DASHBOARDS -->
-        <div class="nav-group-header open" onclick="toggleNavGroup(this)">Dashboards <span class="nav-arrow">▼</span></div>
-        <ul class="nav-sub-menu open">
-            <li class="nav-item active" onclick="navigateTo('page-dashboard')">
-                <span class="nav-icon">🏠</span> My Dashboard
-            </li>
-            <li class="nav-item" onclick="navigateTo('page-analytics')">
-                <span class="nav-icon">📊</span> Analytics & Explorer
-            </li>
-        </ul>
-
-        <!-- SCHEDULING & LOGISTICS -->
-        <div class="nav-group-header" onclick="toggleNavGroup(this)">Scheduling & Logistics <span class="nav-arrow">▼</span></div>
-        <ul class="nav-sub-menu">
-            <li class="nav-item" onclick="navigateTo('page-tech-hub')">
-                <span class="nav-icon">🖥️</span> Tech Hub
-            </li>
-            <li class="nav-item" onclick="navigateTo('page-mst')">
-                <span class="nav-icon">🎓</span> MST Support
-            </li>
-            <li class="nav-item" onclick="navigateTo('page-classroom')">
-                <span class="nav-icon">🗃️</span> Data Management
-            </li>
-        </ul>
-
-        <!-- PROCTORING SERVICES -->
-        <div class="nav-group-header" onclick="toggleNavGroup(this)">Proctoring Services <span class="nav-arrow">▼</span></div>
-        <ul class="nav-sub-menu">
-            <li class="nav-item" onclick="navigateTo('page-exams')">
-                <span class="nav-icon">⚕️</span> Nursing Proctoring
-            </li>
-            <li class="nav-item" onclick="navigateTo('page-mlt')">
-                <span class="nav-icon">🧪</span> MLT Proctoring
-            </li>
-        </ul>
-
-        <!-- TOOLS & SETTINGS -->
-        <div class="nav-group-header" onclick="toggleNavGroup(this)">Tools & Settings <span class="nav-arrow">▼</span></div>
-        <ul class="nav-sub-menu">
-            <li class="nav-item" onclick="navigateTo('page-guide')">
-                <span class="nav-icon">📖</span> User Guide
-            </li>
-            <li class="nav-item" onclick="navigateTo('page-zoom')">
-                <span class="nav-icon">📹</span> Zoom Management
-            </li>
-            <li class="nav-item" onclick="navigateTo('page-settings')">
-                <span class="nav-icon">⚙️</span> Global Settings
-            </li>
-        </ul>
-
-      </div>
+      <ul class="nav-menu" id="main-nav">
+        <!-- Navigation items will be injected by JS_Core.html -->
+      </ul>
     </div>
 
     <div class="main-content">
-      
       <div class="content-top-bar">
-          <button id="nav-toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰ Menu</button>
+        <button id="nav-toggle-btn">
+          <span class="icon">&#9776;</span>
+          <span>Menu</span>
+        </button>
       </div>
-
-      <!-- MODULE INCLUDES -->
+      
+      <!-- The page wrapper is just the .page class itself now -->
       <?!= include('View_Dashboards'); ?>
-      <?!= include('View_Logistics'); ?>
-      <?!= include('View_Proctoring'); ?>
       <?!= include('View_Settings'); ?>
+      <?!= include('View_Proctoring'); ?>
+      <?!= include('View_Logistics'); ?>
       <?!= include('View_Zoom'); ?>
 
     </div>
-    
-    <!-- MODALS -->
-    <?!= include('Part_Modals'); ?>
-    
-    <!-- JAVASCRIPT INCLUDES -->
-    
-    <!-- App-Specific Logic -->
-    <?!= include('JS_Core'); ?>
-    <?!= include('JS_Lookup'); ?>
-    <?!= include('JS_Scheduling'); ?>
-    <?!= include('JS_Calendar'); ?>
-    <?!= include('JS_Settings'); ?>
-    <?!= include('JS_Discovery'); ?>
-    <?!= include('JS_Analytics'); ?>
-    <?!= include('JS_MLT'); ?>
-    <?!= include('JS_Dashboard'); ?>
-    <?!= include('JS_Proctoring'); ?>
-    <?!= include('JS_Zoom'); ?>
 
-</body>
+    <!-- Global loader overlay -->
+    <div id="global-loader">
+      <div class="loader-content">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    </div>
+
+    <!-- SCRIPT INCLUDES -->
+    <?!= include('JS_Core'); ?>
+    <?!= include('JS_App'); ?>
+    <?!= include('JS_Dashboard'); ?>
+    <?!= include('JS_Settings'); ?>
+    <?!= include('JS_Calendar'); ?>
+    <?!= include('JS_Proctoring'); ?>
+    <?!= include('JS_Scheduling'); ?>
+    <?!= include('JS_Analytics'); ?>
+    <?!= include('JS_Zoom'); ?>
+    <?!= include('JS_Lookup'); ?>
+    <?!= include('JS_MLT'); ?>
+
+  </body>
 </html>

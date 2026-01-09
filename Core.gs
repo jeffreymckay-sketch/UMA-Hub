@@ -1,163 +1,80 @@
-
 /**
- * -------------------------------------------------------------------
- * CORE UTILITIES & SETTINGS
- * -------------------------------------------------------------------
+ * @file Core.gs
+ * @description This file contains the core, foundational functions that are 
+ * used across the entire application. It is the bedrock of the app.
  */
 
+
 /**
- * Gets the Master Spreadsheet instance.
- * RELIABLE METHOD: Uses the ID from Config.gs.
+ * Gets the master data hub spreadsheet.
+ *
+ * This is a critical gatekeeper function. All access to the master data
+ * must go through here. It retrieves the masterSheetId from the settings
+ * managed by Config.gs.
+ *
+ * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} The master spreadsheet object.
+ * @throws {Error} If the masterSheetId is not set or the spreadsheet cannot be opened.
  */
 function getMasterDataHub() {
   try {
-    if (!CONFIG || !CONFIG.MASTER_SHEET_ID) {
-      throw new Error("MASTER_SHEET_ID is not defined in the CONFIG object.");
+    const settings = getSettings();
+    const masterSheetId = settings.masterSheetId;
+
+    if (!masterSheetId) {
+      throw new Error('CRITICAL: masterSheetId is not defined in script properties. The application cannot load.');
     }
-    const ss = SpreadsheetApp.openById(CONFIG.MASTER_SHEET_ID);
-    if (ss) {
-      return ss;
-    } else {
-      throw new Error("Could not open spreadsheet with the provided MASTER_SHEET_ID.");
+
+    const spreadsheet = SpreadsheetApp.openById(masterSheetId);
+    return spreadsheet;
+
+  } catch (e) {
+    console.error('Failed to open Master Data Hub: ' + e.message);
+    // Propagate the error to the calling function so it can be handled gracefully
+    // and reported to the user.
+    throw e;
+  }
+}
+
+/**
+ * Retrieves a specific sheet (tab) from the master spreadsheet by its key name.
+ * This function acts as a safeguard against hard-coded sheet names. It uses the
+ * 'sheetTabs' property (a JSON string) stored in PropertiesService to look up
+ * the actual sheet name.
+ *
+ * @param {string} sheetKey The key corresponding to the sheet (e.g., 'Staff_List', 'TechHub_Shifts').
+ *        This key is the cleaned version of the sheet name stored during setup.
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} The requested sheet object.
+ * @throws {Error} If the sheet key is not found, the sheetTabs property is missing,
+ *         or the sheet itself does not exist in the spreadsheet.
+ */
+function getSheet(sheetKey) {
+  try {
+    const settings = getSettings();
+    const sheetTabsJSON = settings.sheetTabs;
+
+    if (!sheetTabsJSON) {
+      throw new Error("The 'sheetTabs' property is missing from script properties. Please run the setup process.");
     }
-  } catch (e) {
-    console.error("Connection Error: " + e.message);
-    throw new Error("System Error: Could not connect to Data Hub. " + e.message);
-  }
-}
 
-function api_getImageDataUrl(fileId) {
-    try {
-        const file = DriveApp.getFileById(fileId);
-        const blob = file.getBlob();
-        const contentType = blob.getContentType();
-        const base64data = Utilities.base64Encode(blob.getBytes());
-        const dataUrl = `data:${contentType};base64,${base64data}`;
-        return { success: true, data: dataUrl };
-    } catch (e) {
-        return { success: false, message: e.message };
+    const sheetTabs = JSON.parse(sheetTabsJSON);
+    const sheetName = sheetTabs[sheetKey];
+
+    if (!sheetName) {
+      throw new Error(`The sheet key "${sheetKey}" was not found in the stored sheet tabs. Please re-run the setup or check the key name.`);
     }
-}
 
-
-/**
- * Fetches data from a tab safely.
- * STABLE METHOD: Uses getDataRange() to ensure all data is captured.
- */
-function getRequiredSheetData(ss, tabName) {
-  const sheet = ss.getSheetByName(tabName);
-  if (!sheet) {
-    console.warn(`Tab "${tabName}" missing.`);
-    return []; 
-  }
-  
-  if (sheet.getLastRow() === 0) return [];
-  return sheet.getDataRange().getValues();
-}
-
-/**
- * Helper to get a sheet or create it if missing.
- */
-function getOrCreateSheet(ss, tabName) {
-  let sheet = ss.getSheetByName(tabName);
-  if (!sheet) {
-    sheet = ss.insertSheet(tabName);
-  }
-  return sheet;
-}
-
-/**
- * Helper to normalize header names.
- */
-function normalizeHeader(header) {
-  return String(header).toLowerCase().replace(/[\s_]/g, '');
-}
-
-/**
- * Helper to extract ID from a Google Sheet URL
- */
-function extractFileIdFromUrl(url) {
-  if (!url) return null;
-  const match = url.match(/[-\w]{25,}/);
-  return match ? match[0] : null;
-}
-
-/**
- * -------------------------------------------------------------------
- * SETTINGS MANAGEMENT
- * -------------------------------------------------------------------
- */
-
-function getSettings(key) {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    const data = props.getProperty(key);
-    return data ? JSON.parse(data) : {};
-  } catch (e) {
-    console.error("Error loading settings: " + e.message);
-    return {};
-  }
-}
-
-function saveSettings(key, data) {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    props.setProperty(key, JSON.stringify(data));
-    return { success: true, message: "Settings saved." };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-
-function api_getAllSettings() {
-  try {
-    const props = PropertiesService.getScriptProperties().getProperties();
-    const result = {};
-    for (const key in props) {
-      try {
-        result[key] = JSON.parse(props[key]);
-      } catch (e) {
-        result[key] = props[key];
-      }
-    }
-    return { success: true, data: result };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-
-/**
- * -------------------------------------------------------------------
- * METADATA HELPERS (Required for Template Builder)
- * -------------------------------------------------------------------
- */
-
-function api_getDataHubTabs() {
-  try {
     const ss = getMasterDataHub();
-    const sheets = ss.getSheets();
-    const names = sheets.map(s => s.getName());
-    return { success: true, data: names };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
+    const sheet = ss.getSheetByName(sheetName);
 
-function api_getTabHeaders(tabName) {
-  try {
-    const ss = getMasterDataHub();
-    const sheet = ss.getSheetByName(tabName);
-    if (!sheet) return { success: false, message: "Tab not found" };
-    
-    const lastCol = sheet.getLastColumn();
-    if (lastCol < 1) return { success: true, data: [] };
-    
-    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-    // Filter out empty headers
-    const validHeaders = headers.filter(h => h !== "");
-    
-    return { success: true, data: validHeaders };
+    if (!sheet) {
+      throw new Error(`The sheet named "${sheetName}" (referenced by key "${sheetKey}") could not be found in the master spreadsheet.`);
+    }
+
+    return sheet;
+
   } catch (e) {
-    return { success: false, message: e.message };
+    console.error(`Error in getSheet('${sheetKey}'): ${e.toString()}`);
+    // Propagate the error to be handled by the calling function.
+    throw e;
   }
 }

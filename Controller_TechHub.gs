@@ -86,8 +86,7 @@ function getTechHubViewData(master) {
 
 function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
     try {
-        const ss = getMasterDataHub();
-        const sheet = getOrCreateSheet(ss, CONFIG.TABS.STAFF_ASSIGNMENTS, CONFIG.HEADERS.ASSIGNMENTS);
+        const sheet = getSheet('Staff_Assignments');
         const data = sheet.getDataRange().getValues(); 
         const headers = data[0].map(normalizeHeader);
         
@@ -135,8 +134,7 @@ function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
 
 function addTechHubShift(shiftData) {
     try {
-        const ss = getMasterDataHub();
-        const sheet = getOrCreateSheet(ss, CONFIG.TABS.TECH_HUB_SHIFTS, CONFIG.HEADERS.SHIFTS);
+        const sheet = getSheet('TechHub_Shifts');
         
         const days = Array.isArray(shiftData.days) ? shiftData.days : [shiftData.day];
         
@@ -151,8 +149,7 @@ function addTechHubShift(shiftData) {
 
 function deleteBulkTechHubShifts(shiftIds) {
     try {
-        const ss = getMasterDataHub();
-        const sheet = ss.getSheetByName(CONFIG.TABS.TECH_HUB_SHIFTS);
+        const sheet = getSheet('TechHub_Shifts');
         const data = sheet.getDataRange().getDisplayValues();
         const idIndex = data[0].map(normalizeHeader).indexOf('shiftid');
         
@@ -180,8 +177,7 @@ function deleteTechHubShift(shiftId) {
 
 function deleteAssignmentsByReferenceId(refId) {
     try {
-        const ss = getMasterDataHub();
-        const sheet = ss.getSheetByName(CONFIG.TABS.STAFF_ASSIGNMENTS);
+        const sheet = getSheet('Staff_Assignments');
         if (!sheet) return;
         const data = sheet.getDataRange().getDisplayValues();
         const refIdIndex = data[0].map(normalizeHeader).indexOf('referenceid');
@@ -193,8 +189,7 @@ function deleteAssignmentsByReferenceId(refId) {
 
 function deleteAssignment(assignmentId) {
     try {
-        const ss = getMasterDataHub();
-        const sheet = ss.getSheetByName(CONFIG.TABS.STAFF_ASSIGNMENTS);
+        const sheet = getSheet('Staff_Assignments');
         const data = sheet.getDataRange().getDisplayValues();
         const idIndex = data[0].map(normalizeHeader).indexOf('assignmentid');
         for (let i = data.length - 1; i >= 1; i--) { 
@@ -209,8 +204,7 @@ function deleteAssignment(assignmentId) {
 
 function resetAllAssignments() {
     try {
-        const ss = getMasterDataHub();
-        const sheet = ss.getSheetByName(CONFIG.TABS.STAFF_ASSIGNMENTS);
+        const sheet = getSheet('Staff_Assignments');
         if (!sheet) return { success: true };
         const data = sheet.getDataRange().getValues();
         const typeIndex = data[0].map(normalizeHeader).indexOf('assignmenttype');
@@ -225,8 +219,7 @@ function resetAllAssignments() {
 
 function handleClearAllShifts() {
     try {
-        const ss = getMasterDataHub();
-        const sheet = ss.getSheetByName(CONFIG.TABS.TECH_HUB_SHIFTS);
+        const sheet = getSheet('TechHub_Shifts');
         if (sheet) {
             const lastRow = sheet.getLastRow();
             if (lastRow > 1) {
@@ -250,8 +243,7 @@ function validateUserEditPermission(targetEmail) {
 function api_getMyAvailability(targetEmail) {
     try {
         const email = validateUserEditPermission(targetEmail);
-        const ss = getMasterDataHub();
-        const sheet = getOrCreateSheet(ss, CONFIG.TABS.STAFF_AVAILABILITY, CONFIG.HEADERS.AVAILABILITY);
+        const sheet = getSheet('Staff_Availability');
         const data = sheet.getDataRange().getDisplayValues();
         const list = [];
         if (data.length > 1) {
@@ -268,8 +260,7 @@ function api_getMyAvailability(targetEmail) {
 function api_addNotAvailable(day, start, end, targetEmail) {
     try {
         const email = validateUserEditPermission(targetEmail);
-        const ss = getMasterDataHub();
-        const sheet = getOrCreateSheet(ss, CONFIG.TABS.STAFF_AVAILABILITY, CONFIG.HEADERS.AVAILABILITY);
+        const sheet = getSheet('Staff_Availability');
         sheet.appendRow(['AV-' + Utilities.getUuid(), email, day, start, end]);
         return api_getMyAvailability(email);
     } catch (e) { return { success: false, message: e.message }; }
@@ -278,8 +269,7 @@ function api_addNotAvailable(day, start, end, targetEmail) {
 function api_deleteAvailability(id, targetEmail) {
     try {
         const email = validateUserEditPermission(targetEmail);
-        const ss = getMasterDataHub();
-        const sheet = ss.getSheetByName(CONFIG.TABS.STAFF_AVAILABILITY);
+        const sheet = getSheet('Staff_Availability');
         const data = sheet.getDataRange().getDisplayValues();
         const idIdx = data[0].map(normalizeHeader).indexOf('availabilityid');
         for (let i = data.length - 1; i >= 1; i--) {
@@ -292,8 +282,7 @@ function api_deleteAvailability(id, targetEmail) {
 function api_getMyPreferences(targetEmail) {
     try {
         const email = validateUserEditPermission(targetEmail);
-        const ss = getMasterDataHub();
-        const sheet = getOrCreateSheet(ss, CONFIG.TABS.STAFF_PREFERENCES, CONFIG.HEADERS.PREFERENCES);
+        const sheet = getSheet('Staff_Preferences');
         const data = sheet.getDataRange().getDisplayValues();
         const prefs = {};
         if (data.length > 1) {
@@ -309,9 +298,8 @@ function api_getMyPreferences(targetEmail) {
 
 function api_savePreference(timeBlock, value, targetEmail) {
     try {
-        const email = validateUsereditPermission(targetEmail);
-        const ss = getMasterDataHub();
-        const sheet = getOrCreateSheet(ss, CONFIG.TABS.STAFF_PREFERENCES, CONFIG.HEADERS.PREFERENCES);
+        const email = validateUserEditPermission(targetEmail);
+        const sheet = getSheet('Staff_Preferences');
         const data = sheet.getDataRange().getValues();
         const h = data[0].map(normalizeHeader);
         const staffIdx = h.indexOf('staffid'), blockIdx = h.indexOf('timeblock'), prefIdx = h.indexOf('preference');

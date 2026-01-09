@@ -1,170 +1,184 @@
 <script>
 /**
  * ===================================================================
- * CORE APPLICATION LOGIC
- * Handles navigation, permissions, and main UI interactions.
+ * CORE APPLICATION INITIALIZER
  * ===================================================================
  */
 
-document.addEventListener('DOMContentLoaded', initializeCoreApp);
+document.addEventListener('DOMContentLoaded', initializeCoreApplication);
 
 /**
- * Main entry point on page load. Fetches essential data to render the UI.
+ * Main entry point. Fetches all essential data to render the UI.
  */
-function initializeCoreApp() {
+function initializeCoreApplication() {
+    showGlobalLoader("Loading Application Data...");
+    
     google.script.run
-        .withSuccessHandler(handleAccessControlData)
+        .withSuccessHandler(handleInitialDataSuccess)
         .withFailureHandler(handleFatalError)
-        .getAccessControlData();
+        .api_getInitialAppData();
 
-    // The loadAllSettings function from JS_Settings will handle loading the logo
-    loadAllSettings();
+    if (typeof loadAllSettings === 'function') {
+        loadAllSettings();
+    }
 }
 
 /**
- * Handles the response from getAccessControlData. This is the primary function
- * that controls what a user can see and do in the application.
- * @param {object} accessData - An object containing user role and permissions matrix.
+ * Handles the successful response from api_getInitialAppData.
  */
-function handleAccessControlData(accessData) {
-    if (accessData.error) {
-        handleFatalError({ message: accessData.error });
+function handleInitialDataSuccess(response) {
+    if (!response || !response.success || !response.data) {
+        const errorMessage = (response && response.message) 
+            ? response.message 
+            : "The server returned an invalid or empty data payload.";
+        handleFatalError({ message: errorMessage });
+        return; 
+    }
+
+    const { access, dashboard, staff } = response.data;
+
+    if (!access || !Array.isArray(access.pages) || !dashboard || !staff) {
+        handleFatalError({ message: "Data payload from server is incomplete. Critical properties (access.pages, dashboard, or staff) are missing or invalid." });
         return;
     }
 
-    const userRole = accessData.userRole;
-    const accessMatrix = accessData.matrix;
+    // 1. Store global data.
+    App.user = { email: access.email, role: access.userRole };
+    App.accessMatrix = access.matrix;
+    App.staffList = staff;
 
-    // Dynamically hide navigation items based on user's role and permissions
-    document.querySelectorAll('.nav-item').forEach(item => {
-        const onclickAttr = item.getAttribute('onclick');
-        const pageIdMatch = onclickAttr ? onclickAttr.match(/navigateTo\('([^']+)'/) : null;
-        
-        if (pageIdMatch && pageIdMatch[1]) {
-            const pageKey = pageIdMatch[1];
-            if (accessMatrix[pageKey] && accessMatrix[pageKey][userRole] === false) {
-                item.style.display = 'none';
+    // 2. Build the navigation.
+    buildNavigation(access.pages, App.user.role, App.accessMatrix);
+
+    // 3. Populate the dashboard.
+    if (typeof populateDashboard === 'function') {
+        populateDashboard(dashboard);
+    }
+
+    // 4. Populate staff selectors throughout the app.
+    populateStaffSelector(staff);
+
+    // 5. Show the default page and hide the loader.
+    navigateToPage('page-dashboard');
+    hideGlobalLoader();
+}
+
+/**
+ * Finds and populates all staff dropdowns.
+ */
+function populateStaffSelector(staffList) {
+    const selectors = document.querySelectorAll('.staff-selector');
+    if (!selectors.length) return;
+
+    const optionsFragment = document.createDocumentFragment();
+    optionsFragment.appendChild(new Option('Select Staff...', '')); 
+
+    if (staffList && staffList.length > 0) {
+        staffList.forEach(staff => {
+            const option = document.createElement('option');
+            option.value = staff.id;
+            option.textContent = staff.name;
+            optionsFragment.appendChild(option);
+        });
+    }
+
+    selectors.forEach(select => {
+        select.innerHTML = ''; 
+        select.appendChild(optionsFragment.cloneNode(true));
+    });
+}
+
+
+/**
+ * Builds the main navigation menu based on the user's role and permissions.
+ */
+function buildNavigation(pages, userRole, matrix) {
+    const nav = document.getElementById('main-nav');
+    if (!nav) return;
+    nav.innerHTML = '';
+
+    pages.forEach(page => {
+        const hasAccess = matrix[page.id] && matrix[page.id][userRole];
+        if (hasAccess) {
+            const li = document.createElement('li');
+            li.className = 'nav-item';
+            li.id = `nav-${page.id}`;
+            // The page ID in the HTML is prefixed with 'page-'. The onclick handler must pass this full ID.
+            li.onclick = () => navigateToPage(`page-${page.id}`);
+            
+            if (page.icon) {
+                const icon = document.createElement('span');
+                icon.className = 'nav-icon';
+                icon.textContent = page.icon;
+                li.appendChild(icon);
             }
+            
+            const title = document.createElement('span');
+            title.textContent = page.name;
+            li.appendChild(title);
+
+            nav.appendChild(li);
         }
     });
-
-    // Special visibility rules for admin/lead roles
-    if (userRole === 'Admin' || userRole === 'Lead') {
-        const roleAssignmentNav = document.getElementById('settings-role-assignment-nav');
-        if(roleAssignmentNav) roleAssignmentNav.style.display = 'block';
-    }
-    if (userRole === 'Admin') {
-        const permissionsMatrixNav = document.getElementById('settings-permissions-matrix-nav');
-        if(permissionsMatrixNav) permissionsMatrixNav.style.display = 'block';
-    }
-
-    // After setting up permissions, load the content for the initially active page.
-    const activePage = document.querySelector('.page.active-page');
-    if (activePage) {
-        const pageId = activePage.id;
-        const loadFunctionName = `load_${pageId.replace('page-', '')}`;
-        if(typeof window[loadFunctionName] === 'function') {
-            window[loadFunctionName]();
-        } else {
-          console.log(`Initial load function ${loadFunctionName} not found.`);
-        }
-    }
 }
 
 /**
- * Displays a fatal error message when the application cannot load.
- * @param {Error} err - The error object.
+ * Handles page navigation, updating the active state.
  */
-function handleFatalError(err) {
-    const contentArea = document.querySelector('.main-content');
-    contentArea.innerHTML = `
-        <div class="fatal-error-container">
-            <h1>Access Error</h1>
-            <p>${err.message || 'Could not load application data.'}</p>
-            <p>Please contact an administrator if this problem persists.</p>
-        </div>`;
-    const sidebar = document.getElementById('app-sidebar');
-    if (sidebar) sidebar.style.display = 'none';
-}
-
-/**
- * ===================================================================
- * UI INTERACTION & NAVIGATION
- * ===================================================================
- */
-
-/**
- * Sets a status message and scrolls it into view.
- * @param {string} elementId - The ID of the status message element.
- * @param {string} message - The text to display.
- * @param {'loading'|'success'|'error'|'clear'} type - The type of message for styling.
- */
-function setStatus(elementId, message, type) {
-    const statusEl = document.getElementById(elementId);
-    if (statusEl) {
-        if (type === 'clear') {
-            statusEl.textContent = '';
-            statusEl.className = 'status-message';
-        } else {
-            statusEl.textContent = message;
-            statusEl.className = `status-message ${type}`;
-            statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    }
-}
-
-
-/**
- * Toggles the visibility of the main sidebar navigation.
- */
-function toggleSidebar() {
-    const sidebar = document.getElementById('app-sidebar');
-    const mainContent = document.querySelector('.main-content');
-    sidebar.classList.toggle('closed');
-    mainContent.classList.toggle('sidebar-closed');
-}
-
-/**
- * Expands or collapses a navigation group (accordion style).
- * @param {HTMLElement} element - The header element that was clicked.
- */
-function toggleNavGroup(element) {
-    const subMenu = element.nextElementSibling;
-    const arrow = element.querySelector('.nav-arrow');
-    
-    if (subMenu.classList.contains('open')) {
-        subMenu.classList.remove('open');
-        arrow.textContent = '▼';
-    } else {
-        subMenu.classList.add('open');
-        arrow.textContent = '▲';
-    }
-}
-
-/**
- * Navigates to a specific page view.
- * @param {string} pageId - The ID of the page element to display.
- */
-function navigateTo(pageId) {
+function navigateToPage(pageId) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+    document.querySelectorAll('.nav-item').forEach(li => li.classList.remove('active'));
+
     const targetPage = document.getElementById(pageId);
-    if (targetPage) {
-        targetPage.classList.add('active-page');
-    }
+    const targetNav = document.getElementById(`nav-${pageId.replace('page-','')}`);
 
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-        const onclickAttr = item.getAttribute('onclick');
-        if (onclickAttr === `navigateTo('${pageId}')`) {
-            item.classList.add('active');
-        }
-    });
+    if (targetPage) targetPage.classList.add('active-page');
+    if (targetNav) targetNav.classList.add('active');
 
-    const loadFunctionName = `load_${pageId.replace('page-', '')}`;
-    if(typeof window[loadFunctionName] === 'function') {
-        window[loadFunctionName]();
-    } else {
-        console.log(`Navigation load function ${loadFunctionName} not found.`);
+    const loadFunction = `load_${pageId.replace('page-', '')}`;
+    if (typeof window[loadFunction] === 'function') {
+        window[loadFunction]();
     }
 }
+
+/**
+ * Displays a fatal, non-recoverable error to the user.
+ */
+function handleFatalError(error) {
+    const appBody = document.querySelector('body');
+    if (appBody) {
+        appBody.innerHTML = `<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: flex; align-items: center; justify-content: center; z-index: 9999;">
+                              <div style="text-align:center; color: #d32f2f; padding: 20px; border: 1px solid #d32f2f; background: #ffebee;">
+                                  <h3>Application Error</h3>
+                                  <p>${error.message || 'An unknown error occurred.'}</p>
+                                  <p>Please contact support or try reloading the page.</p>
+                              </div>
+                          </div>`;
+    }
+}
+
+/** Helper to show the main loading overlay. */
+function showGlobalLoader(message) {
+    const loader = document.getElementById('global-loader');
+    if (loader) {
+        const p = loader.querySelector('p');
+        if (p) p.textContent = message;
+        loader.style.display = 'flex';
+    }
+}
+
+/** Helper to hide the main loading overlay. */
+function hideGlobalLoader() {
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.style.display = 'none';
+}
+
+// Global App object to hold state
+const App = {
+    user: { email: '', role: '' },
+    accessMatrix: {},
+    staffList: [],
+    scriptUrl: ''
+};
+
 </script>
