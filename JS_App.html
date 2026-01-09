@@ -1,41 +1,53 @@
 <script>
 /**
  * ===================================================================
- *  APP-SPECIFIC INITIALIZATION (IGNITION) FUNCTIONS
+ *  CORE UI BEHAVIORS
  * ===================================================================
- * 
- * This file acts as a bridge between the generic core navigation
- * and the specific initialization functions for each page.
+ * This script handles the primary user interface interactions, such
+ * as the sidebar navigation toggle.
  */
 
+document.addEventListener('DOMContentLoaded', function() {
+
+    const sidebar = document.getElementById('app-sidebar');
+    const toggleBtn = document.getElementById('nav-toggle-btn');
+
+    // Check if essential UI elements are present.
+    if (!sidebar || !toggleBtn) {
+        console.error("CRITICAL UI FAILURE: The sidebar or its toggle button was not found in the DOM. The menu will not function.");
+        // Display a visible error in case the console is not open.
+        document.body.insertAdjacentHTML('beforeend', '<div style="position:fixed; top:10px; left:10px; padding:10px; background:red; color:white; z-index:10001;">Error: Sidebar components missing.</div>');
+        return;
+    }
+
+    // Add the event listener that makes the menu button work.
+    toggleBtn.addEventListener('click', function() {
+        sidebar.classList.toggle('closed');
+    });
+
+});
+
+
 /**
- * Initializes the MST Support page by calling its primary data load function.
+ * ===================================================================
+ *  PAGE-SPECIFIC INITIALIZERS (IGNITION)
+ * ===================================================================
+ * These functions are called by the core navigator when a specific
+ * page is loaded.
  */
+
 function load_mst_support() {
-    // The JS_Scheduling.html file contains the function `loadSchedulingRosterData()`,
-    // which is the correct entry point for this page.
     if (typeof loadSchedulingRosterData === 'function') {
         loadSchedulingRosterData();
     }
 }
 
-/**
- * Placeholder initializer for the Tech Hub page.
- * The logic in `JS_Scheduling.html` seems to be mostly for MST, so we will
- * leave this empty for now until we analyze `Controller_TechHub.gs`.
- */
 function load_tech_hub() {
-    // Intentionally empty. The functionality for this page is likely handled 
-    // by event listeners within the page itself.
+    // This page is driven by user events within its view.
 }
 
-/**
- * Placeholder initializer for the Data Management page.
- * The logic in `JS_Lookup.html` is all event-driven (e.g., clicking
- * "Connect to Sheet"). There is no single function to call on page load.
- */
 function load_data_mgmt() {
-    // Intentionally empty. Functionality is user-initiated.
+    // This page is driven by user events within its view.
 }
 
 </script>

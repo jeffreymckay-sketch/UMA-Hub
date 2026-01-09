@@ -1,190 +1,161 @@
 <script>
 /**
  * ===================================================================
- * CORE APPLICATION INITIALIZER
+ * CORE APPLICATION INITIALIZER (v6 - FINAL & CORRECTED)
  * ===================================================================
  */
 
 document.addEventListener('DOMContentLoaded', initializeCoreApplication);
 
-/**
- * Main entry point. Fetches all essential data to render the UI.
- */
 function initializeCoreApplication() {
     showGlobalLoader("Loading Application Data...");
-    
     google.script.run
-        .withSuccessHandler(handleInitialDataSuccess)
+        .withSuccessHandler(handleCoreDataSuccess)
         .withFailureHandler(handleFatalError)
-        .api_getInitialAppData();
-
-    if (typeof loadAllSettings === 'function') {
-        loadAllSettings();
-    }
+        .api_getCoreData();
 }
 
-/**
- * Handles the successful response from api_getInitialAppData.
- */
-function handleInitialDataSuccess(response) {
-    if (!response || !response.success || !response.data) {
-        const errorMessage = (response && response.message) 
-            ? response.message 
-            : "The server returned an invalid or empty data payload.";
-        handleFatalError({ message: errorMessage });
-        return; 
+function handleCoreDataSuccess(response) {
+    if (!response.success) {
+        handleFatalError({ message: response.message || "An unknown server error occurred." });
+        return;
     }
 
     const { access, dashboard, staff } = response.data;
 
-    if (!access || !Array.isArray(access.pages) || !dashboard || !staff) {
-        handleFatalError({ message: "Data payload from server is incomplete. Critical properties (access.pages, dashboard, or staff) are missing or invalid." });
+    if (!access.pages || access.pages.length === 0) {
+        promptForInitialConfiguration("The application configuration is missing.");
         return;
     }
 
-    // 1. Store global data.
     App.user = { email: access.email, role: access.userRole };
     App.accessMatrix = access.matrix;
     App.staffList = staff;
 
-    // 2. Build the navigation.
-    buildNavigation(access.pages, App.user.role, App.accessMatrix);
+    const menuItemsBuilt = buildNavigation(access.pages, App.user.role, App.accessMatrix);
 
-    // 3. Populate the dashboard.
-    if (typeof populateDashboard === 'function') {
-        populateDashboard(dashboard);
+    if (menuItemsBuilt === 0) {
+        const message = `Your user role ('${App.user.role}') does not have permission to view any pages, or the application settings are misconfigured.`;
+        promptForInitialConfiguration(message);
+        return;
     }
 
-    // 4. Populate staff selectors throughout the app.
+    populateDashboard(dashboard);
     populateStaffSelector(staff);
 
-    // 5. Show the default page and hide the loader.
     navigateToPage('page-dashboard');
     hideGlobalLoader();
 }
 
 /**
- * Finds and populates all staff dropdowns.
- */
-function populateStaffSelector(staffList) {
-    const selectors = document.querySelectorAll('.staff-selector');
-    if (!selectors.length) return;
-
-    const optionsFragment = document.createDocumentFragment();
-    optionsFragment.appendChild(new Option('Select Staff...', '')); 
-
-    if (staffList && staffList.length > 0) {
-        staffList.forEach(staff => {
-            const option = document.createElement('option');
-            option.value = staff.id;
-            option.textContent = staff.name;
-            optionsFragment.appendChild(option);
-        });
-    }
-
-    selectors.forEach(select => {
-        select.innerHTML = ''; 
-        select.appendChild(optionsFragment.cloneNode(true));
-    });
-}
-
-
-/**
- * Builds the main navigation menu based on the user's role and permissions.
+ * Builds the main navigation menu and returns the number of items created.
+ * This version is robust against configuration mismatches.
+ * @returns {number} The number of menu items added to the DOM.
  */
 function buildNavigation(pages, userRole, matrix) {
     const nav = document.getElementById('main-nav');
-    if (!nav) return;
+    if (!nav) return 0;
+
     nav.innerHTML = '';
+    let itemsCreated = 0;
 
     pages.forEach(page => {
-        // --- FIX --- 
-        // Defensively check that a page and its ID are valid and that a corresponding
-        // permission matrix entry exists before trying to check the user's role.
-        // This prevents a TypeError if a page is configured in settings but missing from the permissions sheet.
-        if (page && page.id && matrix && matrix[page.id]) {
-            const hasAccess = matrix[page.id][userRole];
-            if (hasAccess) {
-                const li = document.createElement('li');
-                li.className = 'nav-item';
-                li.id = `nav-${page.id}`;
-                // The page ID in the HTML is prefixed with 'page-'. The onclick handler must pass this full ID.
-                li.onclick = () => navigateToPage(`page-${page.id}`);
-                
-                if (page.icon) {
-                    const icon = document.createElement('span');
-                    icon.className = 'nav-icon';
-                    icon.textContent = page.icon;
-                    li.appendChild(icon);
-                }
-                
-                const title = document.createElement('span');
-                title.textContent = page.name;
-                li.appendChild(title);
-
-                nav.appendChild(li);
-            }
+        // --- THE DEFINITIVE FIX --- 
+        // This checks that a permission entry actually exists for the page before trying to access it.
+        // This prevents a TypeError crash if settings and permissions sheets are out of sync.
+        if (page && page.id && matrix[page.id] && matrix[page.id][userRole]) {
+            const li = document.createElement('li');
+            li.className = 'nav-item';
+            li.id = `nav-${page.id}`;
+            li.onclick = () => navigateToPage(`page-${page.id}`);
+            li.innerHTML = `<span class="nav-icon">${page.icon || ''}</span><span>${page.name}</span>`;
+            nav.appendChild(li);
+            itemsCreated++;
         }
     });
+    return itemsCreated;
 }
 
 /**
- * Handles page navigation, updating the active state.
+ * Displays a prompt for the user to initialize or reset settings.
  */
+function promptForInitialConfiguration(reason) {
+    hideGlobalLoader();
+    const promptId = 'first-run-prompt';
+    if (document.getElementById(promptId)) return; // Avoid duplicate prompts
+
+    const promptHtml = `
+        <div id="${promptId}" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 48, 87, 0.95); display: flex; align-items: center; justify-content: center; z-index: 10000; color: white; text-align: center;">
+            <div>
+                <h2 style="color: #f37021;">Application Setup Required</h2>
+                <p style="max-width: 450px; margin: 20px auto; line-height: 1.6;">
+                    <strong>Reason:</strong> ${reason}<br><br>
+                    Click the button below to apply the default configuration. This will fix issues where the menu is empty or incorrect.
+                </p>
+                <button id="run-setup-btn" class="button" style="background-color: #f37021; color: white; font-size: 1.2rem; padding: 15px 30px; border: none; cursor: pointer;">Reset & Reload</button>
+                <div id="setup-status" style="margin-top: 15px;"></div>
+            </div>
+        </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', promptHtml);
+    
+    document.getElementById('run-setup-btn').onclick = function() {
+        this.disabled = true;
+        document.getElementById('setup-status').textContent = 'Configuring...';
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res.success) {
+                    document.getElementById('setup-status').innerHTML = `<span style="color: #A4D65E;">Success! Reloading page...</span>`;
+                    setTimeout(() => window.top.location.reload(), 1500);
+                } else {
+                    this.disabled = false;
+                    document.getElementById('setup-status').innerHTML = `<span style="color: #d32f2f;">Error: ${res.message}</span>`;
+                }
+            })
+            .withFailureHandler(err => {
+                 this.disabled = false;
+                 document.getElementById('setup-status').innerHTML = `<span style="color: #d32f2f;">Fatal Error: ${err.message}</span>`;
+            })
+            .api_initializeApplicationSettings();
+    };
+}
+
+// --- Other Core Functions ---
+
 function navigateToPage(pageId) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
     document.querySelectorAll('.nav-item').forEach(li => li.classList.remove('active'));
-
     const targetPage = document.getElementById(pageId);
     const targetNav = document.getElementById(`nav-${pageId.replace('page-','')}`);
-
     if (targetPage) targetPage.classList.add('active-page');
     if (targetNav) targetNav.classList.add('active');
-
-    const loadFunction = `load_${pageId.replace('page-', '')}`;
-    if (typeof window[loadFunction] === 'function') {
-        window[loadFunction]();
-    }
 }
 
-/**
- * Displays a fatal, non-recoverable error to the user.
- */
+function populateStaffSelector(staffList) {
+    const selectors = document.querySelectorAll('.staff-selector');
+    selectors.forEach(select => {
+        select.innerHTML = '';
+        select.appendChild(new Option('Select Staff...', ''));
+        if (staffList) staffList.forEach(staff => select.appendChild(new Option(staff.name, staff.id)));
+    });
+}
+
 function handleFatalError(error) {
-    const appBody = document.querySelector('body');
-    if (appBody) {
-        appBody.innerHTML = `<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: flex; align-items: center; justify-content: center; z-index: 9999;">
-                              <div style="text-align:center; color: #d32f2f; padding: 20px; border: 1px solid #d32f2f; background: #ffebee;">
-                                  <h3>Application Error</h3>
-                                  <p>${error.message || 'An unknown error occurred.'}</p>
-                                  <p>Please contact support or try reloading the page.</p>
-                              </div>
-                          </div>`;
-    }
+    hideGlobalLoader();
+    const msg = error.message || 'An unknown error occurred.';
+    if (document.getElementById('first-run-prompt')) return;
+    document.body.innerHTML = `<div style="color: #d32f2f; padding: 40px;"><h3>Application Error</h3><p>${msg}</p></div>`;
 }
 
-/** Helper to show the main loading overlay. */
 function showGlobalLoader(message) {
     const loader = document.getElementById('global-loader');
-    if (loader) {
-        const p = loader.querySelector('p');
-        if (p) p.textContent = message;
-        loader.style.display = 'flex';
-    }
+    if(loader) { loader.querySelector('p').textContent = message; loader.style.display = 'flex'; }
 }
 
-/** Helper to hide the main loading overlay. */
 function hideGlobalLoader() {
     const loader = document.getElementById('global-loader');
-    if (loader) loader.style.display = 'none';
+    if(loader) { loader.style.display = 'none'; }
 }
 
-// Global App object to hold state
-const App = {
-    user: { email: '', role: '' },
-    accessMatrix: {},
-    staffList: [],
-    scriptUrl: ''
-};
-
+const App = { user: {}, accessMatrix: {}, staffList: [] };
 </script>

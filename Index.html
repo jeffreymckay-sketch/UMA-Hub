@@ -6,7 +6,7 @@
   </head>
   <body>
     <!-- Main application container -->
-    <div class="sidebar" id="app-sidebar">
+    <div class="sidebar closed" id="app-sidebar">
       <div class="sidebar-header">
         <img class="header-logo" id="logo-img" src="" alt="Logo" style="display:none;"/>
         <div class="logo-loading" id="logo-placeholder">Loading Logo...</div>
@@ -25,7 +25,7 @@
         </button>
       </div>
       
-      <!-- The page wrapper is just the .page class itself now -->
+      <!-- Page Views -->
       <?!= include('View_Dashboards'); ?>
       <?!= include('View_Settings'); ?>
       <?!= include('View_Proctoring'); ?>

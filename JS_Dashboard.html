@@ -1,14 +1,13 @@
 <script>
 /**
  * ===================================================================
- * DASHBOARD UI FUNCTIONS
+ * DASHBOARD UI FUNCTIONS (CLEANED v3)
  * ===================================================================
  */
 
 /**
- * NEW: The missing orchestrator function.
- * This function is called by JS_Core.html after the initial data load.
- * It finds the correct containers and calls the rendering functions.
+ * Populates the dashboard content areas with data from the core load.
+ * This is called by the main success handler in JS_Core.html.
  */
 function populateDashboard(dashboardData) {
     if (!dashboardData) {
@@ -16,65 +15,45 @@ function populateDashboard(dashboardData) {
         return;
     }
 
-    const availabilityContainer = document.getElementById('availability-container');
-    const preferencesContainer = document.getElementById('preferences-container');
+    const availabilityContainer = document.getElementById('my-availability-list');
+    const preferencesContainer = document.getElementById('my-preferences-list');
 
     if (availabilityContainer) {
         renderAvailability(availabilityContainer, dashboardData.availability);
     } else {
-        console.warn("Could not find 'availability-container' to render data.");
+        console.error("CRITICAL: Could not find element with ID 'my-availability-list' to render data.");
     }
 
     if (preferencesContainer) {
         renderPreferences(preferencesContainer, dashboardData.preferences);
     } else {
-        console.warn("Could not find 'preferences-container' to render data.");
+        console.error("CRITICAL: Could not find element with ID 'my-preferences-list' to render data.");
     }
 }
 
 /**
- * This function is triggered when the dashboard page is navigated to.
- */
-function load_dashboard() {
-    showDashboardView('my-dashboard');
-}
-
-/**
- * Handles switching between the main dashboard view and the admin view.
- */
-function showDashboardView(viewName) {
-    document.getElementById('my-dashboard').style.display = 'none';
-    document.getElementById('admin-dashboard').style.display = 'none';
-
-    const view = document.getElementById(viewName);
-    if (view) {
-        view.style.display = 'block';
-    }
-}
-
-/**
- * Renders the availability data into the specified container.
+ * Renders the availability data into its container.
  */
 function renderAvailability(container, data) {
     if (!container) return;
 
     if (!data || data.length === 0) {
-        container.innerHTML = '<p class="not-available">No availability data has been recorded for the upcoming schedule.</p>';
+        container.innerHTML = '<p class="not-available">No availability data has been recorded.</p>';
         return;
     }
 
-    // Create a more structured and readable table for availability
-    let content = '<h5>Your Recorded Availability</h5><table class="data-table zebra-stripes"><thead><tr><th>Day</th><th>Start Time</th><th>End Time</th></tr></thead><tbody>';
-    data.forEach(row => {
-        // Assuming availability data is [StaffID, Day, Start, End]
-        content += `<tr><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td></tr>`;
+    let content = '<table class="data-table zebra-stripes"><thead><tr><th>Day</th><th>Start Time</th><th>End Time</th><th></th></tr></thead><tbody>';
+    data.forEach((row, index) => {
+        // The row index from the original sheet is useful for delete operations.
+        const originalRowIndex = row[row.length - 1]; 
+        content += `<tr><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td><button class="button btn-sm danger" onclick="deleteAvailability(${originalRowIndex})">X</button></td></tr>`;
     });
     content += '</tbody></table>';
     container.innerHTML = content;
 }
 
 /**
- * Renders the preferences data into the specified container.
+ * Renders the preferences data into its container.
  */
 function renderPreferences(container, data) {
     if (!container) return;
@@ -84,11 +63,9 @@ function renderPreferences(container, data) {
         return;
     }
     
-    // Create a simple list for preferences
-    let content = '<h5>Your Work Preferences</h5><ul>';
+    let content = '<ul style="list-style:none; padding:0;">';
     data.forEach(row => {
-        // Assuming preference data is [StaffID, PreferenceType, Value]
-        content += `<li><strong>${row[1]}:</strong> ${row[2]}</li>`;
+        content += `<li style="margin-bottom:8px; padding:5px; background:#f1f1f1; border-radius:3px;"><strong>${row[1]}:</strong> ${row[2]}</li>`;
     });
     content += '</ul>';
     container.innerHTML = content;
