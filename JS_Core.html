@@ -98,26 +98,32 @@ function buildNavigation(pages, userRole, matrix) {
     nav.innerHTML = '';
 
     pages.forEach(page => {
-        const hasAccess = matrix[page.id] && matrix[page.id][userRole];
-        if (hasAccess) {
-            const li = document.createElement('li');
-            li.className = 'nav-item';
-            li.id = `nav-${page.id}`;
-            // The page ID in the HTML is prefixed with 'page-'. The onclick handler must pass this full ID.
-            li.onclick = () => navigateToPage(`page-${page.id}`);
-            
-            if (page.icon) {
-                const icon = document.createElement('span');
-                icon.className = 'nav-icon';
-                icon.textContent = page.icon;
-                li.appendChild(icon);
-            }
-            
-            const title = document.createElement('span');
-            title.textContent = page.name;
-            li.appendChild(title);
+        // --- FIX --- 
+        // Defensively check that a page and its ID are valid and that a corresponding
+        // permission matrix entry exists before trying to check the user's role.
+        // This prevents a TypeError if a page is configured in settings but missing from the permissions sheet.
+        if (page && page.id && matrix && matrix[page.id]) {
+            const hasAccess = matrix[page.id][userRole];
+            if (hasAccess) {
+                const li = document.createElement('li');
+                li.className = 'nav-item';
+                li.id = `nav-${page.id}`;
+                // The page ID in the HTML is prefixed with 'page-'. The onclick handler must pass this full ID.
+                li.onclick = () => navigateToPage(`page-${page.id}`);
+                
+                if (page.icon) {
+                    const icon = document.createElement('span');
+                    icon.className = 'nav-icon';
+                    icon.textContent = page.icon;
+                    li.appendChild(icon);
+                }
+                
+                const title = document.createElement('span');
+                title.textContent = page.name;
+                li.appendChild(title);
 
-            nav.appendChild(li);
+                nav.appendChild(li);
+            }
         }
     });
 }

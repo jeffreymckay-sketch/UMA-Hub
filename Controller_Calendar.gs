@@ -24,7 +24,7 @@ function getAllViewableCalendars() {
 
 function api_getCalendarTargetName() {
   try {
-    const settings = getSettings(CONFIG.SETTINGS_KEYS.CALENDAR);
+    const settings = getSettings();
     if (!settings || !settings.targetCalendarId) return { success: false, message: "No calendar configured." };
     const cal = CalendarApp.getCalendarById(settings.targetCalendarId);
     return cal ? { success: true, name: cal.getName() } : { success: false, message: "Calendar not found." };
@@ -45,14 +45,13 @@ function api_syncSheetToCalendar(templateName, selectedRowIndices, targetCalenda
  */
 function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId) {
   try {
-    const settings = getSettings(CONFIG.SETTINGS_KEYS.CALENDAR);
+    const settings = getSettings();
     const calId = targetCalendarId || settings.targetCalendarId;
     if (!calId) return { success: false, message: "No Calendar Selected." };
 
     if (!settings.sourceTabName) return { success: false, message: "Source Tab not configured." };
 
-    const ss = getMasterDataHub();
-    const sheet = ss.getSheetByName(settings.sourceTabName);
+    const sheet = getSheet(settings.sourceTabName);
     if (!sheet) return { success: false, message: "Tab not found." };
     
     const data = sheet.getDataRange().getValues();
@@ -73,8 +72,8 @@ function core_syncLogic(templateName, isPreview, selectedRows, targetCalendarId)
       if (t) pattern = t.pattern;
     }
 
-    const assignData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_ASSIGNMENTS);
-    const staffData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_LIST);
+    const assignData = getSheet('Staff_Assignments').getDataRange().getValues();
+    const staffData = getSheet('Staff_List').getDataRange().getValues();
     
     const assignmentMap = new Map();
     for (let i = 1; i < assignData.length; i++) {
@@ -508,13 +507,12 @@ function api_syncStaffToCalendar(targetCalendarId) {
         return { success: false, message: "Error: 'Google Calendar API' service is not enabled in the script editor." };
     }
 
-    const settings = getSettings(CONFIG.SETTINGS_KEYS.CALENDAR);
+    const settings = getSettings();
     const calId = targetCalendarId || settings.targetCalendarId;
     if (!calId) return { success: false, message: "No Calendar Selected." };
 
-    const ss = getMasterDataHub();
-    const assignData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_ASSIGNMENTS);
-    const staffData = getRequiredSheetData(ss, CONFIG.TABS.STAFF_LIST);
+    const assignData = getSheet('Staff_Assignments').getDataRange().getValues();
+    const staffData = getSheet('Staff_List').getDataRange().getValues();
 
     const allStaffEmails = new Set();
     for (let i = 1; i < staffData.length; i++) {
@@ -605,7 +603,8 @@ function api_syncStaffToCalendar(targetCalendarId) {
 
 function api_getCalendarEvents(startStr, endStr, calendarId) {
   try {
-    let targetId = calendarId || getSettings(CONFIG.SETTINGS_KEYS.CALENDAR).targetCalendarId;
+    const settings = getSettings();
+    let targetId = calendarId || settings.targetCalendarId;
     if (!targetId) return { success: false, message: "No calendar." };
     const cal = CalendarApp.getCalendarById(targetId);
     if (!cal) return { success: false, message: "Calendar not found." };

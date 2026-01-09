@@ -18,12 +18,10 @@
  */
 function getSchedulingData() {
     try {
-        var ss = SpreadsheetApp.openById(CONFIG.MASTER_SHEET_ID);
-
-        var staffData = _loadSheetData(ss, CONFIG.TABS.STAFF_LIST);
-        var assignmentData = _loadSheetData(ss, CONFIG.TABS.STAFF_ASSIGNMENTS);
-        var courseData = _loadSheetData(ss, CONFIG.TABS.COURSE_SCHEDULE);
-        var shiftData = _loadSheetData(ss, CONFIG.TABS.TECH_HUB_SHIFTS);
+        var staffData = getSheet('Staff_List').getDataRange().getValues();
+        var assignmentData = getSheet('Staff_Assignments').getDataRange().getValues();
+        var courseData = getSheet('Course_Schedule').getDataRange().getValues();
+        var shiftData = getSheet('TechHub_Shifts').getDataRange().getValues();
 
         var staffHeaders = getColumnMap(staffData[0]);
         var assignmentHeaders = getColumnMap(assignmentData[0]);
@@ -110,9 +108,7 @@ function getSchedulingData() {
 
 function api_updateCourseAssignment(courseId, newStaffId) {
     try {
-        var ss = SpreadsheetApp.openById(CONFIG.MASTER_SHEET_ID);
-        var sheet = ss.getSheetByName(CONFIG.TABS.STAFF_ASSIGNMENTS);
-        if (!sheet) throw new Error('Sheet "' + CONFIG.TABS.STAFF_ASSIGNMENTS + '" not found.');
+        var sheet = getSheet('Staff_Assignments');
 
         var data = sheet.getDataRange().getValues();
         var headers = getColumnMap(data[0]);
@@ -162,10 +158,7 @@ function api_updateCourseAssignment(courseId, newStaffId) {
 
 function api_deleteCourse(courseId) {
     try {
-        var ss = SpreadsheetApp.openById(CONFIG.MASTER_SHEET_ID);
-
-        var courseSheet = ss.getSheetByName(CONFIG.TABS.COURSE_SCHEDULE);
-        if (!courseSheet) throw new Error('Sheet "' + CONFIG.TABS.COURSE_SCHEDULE + '" not found.');
+        var courseSheet = getSheet('Course_Schedule');
         var courseData = courseSheet.getDataRange().getValues();
         var courseHeaderRow = courseData.find(function(row) { return row.join('').toLowerCase().includes('eventid'); });
         if (!courseHeaderRow) throw new Error("Could not find header row in Course Schedule sheet.");
@@ -183,18 +176,16 @@ function api_deleteCourse(courseId) {
             }
         }
 
-        var assignmentSheet = ss.getSheetByName(CONFIG.TABS.STAFF_ASSIGNMENTS);
-        if (assignmentSheet) {
-            var assignmentData = assignmentSheet.getDataRange().getValues();
-            var assignmentHeaders = getColumnMap(assignmentData[0]);
-            var refIdCol = assignmentHeaders['referenceid'];
+        var assignmentSheet = getSheet('Staff_Assignments');
+        var assignmentData = assignmentSheet.getDataRange().getValues();
+        var assignmentHeaders = getColumnMap(assignmentData[0]);
+        var refIdCol = assignmentHeaders['referenceid'];
 
-            if (refIdCol !== undefined) {
-                for (var i = assignmentData.length - 1; i >= 1; i--) {
-                    if (String(assignmentData[i][refIdCol]) === String(courseId)) {
-                        assignmentSheet.deleteRow(i + 1);
-                        break;
-                    }
+        if (refIdCol !== undefined) {
+            for (var i = assignmentData.length - 1; i >= 1; i--) {
+                if (String(assignmentData[i][refIdCol]) === String(courseId)) {
+                    assignmentSheet.deleteRow(i + 1);
+                    break;
                 }
             }
         }
@@ -209,9 +200,7 @@ function api_deleteCourse(courseId) {
 
 function api_addCourse(courseDetails) {
     try {
-        var ss = SpreadsheetApp.openById(CONFIG.MASTER_SHEET_ID);
-        var sheet = ss.getSheetByName(CONFIG.TABS.COURSE_SCHEDULE);
-        if (!sheet) throw new Error('Sheet "' + CONFIG.TABS.COURSE_SCHEDULE + '" not found.');
+        var sheet = getSheet('Course_Schedule');
 
         var headerRow = sheet.getDataRange().getValues().find(function(row) { return row.join('').toLowerCase().includes('eventid'); });
         if (!headerRow) throw new Error("Could not find header row in Course Schedule sheet.");
@@ -248,9 +237,7 @@ function api_addCourse(courseDetails) {
 
 function api_updateCourse(courseDetails) {
     try {
-        var ss = SpreadsheetApp.openById(CONFIG.MASTER_SHEET_ID);
-        var sheet = ss.getSheetByName(CONFIG.TABS.COURSE_SCHEDULE);
-        if (!sheet) throw new Error('Sheet "' + CONFIG.TABS.COURSE_SCHEDULE + '" not found.');
+        var sheet = getSheet('Course_Schedule');
 
         var data = sheet.getDataRange().getValues();
         var headerRow = data.find(function(row) { return row.join('').toLowerCase().includes('eventid'); });
@@ -358,12 +345,6 @@ function _getUniqueColumnValues(data, headers, headerName) {
     });
     
     return Array.from(valueSet).sort();
-}
-
-function _loadSheetData(ss, sheetName) {
-    var sheet = ss.getSheetByName(sheetName);
-    if (!sheet) throw new Error('Sheet "' + sheetName + '" not found.');
-    return sheet.getDataRange().getValues();
 }
 
 function getColumnMap(headers) {

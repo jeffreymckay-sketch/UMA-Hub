@@ -39,18 +39,17 @@ function getScriptUrl() {
 function api_getInitialAppData() {
     try {
         const settings = getSettings();
-        const ss = getMasterDataHub();
         const userEmail = Session.getActiveUser().getEmail();
 
-        const staffData = getRequiredSheetData(ss, settings.tabNameStaffList);
+        const staffData = getSheet('Staff_List').getDataRange().getValues();
 
         // --- FIX & DEFENSIVE CHECK ---
-        const access = _getAccessControlData(ss, userEmail, staffData, settings);
+        const access = _getAccessControlData(userEmail, staffData, settings);
         if (!access || !access.staffId) {
-            throw new Error("Access control data was not returned. This is often due to the user\'s email not being found in the Staff_List tab under the \'StaffID\' column.");
+            throw new Error("Access control data was not returned. This is often due to the user's email not being found in the Staff_List tab under the 'StaffID' column.");
         }
 
-        const dashboard = _getDashboardData(ss, access.staffId, settings);
+        const dashboard = _getDashboardData(access.staffId, settings);
         const staffList = _getStaffList(staffData);
 
         return { 
@@ -75,19 +74,14 @@ function api_getInitialAppData() {
  * -------------------------------------------------------------------
  */
 
-/**
- * CORRECTED: Gathers user role, permissions, and ID.
- */
-function _getAccessControlData(ss, userEmail, staffData, settings) {
-    const permSheet = ss.getSheetByName(settings.tabNamePermissionsMatrix); // CORRECTED TAB NAME
+function _getAccessControlData(userEmail, staffData, settings) {
+    const permSheet = getSheet('Permissions_Matrix');
     const matrix = {};
     if (permSheet) {
         const data = permSheet.getDataRange().getValues();
         for (let i = 1; i < data.length; i++) {
             const page = data[i][0];
-            if (page) {
-                matrix[page] = { Admin: true, Lead: data[i][2] === true, Staff: data[i][3] === true };
-            }
+            if (page) { matrix[page] = { Admin: true, Lead: data[i][2] === true, Staff: data[i][3] === true }; }
         }
     }
     
@@ -99,17 +93,30 @@ function _getAccessControlData(ss, userEmail, staffData, settings) {
 
     if (staffData && staffData.length > 1) {
         const headers = staffData[0].map(h => String(h).trim().toLowerCase());
-        const emailIdx = headers.indexOf('staffid'); // CORRECTED HEADER
-        const roleIdx = headers.indexOf('role');
+        
+        // --- ROBUST HEADER FINDER ---
+        const possibleEmailHeaders = ['staffid', 'email', 'staff email', 'user email'];
+        let emailIdx = -1;
+        for(const header of possibleEmailHeaders){
+            const idx = headers.indexOf(header);
+            if(idx > -1){
+                emailIdx = idx;
+                break;
+            }
+        }
+        
+        const roleIdx = headers.indexOf('roles');
 
-        if (emailIdx > -1 && roleIdx > -1) {
+        if (emailIdx > -1) {
             for (let i = 1; i < staffData.length; i++) {
-                if (String(staffData[i][emailIdx]).toLowerCase() === userEmail.toLowerCase()) {
-                    userRole = staffData[i][roleIdx] || "Staff";
-                    staffId = staffData[i][emailIdx]; // Use the official ID from the sheet
+                if (staffData[i][emailIdx] && String(staffData[i][emailIdx]).trim().toLowerCase() === userEmail.toLowerCase()) {
+                    userRole = (roleIdx > -1 && staffData[i][roleIdx]) ? staffData[i][roleIdx] : "Staff";
+                    staffId = staffData[i][emailIdx]; 
                     break;
                 }
             }
+        } else {
+             throw new Error("Could not find a valid user email column in the 'Staff_List' sheet. Please ensure a column with one of the following headers exists: 'staffid', 'email', 'staff email', or 'user email'.");
         }
     }
 
@@ -117,67 +124,38 @@ function _getAccessControlData(ss, userEmail, staffData, settings) {
 }
 
 
-/**
- * Fetches dashboard-specific data for a given user.
- */
-function _getDashboardData(ss, staffId, settings) {
+function _getDashboardData(staffId, settings) {
     try {
-        let availability = [];
-        let preferences = [];
-
-        const availData = getRequiredSheetData(ss, settings.tabNameStaffAvailability);
+        let availability = [], preferences = [];
+        // CORRECTED: Used getDisplayValues() to prevent issues with Date objects.
+        const availData = getSheet('Staff_Availability').getDataRange().getDisplayValues();
         if (availData.length > 1) {
             const headers = availData[0].map(h => String(h).trim().toLowerCase());
-            const staffIdCol = headers.indexOf('staffid'); // CORRECTED HEADER
-            if (staffIdCol !== -1) {
-                availability = availData.slice(1).filter(row => String(row[staffIdCol]).toLowerCase() === String(staffId).toLowerCase());
-            }
+            const staffIdCol = headers.indexOf('staffid');
+            if (staffIdCol !== -1) { availability = availData.slice(1).filter(row => row[staffIdCol] && String(row[staffIdCol]).toLowerCase() === String(staffId).toLowerCase()); }
         }
-
-        const prefData = getRequiredSheetData(ss, settings.tabNameStaffPreferences);
+        const prefData = getSheet('Staff_Preferences').getDataRange().getDisplayValues();
         if (prefData.length > 1) {
             const headers = prefData[0].map(h => String(h).trim().toLowerCase());
-            const staffIdCol = headers.indexOf('staffid'); // CORRECTED HEADER
-            if (staffIdCol !== -1) {
-                preferences = prefData.slice(1).filter(row => String(row[staffIdCol]).toLowerCase() === String(staffId).toLowerCase());
-            }
+            const staffIdCol = headers.indexOf('staffid');
+            if (staffIdCol !== -1) { preferences = prefData.slice(1).filter(row => row[staffIdCol] && String(row[staffIdCol]).toLowerCase() === String(staffId).toLowerCase()); }
         }
-
         return { availability, preferences };
     } catch (e) {
         console.error(`Error in _getDashboardData for staffId ${staffId}: ${e.message}`);
-        return { availability: [], preferences: [] }; // Return empty data to prevent a full crash
+        return { availability: [], preferences: [] };
     }
 }
 
-/**
- * Processes the raw staff data into a clean list of objects.
- */
 function _getStaffList(staffData) {
     if (!staffData || staffData.length < 2) return [];
     const headers = staffData[0].map(h => String(h).trim().toLowerCase());
-    const nameIdx = headers.indexOf('name');
-    const idIdx = headers.indexOf('staffid'); // CORRECTED HEADER
-    const roleIdx = headers.indexOf('role');
-
-    if (nameIdx === -1 || idIdx === -1 || roleIdx === -1) return [];
-
-    const staff = staffData.slice(1).map(row => {
+    const nameIdx = headers.indexOf('fullname');
+    const idIdx = headers.indexOf('staffid');
+    const roleIdx = headers.indexOf('roles');
+    if (nameIdx === -1 || idIdx === -1) return [];
+    return staffData.slice(1).map(row => {
         if (!row[idIdx]) return null;
-        return { name: row[nameIdx], id: row[idIdx], role: row[roleIdx] || "Staff" };
+        return { name: row[nameIdx], id: row[idIdx], role: (roleIdx > -1 && row[roleIdx]) ? row[roleIdx] : "Staff" };
     }).filter(s => s !== null);
-
-    return staff;
-}
-
-/**
- * Utility function to get all data from a required sheet.
- * Throws an error if the sheet is not found.
- */
-function getRequiredSheetData(ss, sheetName) {
-    const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) {
-        throw new Error(`Required sheet \"${sheetName}\" not found in the master spreadsheet.`);
-    }
-    return sheet.getDataRange().getValues();
 }

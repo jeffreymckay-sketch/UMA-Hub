@@ -91,8 +91,7 @@ function api_inspector_exportEvents(events) {
  */
 function api_getEventTypes() {
   try {
-    const ss = getMasterDataHub();
-    const sheet = getOrCreateSheet(ss, CONFIG.TABS.EVENT_TYPES, ['Category Name', 'Keywords']);
+    const sheet = getSheet('Event_Types');
     const data = sheet.getDataRange().getValues();
     
     const types = [];
@@ -106,79 +105,6 @@ function api_getEventTypes() {
       }
     }
     return { success: true, data: types };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-
-/**
- * Scans a calendar for frequent event titles to help discover categories.
- */
-function api_discovery_scanCalendar(calId, daysBack) {
-  try {
-    if (!calId) throw new Error("No calendar ID provided.");
-    const cal = CalendarApp.getCalendarById(calId);
-    if (!cal) throw new Error("Calendar not found.");
-
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - (daysBack || 30));
-
-    const events = cal.getEvents(start, end);
-    const frequencyMap = {};
-
-    events.forEach(e => {
-      let title = e.getTitle().toLowerCase().trim();
-      if (title) {
-        frequencyMap[title] = (frequencyMap[title] || 0) + 1;
-      }
-    });
-
-    const sorted = Object.keys(frequencyMap)
-      .map(key => ({ keyword: key, count: frequencyMap[key] }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 50); 
-
-    return { success: true, count: events.length, data: sorted };
-
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-
-/**
- * Saves new Event Type rules to the "Event_Types" tab.
- */
-function api_discovery_saveRules(rules) {
-  try {
-    const ss = getMasterDataHub();
-    const sheet = getOrCreateSheet(ss, CONFIG.TABS.EVENT_TYPES, ['Category Name', 'Keywords']);
-    const data = sheet.getDataRange().getValues();
-    
-    const categoryMap = {}; 
-    for (let i = 1; i < data.length; i++) {
-      categoryMap[data[i][0]] = i + 1;
-    }
-
-    rules.forEach(rule => {
-      const catName = rule.category;
-      const keyword = rule.keyword;
-
-      if (categoryMap[catName]) {
-        const rowIdx = categoryMap[catName];
-        const currentKeywords = sheet.getRange(rowIdx, 2).getValue();
-        if (!currentKeywords.includes(keyword)) {
-          const newKeywords = currentKeywords ? (currentKeywords + ", " + keyword) : keyword;
-          sheet.getRange(rowIdx, 2).setValue(newKeywords);
-        }
-      } else {
-        sheet.appendRow([catName, keyword]);
-        categoryMap[catName] = sheet.getLastRow();
-      }
-    });
-
-    return { success: true };
-
   } catch (e) {
     return { success: false, message: e.message };
   }

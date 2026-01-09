@@ -67,14 +67,33 @@ function api_discovery_scanCalendar(calendarId, daysBack) {
  */
 function api_discovery_saveRules(newRules) {
   try {
-    const ss = getMasterDataHub();
-    let sheet = ss.getSheetByName(CONFIG.TABS.EVENT_TYPES);
-    
-    // Create sheet if missing
-    if (!sheet) {
-      sheet = ss.insertSheet(CONFIG.TABS.EVENT_TYPES);
-      sheet.appendRow(["Category Name", "Keywords (Comma Separated)"]);
-      sheet.getRange(1,1,1,2).setFontWeight("bold");
+    const sheetKey = 'Event_Types';
+    let sheet;
+
+    try {
+      sheet = getSheet(sheetKey);
+    } catch (e) {
+      if (e.message.toLowerCase().includes('not found')) {
+        // If the sheet doesn't exist, create it and update properties.
+        console.log(`Sheet with key '${sheetKey}' not found. Creating it.`);
+        const ss = getMasterDataHub();
+        const newSheetName = sheetKey; // Use the key as the name for the new sheet.
+        
+        sheet = ss.insertSheet(newSheetName);
+        sheet.appendRow(["Category Name", "Keywords (Comma Separated)"]);
+        sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+
+        // Update properties so getSheet() works next time.
+        const settings = getSettings();
+        const sheetTabs = settings.sheetTabs ? JSON.parse(settings.sheetTabs) : {};
+        sheetTabs[sheetKey] = newSheetName;
+        saveSetting('sheetTabs', JSON.stringify(sheetTabs));
+        
+        console.log(`Created sheet '${newSheetName}' and updated script properties.`);
+      } else {
+        // A different error occurred, so re-throw it.
+        throw e;
+      }
     }
 
     const data = sheet.getDataRange().getValues();

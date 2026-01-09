@@ -6,20 +6,19 @@
 
 function api_generateStaffReport(startDateString, endDateString) {
     try {
-        const ss = getMasterDataHub();
-        const reportSheet = getOrCreateSheet(ss, CONFIG.TABS.REPORT_DATA, CONFIG.HEADERS.REPORTING);
+        const reportSheet = getSheet('Report_Data');
         const startDate = new Date(startDateString);
         const endDate = new Date(endDateString);
         if (isNaN(startDate) || isNaN(endDate) || startDate > endDate) throw new Error("Invalid date range.");
 
-        const staffAssignments = getRequiredSheetData(ss, CONFIG.TABS.STAFF_ASSIGNMENTS).slice(1);
-        const staffList = getRequiredSheetData(ss, CONFIG.TABS.STAFF_LIST);
-        const shiftData = getRequiredSheetData(ss, CONFIG.TABS.TECH_HUB_SHIFTS);
-        const courseData = getRequiredSheetData(ss, CONFIG.TABS.COURSE_SCHEDULE);
+        const staffAssignments = getSheet('Staff_Assignments').getDataRange().getValues().slice(1);
+        const staffList = getSheet('Staff_List').getDataRange().getValues();
+        const shiftData = getSheet('TechHub_Shifts').getDataRange().getValues();
+        const courseData = getSheet('Course_Schedule').getDataRange().getValues();
         
-        const staffMap = createDataMap(staffList, CONFIG.COLUMN_KEYS.STAFF_ID);
-        const shiftMap = createDataMap(shiftData, CONFIG.COLUMN_KEYS.SHIFT_ID);
-        const courseMap = createDataMap(courseData, CONFIG.COLUMN_KEYS.COURSE_ID);
+        const staffMap = createDataMap(staffList, 0);
+        const shiftMap = createDataMap(shiftData, 0);
+        const courseMap = createDataMap(courseData, 0);
 
         const reportRows = [];
         for (const assignmentRow of staffAssignments) {
@@ -28,29 +27,50 @@ function api_generateStaffReport(startDateString, endDateString) {
             if (!staffDetails) continue;
 
             let context = { description: 'N/A', durationMinutes: 0, dayOfWeek: null, startTime: null, endTime: null };
-            if (assignment.assignmentType === CONFIG.ASSIGNMENT_TYPES.TECH_HUB) {
+            if (assignment.assignmentType === 'Tech Hub') {
                 const shift = shiftMap[assignment.referenceId];
-                if (shift) { context = { description: shift.Description, dayOfWeek: shift.DayOfWeek, startTime: shift.StartTime, endTime: shift.EndTime, durationMinutes: parseTime(shift.EndTime) - parseTime(shift.StartTime) }; }
-            } else if (assignment.assignmentType === CONFIG.ASSIGNMENT_TYPES.COURSE) {
+                if (shift) { 
+                    const startTime = new Date(shift[2]);
+                    const endTime = new Date(shift[3]);
+                    context = { 
+                        description: shift[1], 
+                        dayOfWeek: shift[4], 
+                        startTime: startTime.toLocaleTimeString(), 
+                        endTime: endTime.toLocaleTimeString(), 
+                        durationMinutes: (endTime - startTime) / 60000 
+                    }; 
+                }
+            } else if (assignment.assignmentType === 'Course') {
                 const course = courseMap[assignment.referenceId];
-                if (course) { context = { description: course.CourseName, dayOfWeek: course.DayOfWeek || 'Monday', startTime: course.StartTime || '10:00', endTime: course.EndTime || '11:00', durationMinutes: 60 }; }
+                if (course) { 
+                    const startTime = new Date(course[3]);
+                    const endTime = new Date(course[4]);
+                    context = { 
+                        description: course[1], 
+                        dayOfWeek: course[2] || 'Monday', 
+                        startTime: startTime.toLocaleTimeString(), 
+                        endTime: endTime.toLocaleTimeString(), 
+                        durationMinutes: 60 
+                    }; 
+                }
             }
 
-            const targetDayIndex = CONFIG.WEEKDAYS.indexOf(context.dayOfWeek);
+            const WEEKDAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+            const targetDayIndex = WEEKDAYS.indexOf(context.dayOfWeek.toUpperCase());
             if (targetDayIndex === -1) continue;
             
             let currentDate = new Date(startDate);
             while (currentDate <= endDate) {
                 if (currentDate.getDay() === targetDayIndex) {
-                    const eventDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), CONFIG.DATE_FORMATS.ISO);
-                    reportRows.push([eventDate, staffDetails.StaffID, staffDetails.FullName, staffDetails.Roles.split(',')[0], assignment.assignmentType, assignment.referenceId, context.description, context.startTime, context.endTime, context.durationMinutes / 60, CONFIG.STATUS.PLANNED, 0]);
+                    const eventDate = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                    reportRows.push([eventDate, staffDetails[0], staffDetails[2], staffDetails[4], assignment.assignmentType, assignment.referenceId, context.description, context.startTime, context.endTime, context.durationMinutes / 60, 'PLANNED', 0]);
                 }
                 currentDate.setDate(currentDate.getDate() + 1);
             }
         }
 
-        if (reportSheet.getLastRow() > 1) reportSheet.getRange(2, 1, reportSheet.getLastRow() - 1, CONFIG.HEADERS.REPORTING.length).clearContent();
-        if (reportRows.length > 0) reportSheet.getRange(2, 1, reportRows.length, CONFIG.HEADERS.REPORTING.length).setValues(reportRows);
+        if (reportSheet.getLastRow() > 1) reportSheet.getRange(2, 1, reportSheet.getLastRow() - 1, 12).clearContent();
+        if (reportRows.length > 0) reportSheet.getRange(2, 1, reportRows.length, 12).setValues(reportRows);
         return { success: true, message: `Generated ${reportRows.length} records.` };
     } catch (e) { return { success: false, message: e.message }; }
 }
