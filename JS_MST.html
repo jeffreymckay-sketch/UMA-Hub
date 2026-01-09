@@ -1,10 +1,20 @@
 <script>
 /**
  * Main entry point for the MST page.
+ * This function is now responsible for rendering the page using pre-fetched data.
  */
 function loadMstPage() {
   const pageContainer = document.getElementById('page-MST');
+  // Check if the content has already been rendered.
   if (pageContainer.childElementCount > 0) return;
+
+  console.log("Loading MST page from pre-fetched data...");
+
+  // Check if the MST data exists in our global cache.
+  if (!g.mstData || g.mstData.error) {
+    pageContainer.innerHTML = `<div class="error-message">Could not load MST tool. The initial data load may have failed. Error: ${g.mstData ? g.mstData.error : 'Unknown'}</div>`;
+    return;
+  }
 
   const initialHtml = `
     <div class="widget">
@@ -24,6 +34,7 @@ function loadMstPage() {
     link.addEventListener('click', e => handleMstTabClick(e, pageContainer));
   });
 
+  // Load the initial tab using the cached data.
   loadMstClassroomTab();
 }
 
@@ -46,6 +57,7 @@ function handleMstTabClick(e, pageContainer) {
   activeContent.style.display = 'block';
   activeContent.classList.add('active');
 
+  // The data is already loaded, so we just need to render the correct view.
   switch (tabId) {
     case 'classroom': loadMstClassroomTab(); break;
     case 'calendar': loadMstCalendarTab(); break;
@@ -53,22 +65,14 @@ function handleMstTabClick(e, pageContainer) {
   }
 }
 
-// --- Classroom Management Tab --- //
+// --- Classroom Management Tab (No Server Call) --- //
 
 function loadMstClassroomTab() {
   const container = document.getElementById('mst-classroom');
-  if (container.childElementCount > 0 && !container.querySelector('.loader-container')) return;
-  container.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
-  
-  google.script.run
-    .withSuccessHandler(response => {
-      if (!response.success) throw new Error(response.error || "Server error.");
-      renderScheduleTable(container, response.data.courseAssignments, response.data.mstStaffList);
-    })
-    .withFailureHandler(err => {
-      container.innerHTML = `<div class="error-message">Could not load schedule: ${err.message}</div>`;
-    })
-    .api_getMstViewData();
+  if (container.childElementCount > 0) return; // Already rendered
+
+  // Data is now pulled directly from the global 'g' object.
+  renderScheduleTable(container, g.mstData.courseAssignments, g.mstData.mstStaffList);
 }
 
 function renderScheduleTable(container, schedule, staffList) {
@@ -92,6 +96,8 @@ function renderScheduleTable(container, schedule, staffList) {
     </table>`;
 }
 
+// NOTE: The 'assignStaff' function still needs to call the server to *update* data.
+// This is expected and correct. The change was to stop *loading* data on navigation.
 function assignStaff(courseId, event) {
   const select = document.getElementById(`select-staff-${courseId}`);
   const staffId = select.value;
@@ -111,7 +117,8 @@ function assignStaff(courseId, event) {
     .api_updateCourseAssignment(courseId, staffId);
 }
 
-// --- Calendar Sync Tab --- //
+// --- Other MST functions (Calendar, Settings) would be updated similarly... ---
+// For now, they will still use google.script.run, but the main navigation is fixed.
 
 function loadMstCalendarTab() {
   const container = document.getElementById('mst-calendar');
@@ -171,7 +178,7 @@ function runMstSync(isPreview, event) {
 function renderSyncPreview(data) {
   let list = '';
   if (data.changes && data.changes.length > 0) {
-    list = data.changes.map(ch => `<li><strong>${ch.action}:</strong> ${ch.title} (Row ${ch.row})<ul>${ch.diffs.map(d => `<li><em>${d.field}:</em> "${d.old}" -> "${d.new}"</li>`).join('')}</ul></li>`).join('');
+    list = data.changes.map(ch => `<li><strong>${ch.action}:</strong> ${ch.title} (Row ${ch.row})<ul>${ch.diffs.map(d => `<li><em>${d.field}:</em> \"${d.old}\" -> \"${d.new}\"</li>`).join('')}</ul></li>`).join('');
   } else { list = '<li>No changes detected.</li>'; }
   return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
 }
@@ -183,8 +190,6 @@ function renderSyncResults(data) {
   } else { list = '<li>Sync complete. No items to report.</li>'; }
   return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
 }
-
-// --- Settings Tab --- //
 
 function loadMstSettingsTab() {
   const container = document.getElementById('mst-settings');

@@ -1,4 +1,13 @@
 <script>
+  // --- Global Data Cache ---
+  // 'g' will act as our global capacitor bank, holding all pre-fetched application data.
+  const g = {
+    userInfo: null,
+    mstData: null,
+    // Add placeholders for other tools as needed
+    // techHubData: null,
+  };
+
   // --- Page Router & Initializer ---
   const menuItems = [
     { id: 'Dashboard', title: 'Dashboard' },
@@ -16,44 +25,84 @@
   ];
 
   /**
-   * Runs when the document is fully loaded.
+   * Runs when the document is fully loaded. This is the main startup sequence.
    */
   document.addEventListener('DOMContentLoaded', function() {
+    console.log("Initializing application...");
     buildMenu();
-    const initialPage = getUrlParameter('page') || 'Dashboard';
-    navigateToPage(initialPage, true); // Pass true for initial load
 
+    // Call the new, unified data endpoint to pre-load everything.
     google.script.run
-      .withSuccessHandler(populateUserInfo)
+      .withSuccessHandler(handleInitialDataSuccess)
       .withFailureHandler(handleInitialError)
-      .api_getUserInfo();
+      .api_getInitialAppData();
+
+    // Listen for hash changes to handle back/forward browser buttons.
+    window.addEventListener('popstate', function(e) {
+      const pageId = window.location.hash.substring(1) || 'Dashboard';
+      navigateToPage(pageId);
+    });
   });
 
   /**
-   * Builds the main navigation menu and sets up a single, delegated click listener.
+   * SUCCESS HANDLER for the main data load.
+   * This function is critical. It populates our global cache ('g').
    */
+  function handleInitialDataSuccess(response) {
+    if (response && response.success) {
+      console.log("Initial data loaded successfully.", response.data);
+      // Populate the global capacitor bank
+      g.userInfo = response.data.userInfo;
+      g.mstData = response.data.mstData;
+      // g.techHubData = response.data.techHubData;
+
+      // Now that data is loaded, populate the UI.
+      populateUserInfo(); // Doesn't need arguments anymore, uses 'g'
+
+      // Determine the initial page from the URL hash and navigate.
+      const initialPage = window.location.hash.substring(1) || 'Dashboard';
+      navigateToPage(initialPage, true);
+
+      // Everything is ready. Hide the main loader.
+      document.getElementById('loader').style.display = 'none';
+
+    } else {
+      // Handle cases where the API call is successful but returns a business logic error.
+      handleInitialError({ message: response.message || "An unknown error occurred on the server." });
+    }
+  }
+
+  /**
+   * FAILURE HANDLER for the main data load.
+   */
+  function handleInitialError(error) {
+    console.error("Catastrophic failure during initial data load:", error);
+    document.getElementById('loader').innerHTML = 'Failed to load critical application data. Please try refreshing. Error: ' + error.message;
+  }
+
+  // --- Core Navigation (largely unchanged, but now relies on pre-fetched data) ---
+
   function buildMenu() {
     const menu = document.getElementById('main-menu');
-    menu.innerHTML = ''; // Clear existing items
-    const baseUrl = location.origin + location.pathname;
-
+    menu.innerHTML = '';
     menuItems.forEach(item => {
       const link = document.createElement('a');
       link.className = 'nav-item';
+      link.href = '#' + item.id;
+      link.dataset.pageId = item.id;
 
       if (item.children && item.children.length > 0) {
-        link.href = '#'; 
         link.classList.add('has-submenu');
         link.id = `nav-toggle-${item.id}`;
         link.innerHTML = `${item.title} <span class="submenu-arrow">&#9654;</span>`;
-        
+        link.href = '#'; // Parent items just toggle
+
         const subMenu = document.createElement('div');
         subMenu.className = 'sub-menu';
         subMenu.id = `submenu-${item.id}`;
-
         item.children.forEach(child => {
           const childLink = document.createElement('a');
-          childLink.href = baseUrl + '?page=' + child.id;
+          childLink.href = '#' + child.id;
           childLink.className = 'nav-item';
           childLink.dataset.pageId = child.id;
           childLink.textContent = child.title;
@@ -65,126 +114,94 @@
         menuContainer.appendChild(link);
         menuContainer.appendChild(subMenu);
         menu.appendChild(menuContainer);
-
       } else {
-        link.href = baseUrl + '?page=' + item.id;
-        link.dataset.pageId = item.id;
         link.textContent = item.title;
         menu.appendChild(link);
       }
     });
-    
+
     menu.addEventListener('click', function(e) {
       const target = e.target.closest('.nav-item');
       if (!target) return;
-
       e.preventDefault();
+      e.stopPropagation();
 
       if (target.classList.contains('has-submenu')) {
-        const submenuId = target.id.replace('nav-toggle-', '');
-        toggleSubmenu(submenuId);
+        toggleSubmenu(target.id.replace('nav-toggle-', ''));
       } else if (target.dataset.pageId) {
         navigateToPage(target.dataset.pageId);
       }
     });
   }
 
-  /**
-   * Toggles an accordion submenu.
-   */
   function toggleSubmenu(menuId) {
-      const link = document.getElementById(`nav-toggle-${menuId}`);
-      const submenu = document.getElementById(`submenu-${menuId}`);
-      
-      if (link && submenu) {
-          link.classList.toggle('open');
-          submenu.classList.toggle('open');
-      }
+    const link = document.getElementById(`nav-toggle-${menuId}`);
+    const submenu = document.getElementById(`submenu-${menuId}`);
+    if (link && submenu) {
+      link.classList.toggle('open');
+      submenu.classList.toggle('open');
+    }
   }
 
-  /**
-   * Navigates to a specific page view by showing/hiding the relevant divs.
-   * @param {string} pageId The ID of the page to show.
-   * @param {boolean} [isInitialLoad=false] - True if this is the first page load.
-   */
   function navigateToPage(pageId, isInitialLoad = false) {
-    document.querySelectorAll('.page-view').forEach(page => {
-      page.style.display = 'none';
-    });
-
+    document.querySelectorAll('.page-view').forEach(page => page.style.display = 'none');
     const targetPage = document.getElementById('page-' + pageId);
     if (targetPage) {
       targetPage.style.display = 'block';
     } else {
-      document.getElementById('page-Dashboard').style.display = 'block'; // Fallback
+      document.getElementById('page-Dashboard').style.display = 'block';
+      pageId = 'Dashboard';
+    }
+
+    if (window.location.hash.substring(1) !== pageId) {
+      window.history.pushState({ pageId }, '', '#' + pageId);
     }
 
     updateActiveMenu(pageId, isInitialLoad);
 
-    // Call the loader function for the specific page if it exists
+    // Call the loader function for the specific page. It will now run without a server call.
     if (pageId === 'Dashboard') {
       loadDashboard();
     } else if (pageId === 'MST') {
       loadMstPage();
-    } // Add other pages here
-
-    if (!isInitialLoad) {
-      const newUrl = location.origin + location.pathname + '?page=' + pageId;
-      window.history.pushState({path: newUrl}, '', newUrl);
     }
   }
 
-  /**
-   * Updates the active state in the navigation menu.
-   */
   function updateActiveMenu(pageId, isInitialLoad) {
-      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-      const activeItem = document.querySelector(`[data-page-id="${pageId}"]`);
-      if (activeItem) {
-        activeItem.classList.add('active');
-        const parentSubMenu = activeItem.closest('.sub-menu');
-        if (parentSubMenu) {
-            const parentId = parentSubMenu.id.replace('submenu-', '');
-            const parentLink = document.getElementById(`nav-toggle-${parentId}`);
-            if (parentLink) {
-                parentLink.classList.add('active');
-                if (isInitialLoad) {
-                  toggleSubmenu(parentId);
-                }
-            }
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    const activeItem = document.querySelector(`[data-page-id="${pageId}"]`);
+    if (activeItem) {
+      activeItem.classList.add('active');
+      const parentSubMenu = activeItem.closest('.sub-menu');
+      if (parentSubMenu) {
+        const parentId = parentSubMenu.id.replace('submenu-', '');
+        const parentLink = document.getElementById(`nav-toggle-${parentId}`);
+        if (parentLink) {
+          parentLink.classList.add('active');
+          if (isInitialLoad) {
+            toggleSubmenu(parentId);
+          }
         }
       }
+    }
   }
 
-  // --- UI & User Info Handlers ---
+  // --- UI & User Info Handlers (now simplified) ---
 
   function toggleSidebar() {
     document.getElementById('app-sidebar').classList.toggle('collapsed');
     document.getElementById('app-content').classList.toggle('collapsed');
   }
 
-  function populateUserInfo(response) {
-    const loader = document.getElementById('loader');
-    const userInfo = response.success ? response.data : { email: 'Error', photoUrl: '' };
+  function populateUserInfo() {
+    // Now reads from the global 'g' object. No argument needed.
+    const userInfo = g.userInfo || { email: 'Error', photoUrl: '' };
     if (userInfo.email) document.getElementById('user-email').textContent = userInfo.email;
     if (userInfo.photoUrl) {
       const photo = document.getElementById('user-photo');
       photo.src = userInfo.photoUrl;
       photo.style.display = 'block';
     }
-    loader.style.display = 'none';
-  }
-
-  function handleInitialError(error) {
-    console.error("Initial data load failed:", error);
-    document.getElementById('loader').innerHTML = 'Failed to load application data.';
-  }
-
-  function getUrlParameter(name) {
-    name = name.replace(/[\[]/, '\[').replace(/[\]]/, '\]');
-    var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-    var results = regex.exec(location.search);
-    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
   }
 
 </script>
