@@ -1,74 +1,135 @@
 <script>
-/**
- * ===================================================================
- * DASHBOARD UI FUNCTIONS (CLEANED v3)
- * ===================================================================
- */
-
-/**
- * Populates the dashboard content areas with data from the core load.
- * This is called by the main success handler in JS_Core.html.
- */
-function populateDashboard(dashboardData) {
-    if (!dashboardData) {
-        console.error("populateDashboard was called with no data.");
-        return;
-    }
-
-    const availabilityContainer = document.getElementById('my-availability-list');
-    const preferencesContainer = document.getElementById('my-preferences-list');
-
-    if (availabilityContainer) {
-        renderAvailability(availabilityContainer, dashboardData.availability);
-    } else {
-        console.error("CRITICAL: Could not find element with ID 'my-availability-list' to render data.");
-    }
-
-    if (preferencesContainer) {
-        renderPreferences(preferencesContainer, dashboardData.preferences);
-    } else {
-        console.error("CRITICAL: Could not find element with ID 'my-preferences-list' to render data.");
-    }
-}
-
-/**
- * Renders the availability data into its container.
- */
-function renderAvailability(container, data) {
-    if (!container) return;
-
-    if (!data || data.length === 0) {
-        container.innerHTML = '<p class="not-available">No availability data has been recorded.</p>';
-        return;
-    }
-
-    let content = '<table class="data-table zebra-stripes"><thead><tr><th>Day</th><th>Start Time</th><th>End Time</th><th></th></tr></thead><tbody>';
-    data.forEach((row, index) => {
-        // The row index from the original sheet is useful for delete operations.
-        const originalRowIndex = row[row.length - 1]; 
-        content += `<tr><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td><button class="button btn-sm danger" onclick="deleteAvailability(${originalRowIndex})">X</button></td></tr>`;
-    });
-    content += '</tbody></table>';
-    container.innerHTML = content;
-}
-
-/**
- * Renders the preferences data into its container.
- */
-function renderPreferences(container, data) {
-    if (!container) return;
-
-    if (!data || data.length === 0) {
-        container.innerHTML = '<p class="not-available">No work preferences have been recorded.</p>';
-        return;
-    }
+  // --- Main Loader ---
+  function loadDashboard() {
+    const dashboardView = document.getElementById('page-Dashboard');
+    dashboardView.innerHTML = '<div class="loader-ring"></div>';
     
-    let content = '<ul style="list-style:none; padding:0;">';
-    data.forEach(row => {
-        content += `<li style="margin-bottom:8px; padding:5px; background:#f1f1f1; border-radius:3px;"><strong>${row[1]}:</strong> ${row[2]}</li>`;
-    });
-    content += '</ul>';
-    container.innerHTML = content;
-}
+    google.script.run
+      .withSuccessHandler(renderDashboard)
+      .withFailureHandler(showError)
+      .api_getDashboardData();
+  }
+
+  // --- Render Functions ---
+  function renderDashboard(response) {
+    if (!response.success) {
+      showError(response.message);
+      return;
+    }
+
+    const { availability, preferences } = response.data;
+    const dashboardView = document.getElementById('page-Dashboard');
+    dashboardView.innerHTML = ''; // Clear loader
+
+    // Build Availability Widget
+    const availabilityWidget = document.createElement('div');
+    availabilityWidget.className = 'widget';
+    availabilityWidget.innerHTML = buildAvailabilityHtml(availability);
+    dashboardView.appendChild(availabilityWidget);
+
+    // Build Preferences Widget
+    const preferencesWidget = document.createElement('div');
+    preferencesWidget.className = 'widget';
+    preferencesWidget.innerHTML = buildPreferencesHtml(preferences);
+    dashboardView.appendChild(preferencesWidget);
+  }
+
+  function buildAvailabilityHtml(availabilityData) {
+    let tableRows = availabilityData.map(slot => `
+      <tr>
+        <td>${slot.day}</td>
+        <td>${slot.start || 'N/A'}</td>
+        <td>${slot.end || 'N/A'}</td>
+        <td><button class="button-danger" onclick="deleteAvailability('${slot.id}')">Delete</button></td>
+      </tr>`).join('');
+
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const dayOptions = days.map(d => `<option value="${d}">${d}</option>`).join('');
+
+    return `
+      <h2>My Weekly Availability</h2>
+      <table class="data-table">
+        <thead><tr><th>Day</th><th>Start Time</th><th>End Time</th><th>Action</th></tr></thead>
+        <tbody>${tableRows.length > 0 ? tableRows : '<tr><td colspan="4" style="text-align:center;">No availability set.</td></tr>'}</tbody>
+      </table>
+      <div class="form-container">
+        <h3>Add New Availability</h3>
+        <form id="add-availability-form" class="inline-form">
+          <select name="day" required>${dayOptions}</select>
+          <input type="time" name="start" required>
+          <input type="time" name="end" required>
+          <button type="button" onclick="addAvailability()">Add Slot</button>
+        </form>
+      </div>
+    `;
+  }
+
+  function buildPreferencesHtml(preferencesData) {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    const timeSlots = ["Morning", "Afternoon", "Evening"];
+    const options = ["Yes Please", "No Thanks", "Eh, Sure"];
+
+    let tableRows = days.map(day => {
+      let cells = timeSlots.map(slot => {
+        const timeBlock = `${day}_${slot}`;
+        const currentPref = preferencesData[timeBlock] || 'Eh, Sure';
+        let selectOptions = options.map(opt => 
+          `<option value="${opt}" ${opt === currentPref ? 'selected' : ''}>${opt}</option>`
+        ).join('');
+        return `<td><select name="${timeBlock}">${selectOptions}</select></td>`;
+      }).join('');
+      return `<tr><th>${day}</th>${cells}</tr>`;
+    }).join('');
+
+    return `
+      <h2>My Work Preferences</h2>
+      <p>Let us know what time blocks work best for you.</p>
+      <form id="preferences-form">
+        <table class="data-table preferences-table">
+          <thead><tr><th></th><th>Morning</th><th>Afternoon</th><th>Evening</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div class="form-actions">
+          <button type="button" class="button-primary" onclick="savePreferences()">Save Preferences</button>
+        </div>
+      </form>
+    `;
+  }
+
+  // --- Client-to-Server Communication ---
+  function handleBackendResponse(response) {
+    if (response.success) {
+      alert(response.message);
+      loadDashboard(); // Reload the dashboard
+    } else {
+      showError(response.message);
+    }
+  }
+
+  function addAvailability() {
+    const form = document.getElementById('add-availability-form');
+    const formData = Object.fromEntries(new FormData(form).entries());
+    if (!formData.day || !formData.start || !formData.end) {
+      alert('Please fill out all availability fields.');
+      return;
+    }
+    google.script.run.withSuccessHandler(handleBackendResponse).withFailureHandler(showError).api_addAvailability(formData);
+  }
+
+  function deleteAvailability(recordId) {
+    if (!confirm('Are you sure you want to delete this slot?')) return;
+    google.script.run.withSuccessHandler(handleBackendResponse).withFailureHandler(showError).api_deleteAvailability(recordId);
+  }
+
+  function savePreferences() {
+    const form = document.getElementById('preferences-form');
+    const formData = Object.fromEntries(new FormData(form).entries());
+    google.script.run.withSuccessHandler(handleBackendResponse).withFailureHandler(showError).api_updateStaffPreferences(formData);
+  }
+  
+  function showError(message, error) {
+    console.error('Error received:', message, error);
+    alert('An error occurred: ' + message);
+  }
 
 </script>

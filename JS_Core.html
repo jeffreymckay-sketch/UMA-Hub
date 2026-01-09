@@ -1,161 +1,190 @@
 <script>
-/**
- * ===================================================================
- * CORE APPLICATION INITIALIZER (v6 - FINAL & CORRECTED)
- * ===================================================================
- */
+  // --- Page Router & Initializer ---
+  const menuItems = [
+    { id: 'Dashboard', title: 'Dashboard' },
+    {
+      id: 'Logistics',
+      title: 'Logistics',
+      children: [
+        { id: 'MST', title: 'MST' },
+        { id: 'TechHub', title: 'Tech Hub' }
+      ]
+    },
+    { id: 'Proctoring', title: 'Proctoring' },
+    { id: 'Zoom', title: 'Zoom' },
+    { id: 'Settings', title: 'Settings' }
+  ];
 
-document.addEventListener('DOMContentLoaded', initializeCoreApplication);
+  /**
+   * Runs when the document is fully loaded.
+   */
+  document.addEventListener('DOMContentLoaded', function() {
+    buildMenu();
+    const initialPage = getUrlParameter('page') || 'Dashboard';
+    navigateToPage(initialPage, true); // Pass true for initial load
 
-function initializeCoreApplication() {
-    showGlobalLoader("Loading Application Data...");
     google.script.run
-        .withSuccessHandler(handleCoreDataSuccess)
-        .withFailureHandler(handleFatalError)
-        .api_getCoreData();
-}
+      .withSuccessHandler(populateUserInfo)
+      .withFailureHandler(handleInitialError)
+      .api_getUserInfo();
+  });
 
-function handleCoreDataSuccess(response) {
-    if (!response.success) {
-        handleFatalError({ message: response.message || "An unknown server error occurred." });
-        return;
-    }
+  /**
+   * Builds the main navigation menu and sets up a single, delegated click listener.
+   */
+  function buildMenu() {
+    const menu = document.getElementById('main-menu');
+    menu.innerHTML = ''; // Clear existing items
+    const baseUrl = location.origin + location.pathname;
 
-    const { access, dashboard, staff } = response.data;
+    menuItems.forEach(item => {
+      const link = document.createElement('a');
+      link.className = 'nav-item';
 
-    if (!access.pages || access.pages.length === 0) {
-        promptForInitialConfiguration("The application configuration is missing.");
-        return;
-    }
+      if (item.children && item.children.length > 0) {
+        link.href = '#'; 
+        link.classList.add('has-submenu');
+        link.id = `nav-toggle-${item.id}`;
+        link.innerHTML = `${item.title} <span class="submenu-arrow">&#9654;</span>`;
+        
+        const subMenu = document.createElement('div');
+        subMenu.className = 'sub-menu';
+        subMenu.id = `submenu-${item.id}`;
 
-    App.user = { email: access.email, role: access.userRole };
-    App.accessMatrix = access.matrix;
-    App.staffList = staff;
+        item.children.forEach(child => {
+          const childLink = document.createElement('a');
+          childLink.href = baseUrl + '?page=' + child.id;
+          childLink.className = 'nav-item';
+          childLink.dataset.pageId = child.id;
+          childLink.textContent = child.title;
+          subMenu.appendChild(childLink);
+        });
 
-    const menuItemsBuilt = buildNavigation(access.pages, App.user.role, App.accessMatrix);
+        const menuContainer = document.createElement('div');
+        menuContainer.className = 'submenu-container';
+        menuContainer.appendChild(link);
+        menuContainer.appendChild(subMenu);
+        menu.appendChild(menuContainer);
 
-    if (menuItemsBuilt === 0) {
-        const message = `Your user role ('${App.user.role}') does not have permission to view any pages, or the application settings are misconfigured.`;
-        promptForInitialConfiguration(message);
-        return;
-    }
-
-    populateDashboard(dashboard);
-    populateStaffSelector(staff);
-
-    navigateToPage('page-dashboard');
-    hideGlobalLoader();
-}
-
-/**
- * Builds the main navigation menu and returns the number of items created.
- * This version is robust against configuration mismatches.
- * @returns {number} The number of menu items added to the DOM.
- */
-function buildNavigation(pages, userRole, matrix) {
-    const nav = document.getElementById('main-nav');
-    if (!nav) return 0;
-
-    nav.innerHTML = '';
-    let itemsCreated = 0;
-
-    pages.forEach(page => {
-        // --- THE DEFINITIVE FIX --- 
-        // This checks that a permission entry actually exists for the page before trying to access it.
-        // This prevents a TypeError crash if settings and permissions sheets are out of sync.
-        if (page && page.id && matrix[page.id] && matrix[page.id][userRole]) {
-            const li = document.createElement('li');
-            li.className = 'nav-item';
-            li.id = `nav-${page.id}`;
-            li.onclick = () => navigateToPage(`page-${page.id}`);
-            li.innerHTML = `<span class="nav-icon">${page.icon || ''}</span><span>${page.name}</span>`;
-            nav.appendChild(li);
-            itemsCreated++;
-        }
+      } else {
+        link.href = baseUrl + '?page=' + item.id;
+        link.dataset.pageId = item.id;
+        link.textContent = item.title;
+        menu.appendChild(link);
+      }
     });
-    return itemsCreated;
-}
-
-/**
- * Displays a prompt for the user to initialize or reset settings.
- */
-function promptForInitialConfiguration(reason) {
-    hideGlobalLoader();
-    const promptId = 'first-run-prompt';
-    if (document.getElementById(promptId)) return; // Avoid duplicate prompts
-
-    const promptHtml = `
-        <div id="${promptId}" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 48, 87, 0.95); display: flex; align-items: center; justify-content: center; z-index: 10000; color: white; text-align: center;">
-            <div>
-                <h2 style="color: #f37021;">Application Setup Required</h2>
-                <p style="max-width: 450px; margin: 20px auto; line-height: 1.6;">
-                    <strong>Reason:</strong> ${reason}<br><br>
-                    Click the button below to apply the default configuration. This will fix issues where the menu is empty or incorrect.
-                </p>
-                <button id="run-setup-btn" class="button" style="background-color: #f37021; color: white; font-size: 1.2rem; padding: 15px 30px; border: none; cursor: pointer;">Reset & Reload</button>
-                <div id="setup-status" style="margin-top: 15px;"></div>
-            </div>
-        </div>`;
     
-    document.body.insertAdjacentHTML('beforeend', promptHtml);
-    
-    document.getElementById('run-setup-btn').onclick = function() {
-        this.disabled = true;
-        document.getElementById('setup-status').textContent = 'Configuring...';
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res.success) {
-                    document.getElementById('setup-status').innerHTML = `<span style="color: #A4D65E;">Success! Reloading page...</span>`;
-                    setTimeout(() => window.top.location.reload(), 1500);
-                } else {
-                    this.disabled = false;
-                    document.getElementById('setup-status').innerHTML = `<span style="color: #d32f2f;">Error: ${res.message}</span>`;
+    menu.addEventListener('click', function(e) {
+      const target = e.target.closest('.nav-item');
+      if (!target) return;
+
+      e.preventDefault();
+
+      if (target.classList.contains('has-submenu')) {
+        const submenuId = target.id.replace('nav-toggle-', '');
+        toggleSubmenu(submenuId);
+      } else if (target.dataset.pageId) {
+        navigateToPage(target.dataset.pageId);
+      }
+    });
+  }
+
+  /**
+   * Toggles an accordion submenu.
+   */
+  function toggleSubmenu(menuId) {
+      const link = document.getElementById(`nav-toggle-${menuId}`);
+      const submenu = document.getElementById(`submenu-${menuId}`);
+      
+      if (link && submenu) {
+          link.classList.toggle('open');
+          submenu.classList.toggle('open');
+      }
+  }
+
+  /**
+   * Navigates to a specific page view by showing/hiding the relevant divs.
+   * @param {string} pageId The ID of the page to show.
+   * @param {boolean} [isInitialLoad=false] - True if this is the first page load.
+   */
+  function navigateToPage(pageId, isInitialLoad = false) {
+    document.querySelectorAll('.page-view').forEach(page => {
+      page.style.display = 'none';
+    });
+
+    const targetPage = document.getElementById('page-' + pageId);
+    if (targetPage) {
+      targetPage.style.display = 'block';
+    } else {
+      document.getElementById('page-Dashboard').style.display = 'block'; // Fallback
+    }
+
+    updateActiveMenu(pageId, isInitialLoad);
+
+    // Call the loader function for the specific page if it exists
+    if (pageId === 'Dashboard') {
+      loadDashboard();
+    } else if (pageId === 'MST') {
+      loadMstPage();
+    } // Add other pages here
+
+    if (!isInitialLoad) {
+      const newUrl = location.origin + location.pathname + '?page=' + pageId;
+      window.history.pushState({path: newUrl}, '', newUrl);
+    }
+  }
+
+  /**
+   * Updates the active state in the navigation menu.
+   */
+  function updateActiveMenu(pageId, isInitialLoad) {
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      const activeItem = document.querySelector(`[data-page-id="${pageId}"]`);
+      if (activeItem) {
+        activeItem.classList.add('active');
+        const parentSubMenu = activeItem.closest('.sub-menu');
+        if (parentSubMenu) {
+            const parentId = parentSubMenu.id.replace('submenu-', '');
+            const parentLink = document.getElementById(`nav-toggle-${parentId}`);
+            if (parentLink) {
+                parentLink.classList.add('active');
+                if (isInitialLoad) {
+                  toggleSubmenu(parentId);
                 }
-            })
-            .withFailureHandler(err => {
-                 this.disabled = false;
-                 document.getElementById('setup-status').innerHTML = `<span style="color: #d32f2f;">Fatal Error: ${err.message}</span>`;
-            })
-            .api_initializeApplicationSettings();
-    };
-}
+            }
+        }
+      }
+  }
 
-// --- Other Core Functions ---
+  // --- UI & User Info Handlers ---
 
-function navigateToPage(pageId) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
-    document.querySelectorAll('.nav-item').forEach(li => li.classList.remove('active'));
-    const targetPage = document.getElementById(pageId);
-    const targetNav = document.getElementById(`nav-${pageId.replace('page-','')}`);
-    if (targetPage) targetPage.classList.add('active-page');
-    if (targetNav) targetNav.classList.add('active');
-}
+  function toggleSidebar() {
+    document.getElementById('app-sidebar').classList.toggle('collapsed');
+    document.getElementById('app-content').classList.toggle('collapsed');
+  }
 
-function populateStaffSelector(staffList) {
-    const selectors = document.querySelectorAll('.staff-selector');
-    selectors.forEach(select => {
-        select.innerHTML = '';
-        select.appendChild(new Option('Select Staff...', ''));
-        if (staffList) staffList.forEach(staff => select.appendChild(new Option(staff.name, staff.id)));
-    });
-}
+  function populateUserInfo(response) {
+    const loader = document.getElementById('loader');
+    const userInfo = response.success ? response.data : { email: 'Error', photoUrl: '' };
+    if (userInfo.email) document.getElementById('user-email').textContent = userInfo.email;
+    if (userInfo.photoUrl) {
+      const photo = document.getElementById('user-photo');
+      photo.src = userInfo.photoUrl;
+      photo.style.display = 'block';
+    }
+    loader.style.display = 'none';
+  }
 
-function handleFatalError(error) {
-    hideGlobalLoader();
-    const msg = error.message || 'An unknown error occurred.';
-    if (document.getElementById('first-run-prompt')) return;
-    document.body.innerHTML = `<div style="color: #d32f2f; padding: 40px;"><h3>Application Error</h3><p>${msg}</p></div>`;
-}
+  function handleInitialError(error) {
+    console.error("Initial data load failed:", error);
+    document.getElementById('loader').innerHTML = 'Failed to load application data.';
+  }
 
-function showGlobalLoader(message) {
-    const loader = document.getElementById('global-loader');
-    if(loader) { loader.querySelector('p').textContent = message; loader.style.display = 'flex'; }
-}
+  function getUrlParameter(name) {
+    name = name.replace(/[\[]/, '\[').replace(/[\]]/, '\]');
+    var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+    var results = regex.exec(location.search);
+    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+  }
 
-function hideGlobalLoader() {
-    const loader = document.getElementById('global-loader');
-    if(loader) { loader.style.display = 'none'; }
-}
-
-const App = { user: {}, accessMatrix: {}, staffList: [] };
 </script>

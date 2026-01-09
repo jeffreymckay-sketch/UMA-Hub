@@ -1,0 +1,262 @@
+<script>
+/**
+ * Main entry point for the MST page.
+ */
+function loadMstPage() {
+  const pageContainer = document.getElementById('page-MST');
+  if (pageContainer.childElementCount > 0) return;
+
+  const initialHtml = `
+    <div class="widget">
+      <nav class="tab-nav">
+        <a href="#" class="tab-link active" data-tab="classroom">Classroom Management</a>
+        <a href="#" class="tab-link" data-tab="calendar">Calendar Sync</a>
+        <a href="#" class="tab-link" data-tab="settings">Settings</a>
+      </nav>
+      <div id="mst-classroom" class="tab-content active"></div>
+      <div id="mst-calendar" class="tab-content" style="display:none;"></div>
+      <div id="mst-settings" class="tab-content" style="display:none;"></div>
+    </div>
+  `;
+  pageContainer.innerHTML = initialHtml;
+
+  pageContainer.querySelectorAll('.tab-link').forEach(link => {
+    link.addEventListener('click', e => handleMstTabClick(e, pageContainer));
+  });
+
+  loadMstClassroomTab();
+}
+
+/**
+ * Handles tab navigation clicks specifically for the MST page.
+ */
+function handleMstTabClick(e, pageContainer) {
+  e.preventDefault();
+  const tabId = e.target.dataset.tab;
+
+  pageContainer.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
+  e.target.classList.add('active');
+
+  pageContainer.querySelectorAll('.tab-content').forEach(c => {
+    c.style.display = 'none';
+    c.classList.remove('active');
+  });
+
+  const activeContent = document.getElementById(`mst-${tabId}`);
+  activeContent.style.display = 'block';
+  activeContent.classList.add('active');
+
+  switch (tabId) {
+    case 'classroom': loadMstClassroomTab(); break;
+    case 'calendar': loadMstCalendarTab(); break;
+    case 'settings': loadMstSettingsTab(); break;
+  }
+}
+
+// --- Classroom Management Tab --- //
+
+function loadMstClassroomTab() {
+  const container = document.getElementById('mst-classroom');
+  if (container.childElementCount > 0 && !container.querySelector('.loader-container')) return;
+  container.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
+  
+  google.script.run
+    .withSuccessHandler(response => {
+      if (!response.success) throw new Error(response.error || "Server error.");
+      renderScheduleTable(container, response.data.courseAssignments, response.data.mstStaffList);
+    })
+    .withFailureHandler(err => {
+      container.innerHTML = `<div class="error-message">Could not load schedule: ${err.message}</div>`;
+    })
+    .api_getMstViewData();
+}
+
+function renderScheduleTable(container, schedule, staffList) {
+  const staffOptions = staffList.map(staff => `<option value="${staff.id}">${staff.name}</option>`).join('');
+  container.innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>Course</th><th>Day</th><th>Time</th><th>Location</th><th>Assigned Staff</th><th>Actions</th></tr></thead>
+      <tbody>
+        ${schedule.map(item => `
+          <tr data-course-id="${item.id}">
+            <td>${item.itemName}</td><td>${item.courseDay}</td><td>${item.courseTime}</td><td>${item.location}</td>
+            <td id="staff-cell-${item.id}">${item.staffName || 'Not Assigned'}</td>
+            <td>
+              <div class="inline-form">
+                <select id="select-staff-${item.id}" class="form-field"><option value="">-- Select --</option>${staffOptions}</select>
+                <button onclick="assignStaff('${item.id}', event)">Assign</button>
+              </div>
+            </td>
+          </tr>`).join('') || '<tr><td colspan="6">No schedule data found.</td></tr>'}
+      </tbody>
+    </table>`;
+}
+
+function assignStaff(courseId, event) {
+  const select = document.getElementById(`select-staff-${courseId}`);
+  const staffId = select.value;
+  if (!staffId) { alert('Please select a staff member.'); return; }
+  
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '...';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.success) {
+        document.getElementById(`staff-cell-${courseId}`).textContent = select.options[select.selectedIndex].text;
+      } else { alert('Save Failed: ' + res.error); }
+      btn.disabled = false; btn.textContent = 'Assign';
+    })
+    .withFailureHandler(err => { alert('Error: ' + err.message); btn.disabled = false; btn.textContent = 'Assign'; })
+    .api_updateCourseAssignment(courseId, staffId);
+}
+
+// --- Calendar Sync Tab --- //
+
+function loadMstCalendarTab() {
+  const container = document.getElementById('mst-calendar');
+  if (container.childElementCount > 0) return;
+  container.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
+
+  google.script.run
+    .withSuccessHandler(res => res.success ? renderCalendarSyncForm(container, res.data) : container.innerHTML = `<div class="error-message">${res.message}</div>`)
+    .withFailureHandler(err => container.innerHTML = `<div class="error-message">Error: ${err.message}</div>`)
+    .getWritableCalendars();
+}
+
+function renderCalendarSyncForm(container, calendars) {
+  const calOptions = calendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  container.innerHTML = `
+    <div class="form-grid" style="max-width: 800px;">
+      <div class="form-field full-width">
+        <label for="mst-calendar-select">Select Google Calendar</label>
+        <select id="mst-calendar-select" class="form-field">${calOptions}</select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="button-primary" onclick="runMstSync(true, event)">Preview Changes</button>
+      <button onclick="runMstSync(false, event)">Run Sync</button>
+    </div>
+    <div id="mst-sync-results" class="feedback-container"></div>`;
+}
+
+function runMstSync(isPreview, event) {
+  const calId = document.getElementById('mst-calendar-select').value;
+  if (!calId) return;
+
+  const resultsDiv = document.getElementById('mst-sync-results');
+  resultsDiv.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
+  
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = isPreview ? 'Previewing...' : 'Syncing...';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (!res.success) {
+        resultsDiv.innerHTML = `<div class="error-message">Error: ${res.message}</div>`;
+      } else {
+        resultsDiv.innerHTML = res.isPreview ? renderSyncPreview(res) : renderSyncResults(res);
+      }
+      btn.disabled = false;
+      btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
+    })
+    .withFailureHandler(err => {
+      resultsDiv.innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+      btn.disabled = false;
+      btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
+    })
+    .api_runMstCalendarSync(calId, isPreview);
+}
+
+function renderSyncPreview(data) {
+  let list = '';
+  if (data.changes && data.changes.length > 0) {
+    list = data.changes.map(ch => `<li><strong>${ch.action}:</strong> ${ch.title} (Row ${ch.row})<ul>${ch.diffs.map(d => `<li><em>${d.field}:</em> "${d.old}" -> "${d.new}"</li>`).join('')}</ul></li>`).join('');
+  } else { list = '<li>No changes detected.</li>'; }
+  return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
+}
+
+function renderSyncResults(data) {
+  let list = '';
+  if (data.results && data.results.length > 0) {
+    list = data.results.map(r => `<li><strong>${r.title}:</strong> ${r.status} - <em>${r.details}</em></li>`).join('');
+  } else { list = '<li>Sync complete. No items to report.</li>'; }
+  return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
+}
+
+// --- Settings Tab --- //
+
+function loadMstSettingsTab() {
+  const container = document.getElementById('mst-settings');
+  if (container.childElementCount > 0 && !container.querySelector('.loader-container')) return;
+  container.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (!res.success) throw new Error(res.message);
+      renderMstSettingsForm(container, res.data);
+    })
+    .withFailureHandler(err => container.innerHTML = `<div class="error-message">Could not load settings: ${err.message}</div>`)
+    .api_getMstSettings();
+}
+
+function renderMstSettingsForm(container, data) {
+  const savedTab = data.settings.sourceTabName || '';
+  const sheetNames = data.sheetNames || [];
+
+  const optionsHtml = sheetNames.map(name =>
+    `<option value="${name}" ${name === savedTab ? 'selected' : ''}>${name}</option>`
+  ).join('');
+
+  container.innerHTML = `
+    <div class="form-grid" style="max-width: 800px;">
+      <div class="form-field full-width">
+        <label for="mst-source-tab-name">Source Sheet Tab Name</label>
+        <select id="mst-source-tab-name" class="form-field">
+          <option value="">-- Select a Sheet --</option>
+          ${optionsHtml}
+        </select>
+        <small>The name of the tab in your Master Sheet that contains the MST course schedule.</small>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="button-primary" onclick="saveMstSettings(event)">Save Settings</button>
+      <div id="mst-settings-feedback" style="display: inline-block; margin-left: 10px;"></div>
+    </div>`;
+}
+
+function saveMstSettings(event) {
+  const sourceTabName = document.getElementById('mst-source-tab-name').value;
+  if (!sourceTabName) {
+    alert('Please select a Source Sheet Tab.');
+    return;
+  }
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const settings = { sourceTabName: sourceTabName };
+  const feedbackDiv = document.getElementById('mst-settings-feedback');
+  feedbackDiv.innerHTML = '';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.success) {
+        feedbackDiv.innerHTML = '<span style="color: var(--color-green);">Saved!</span>';
+        setTimeout(() => feedbackDiv.innerHTML = '', 3000);
+      } else {
+        feedbackDiv.innerHTML = `<span style="color: var(--color-red);">Error: ${res.message || 'Unknown error'}</span>`;
+      }
+      btn.disabled = false;
+      btn.textContent = 'Save Settings';
+    })
+    .withFailureHandler(err => {
+      feedbackDiv.innerHTML = `<span style="color: var(--color-red);">Error: ${err.message}</span>`;
+      btn.disabled = false;
+      btn.textContent = 'Save Settings';
+    })
+    .api_saveMstSettings(settings);
+}
+
+</script>

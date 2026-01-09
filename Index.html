@@ -5,55 +5,49 @@
     <?!= include('Styles'); ?>
   </head>
   <body>
-    <!-- Main application container -->
-    <div class="sidebar closed" id="app-sidebar">
-      <div class="sidebar-header">
-        <img class="header-logo" id="logo-img" src="" alt="Logo" style="display:none;"/>
-        <div class="logo-loading" id="logo-placeholder">Loading Logo...</div>
-        <h2 class="sidebar-title" id="app-title-text">Staff Hub</h2>
+
+    <div class="app-header">
+      <div class="header-left">
+        <span class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</span>
+        <h1 class="app-title">University Dept. Management App</h1>
       </div>
-      <ul class="nav-menu" id="main-nav">
-        <!-- Navigation items will be injected by JS_Core.html -->
-      </ul>
-    </div>
-
-    <div class="main-content">
-      <div class="content-top-bar">
-        <button id="nav-toggle-btn">
-          <span class="icon">&#9776;</span>
-          <span>Menu</span>
-        </button>
-      </div>
-      
-      <!-- Page Views -->
-      <?!= include('View_Dashboards'); ?>
-      <?!= include('View_Settings'); ?>
-      <?!= include('View_Proctoring'); ?>
-      <?!= include('View_Logistics'); ?>
-      <?!= include('View_Zoom'); ?>
-
-    </div>
-
-    <!-- Global loader overlay -->
-    <div id="global-loader">
-      <div class="loader-content">
-        <div class="spinner"></div>
-        <p>Loading...</p>
+      <div class="user-info">
+        <span id="user-email"></span>
+        <img src="" alt="User" id="user-photo" style="display:none;"/>
       </div>
     </div>
 
-    <!-- SCRIPT INCLUDES -->
+    <div class="app-sidebar" id="app-sidebar">
+        <nav class="main-nav" id="main-menu">
+            <!-- Menu items will be dynamically inserted here by JS_Core -->
+        </nav>
+    </div>
+
+    <div class="app-content" id="app-content">
+      <!-- Dashboard Page -->
+      <div id="page-Dashboard" class="page-view">
+        <!-- Content for the Dashboard will be loaded here by JS_Dashboard.html -->
+      </div>
+
+      <!-- MST Page -->
+      <div id="page-MST" class="page-view" style="display:none;">
+          <!-- Content for the MST page will be loaded here by JS_MST.html -->
+      </div>
+
+      <!-- Other pages would be structured similarly -->
+      <div id="page-TechHub" class="page-view" style="display:none;"><h2>Tech Hub Page</h2><p>Content coming soon.</p></div>
+      <div id="page-Proctoring" class="page-view" style="display:none;"><h2>Proctoring Page</h2><p>Content coming soon.</p></div>
+      <div id="page-Zoom" class="page-view" style="display:none;"><h2>Zoom Page</h2><p>Content coming soon.</p></div>
+      <div id="page-Settings" class="page-view" style="display:none;"><h2>Settings Page</h2><p>Content coming soon.</p></div>
+    </div>
+
+    <div class="loader-container" id="loader">
+        <div class="loader-ring"></div>
+    </div>
+
     <?!= include('JS_Core'); ?>
-    <?!= include('JS_App'); ?>
     <?!= include('JS_Dashboard'); ?>
-    <?!= include('JS_Settings'); ?>
-    <?!= include('JS_Calendar'); ?>
-    <?!= include('JS_Proctoring'); ?>
-    <?!= include('JS_Scheduling'); ?>
-    <?!= include('JS_Analytics'); ?>
-    <?!= include('JS_Zoom'); ?>
-    <?!= include('JS_Lookup'); ?>
-    <?!= include('JS_MLT'); ?>
-
+    <?!= include('JS_MST'); ?>
+    
   </body>
 </html>

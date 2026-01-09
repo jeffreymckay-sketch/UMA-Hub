@@ -11,6 +11,71 @@
  */
 
 /**
+ * Fetches scheduling data specifically for the MST Classroom Management view.
+ * This is a streamlined version of getSchedulingData() that only loads course data.
+ * @returns {object} A response object with success status and data or an error.
+ */
+function api_getMstSchedulingData() {
+    try {
+        var staffData = getSheet('Staff_List').getDataRange().getValues();
+        var assignmentData = getSheet('Staff_Assignments').getDataRange().getValues();
+        var courseData = getSheet('Course_Schedule').getDataRange().getValues();
+
+        var staffHeaders = getColumnMap(staffData[0]);
+        var assignmentHeaders = getColumnMap(assignmentData[0]);
+        var courseHeaderRow = courseData.find(function(row) { return row.join('').toLowerCase().includes('eventid'); });
+        if (!courseHeaderRow) throw new Error("Could not find header row in Course Schedule sheet. Please ensure 'eventID' column exists.");
+        var courseHeaders = getColumnMap(courseHeaderRow);
+        
+        var courseHeaderIndex = courseData.indexOf(courseHeaderRow);
+
+        var allStaff = staffData.slice(1).map(function(row) { return parseStaff(row, staffHeaders); }).filter(function(s) { return s && s.isActive; });
+        var allAssignments = assignmentData.slice(1).map(function(row) { return parseAssignment(row, assignmentHeaders); }).filter(Boolean);
+        var allCourses = courseData.slice(courseHeaderIndex + 1).map(function(row) { return parseCourse(row, courseHeaders); }).filter(Boolean);
+
+        var staffMap = new Map(allStaff.map(function(s) { return [String(s.id).toLowerCase(), s]; }));
+        var assignmentMap = new Map(allAssignments.map(function(a) { return [String(a.eventId), a]; }));
+
+        var courseAssignmentsView = allCourses.map(function(course) {
+            var assignment = assignmentMap.get(String(course.id));
+            var staff = assignment && assignment.staffId ? staffMap.get(String(assignment.staffId).toLowerCase()) : null;
+            return {
+                id: course.id,
+                assignmentId: assignment ? assignment.id : null,
+                itemName: course.name,
+                courseFaculty: course.faculty,
+                courseDay: course.daysOfWeek.join(' / '),
+                courseTime: formatDate(course.startDate, 'h:mm') + ' - ' + formatDate(course.endDate, 'h:mm aa'),
+                startDate: formatDate(course.startDate, 'yyyy-MM-dd'),
+                endDate: formatDate(course.endDate, 'yyyy-MM-dd'),
+                location: course.location,
+                duration: calculateDuration(course.startDate, course.endDate),
+                link: course.zoomLink,
+                staffName: staff ? staff.name : "Unassigned",
+                staffId: staff ? staff.id : null,
+                session: course.session,
+                runTime: course.runTime,
+                timeOfDay: course.timeOfDay
+            };
+        });
+        
+        var mstStaffList = allStaff.filter(function(s) { return s.role && s.role.toLowerCase().includes('mst'); }).map(function(s) { return { id: s.id, name: s.name }; });
+
+        return {
+            success: true,
+            data: {
+                courseAssignments: courseAssignmentsView,
+                mstStaffList: mstStaffList
+            }
+        };
+
+    } catch (e) {
+        console.error("Error in api_getMstSchedulingData: " + e.stack);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
  * Main entry point for the frontend to get all scheduling data.
  * This function orchestrates the loading and processing of data from
  * multiple spreadsheet tabs.

@@ -1,341 +1,242 @@
 <style>
+  /* University Brand Colors */
   :root {
-    --primary-color: #003057; /* Branding Blue */
-    --secondary-color: #f37021; /* Branding Orange */
-    --accent-color: #A4D65E; /* Branding Light Green */
-    --success-color: #007934; /* Branding Green */
-    --bg-color: #f4f6f8;
-    --text-color: #333;
-    --sidebar-width: 260px;
-    --border-color: #ddd;
+    --color-primary-navy: #003057;
+    --color-primary-orange: #f37021;
+    --color-primary-green: #007934;
+    --color-accent-gray: #f2f2f2;
+    --color-text-light: #ffffff;
+    --color-text-dark: #333333;
+    --color-border-light: #dddddd;
+    --color-danger: #d9534f;
   }
 
-  /* GLOBAL LAYOUT - LOCKS THE WINDOW */
-  body { 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    margin: 0; padding: 0; 
-    background-color: var(--bg-color); 
-    color: var(--text-color); 
+  /* Basic Reset & Body */
+  body, html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', Arial, sans-serif;
+    background-color: var(--color-accent-gray);
+    color: var(--color-text-dark);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- Loader --- */
+  .loader-container {
+    position: fixed; 
+    top: 0; left: 0; 
+    width: 100%; height: 100%;
     display: flex; 
-    height: 100vh; /* Full Viewport Height */
-    overflow: hidden; /* Prevents outer scrollbar on Google Sites */
+    justify-content: center; 
+    align-items: center; 
+    background-color: #fff;
+    z-index: 9999;
+    transition: opacity 0.5s ease;
+  }
+  .loader-ring {
+    border: 6px solid var(--color-primary-navy);
+    border-top-color: var(--color-primary-orange);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1.2s linear infinite;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
-  /* SIDEBAR */
-  .sidebar { 
-      width: var(--sidebar-width); 
-      background-color: var(--primary-color); 
-      color: white; 
-      display: flex; 
-      flex-direction: column; 
-      flex-shrink: 0; 
-      box-shadow: 2px 0 5px rgba(0,0,0,0.1); 
-      transition: width 0.3s ease, transform 0.3s ease; 
-      overflow: hidden;
-      white-space: nowrap; 
-      z-index: 100;
+  /* --- App Layout --- */
+  .app-header {
+    background-color: var(--color-primary-navy);
+    color: var(--color-text-light);
+    padding: 0 20px;
+    height: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
-  
-  /* CLOSED STATE - Default */
-  .sidebar.closed { 
-      width: 0; 
-      transform: translateX(-100%); /* Moves it off-screen smoothly */
+  .app-sidebar {
+    background-color: #ffffff;
+    width: 220px;
+    position: fixed;
+    top: 60px; 
+    left: 0;
+    height: calc(100% - 60px);
+    padding-top: 15px;
+    border-right: 1px solid var(--color-border-light);
+    transform: translateX(0);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 900;
+  }
+  .app-sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+  .app-content {
+    margin-top: 60px;
+    margin-left: 220px;
+    padding: 25px;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .app-content.collapsed {
+    margin-left: 0;
   }
 
-  .sidebar-header { padding: 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
-  .header-logo { max-width: 80%; max-height: 80px; object-fit: contain; margin-bottom: 10px; visibility: hidden; }
-  .logo-loading { font-size: 0.8em; color: rgba(255,255,255,0.5); }
-  .sidebar-title { font-size: 1.2rem; font-weight: bold; display: block; letter-spacing: 0.5px; }
+  /* --- Header & Navigation --- */
+  .header-left { display: flex; align-items: center; }
+  .sidebar-toggle { cursor: pointer; font-size: 24px; padding: 10px; margin-right: 10px;}
+  .app-title { margin: 0; font-size: 20px; font-weight: 500; }
+  .user-info { display: flex; align-items: center; }
+  #user-photo { width: 38px; height: 38px; border-radius: 50%; margin-left: 15px; border: 2px solid var(--color-text-light); }
   
-  /* ACCORDION NAV */
-  .nav-menu { list-style: none; padding: 0; margin: 20px 0; flex-grow: 1; overflow-y: auto; }
-  
-  .nav-group-header {
-      padding: 15px 25px;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: rgba(255,255,255,0.8);
-      border-left: 4px solid transparent;
-      transition: background 0.2s;
+  .main-nav .nav-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: var(--color-text-dark);
+    border-left: 5px solid transparent;
+    font-size: 16px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    position: relative; /* Needed for arrow positioning */
   }
-  .nav-group-header:hover { background-color: rgba(255,255,255,0.05); color: white; }
-  
-  .nav-arrow { font-size: 0.7em; transition: transform 0.3s ease; }
-  .nav-group-header.open .nav-arrow { transform: rotate(180deg); }
-  
-  .nav-sub-menu {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      background-color: rgba(0,0,0,0.2);
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease-out;
+  .main-nav .nav-item:hover {
+    background-color: var(--color-accent-gray);
   }
-  .nav-sub-menu.open { max-height: 800px; transition: max-height 0.5s ease-in; }
+  .main-nav .nav-item.active {
+    border-left-color: var(--color-primary-orange);
+    font-weight: 600;
+    color: var(--color-primary-navy);
+  }
 
-  .nav-item { padding: 12px 25px 12px 35px; cursor: pointer; transition: background 0.2s, border-left 0.2s; border-left: 4px solid transparent; display: flex; align-items: center; font-size: 0.9rem; }
-  .nav-item:hover { background-color: rgba(255,255,255,0.05); }
-  .nav-item.active { background-color: rgba(255,255,255,0.15); border-left-color: var(--secondary-color); font-weight: 600; color: white; }
-  .nav-icon { margin-right: 10px; width: 20px; text-align: center; }
-
-  /* MAIN CONTENT AREA */
-  .main-content { 
-      flex-grow: 1; 
-      display: flex; 
-      flex-direction: column; 
-      height: 100%; 
-      overflow: hidden; /* Locks outer container */
-      position: relative;
+  /* --- Accordion Sub-menu --- */
+  .nav-item.has-submenu .submenu-arrow {
+    position: absolute;
+    right: 20px;
+    transition: transform 0.3s ease;
   }
-  
-  .content-top-bar { 
-      display: flex; 
-      align-items: center; 
-      padding: 15px 20px; 
-      background: white; 
-      border-bottom: 1px solid #eee;
-      flex-shrink: 0; /* Prevents header from shrinking */
+  .nav-item.has-submenu.open .submenu-arrow {
+    transform: rotate(90deg);
   }
-  
-  #nav-toggle-btn { 
-      background: none; 
-      border: 1px solid #ddd; 
-      font-size: 1rem; 
-      cursor: pointer; 
-      color: var(--primary-color); 
-      padding: 8px 15px; 
-      border-radius: 4px; 
-      transition: all 0.2s; 
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 600;
+  .sub-menu {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    background-color: #fafafa; /* Slightly different background for sub-items */
   }
-  #nav-toggle-btn:hover { background-color: #f0f4f8; border-color: var(--primary-color); }
-
-  /* SCROLLABLE PAGE CONTAINER */
-  .page { 
-      display: none; 
-      animation: fadeIn 0.3s ease-in-out; 
-      padding: 20px; 
-      overflow-y: auto; /* Only the content scrolls */
-      height: 100%; 
-      box-sizing: border-box;
+  .sub-menu.open {
+      max-height: 200px; 
   }
-  .active-page { display: block; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-  h1 { color: var(--primary-color); border-bottom: 2px solid var(--secondary-color); padding-bottom: 10px; margin-top: 0; }
-  h2 { color: var(--primary-color); font-size: 1.3rem; margin-top: 25px; }
-  h3 { color: #555; font-size: 1.1rem; margin-bottom: 10px; }
-
-  /* TABS */
-  .tab-nav { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; padding-left: 5px; flex-wrap: wrap; gap: 2px; }
-  .tab-nav-item { padding: 10px 20px; cursor: pointer; background-color: #e9ecef; color: #666; border: 1px solid var(--border-color); border-bottom: none; border-radius: 8px 8px 0 0; font-size: 0.9rem; transition: all 0.2s; flex-grow: 1; text-align: center; max-width: 200px; }
-  .tab-nav-item:hover:not(.active) { background-color: #dde2e6; }
-  .tab-nav-item.active { background-color: var(--accent-color); color: var(--primary-color); font-weight: 800; border: 1px solid var(--accent-color); border-bottom: 1px solid var(--accent-color); }
-  .tab-page { display: none; padding: 20px; background: #fff; border: 1px solid var(--border-color); border-top: none; border-radius: 0 0 8px 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-  .tab-page.active { display: block; }
-
-  /* RESPONSIVE FORMS */
-  .form-group { margin-bottom: 15px; }
-  
-  /* Flexbox Wrapping for Inputs */
-  .inline-group { 
-      display: flex; 
-      gap: 15px; 
-      align-items: flex-end; 
-      flex-wrap: wrap; /* Allows items to drop to next line */
+  .sub-menu .nav-item {
+      padding-left: 40px; /* Indent sub-menu items */
+      font-size: 15px;
   }
-  
-  /* Inputs grow to fill space, but won't shrink below 150px */
-  .inline-group > div, 
-  .inline-group > input, 
-  .inline-group > select,
-  .inline-group > button {
-      flex: 1 1 150px; 
-  }
-  
-  /* Specific overrides for checkboxes/labels to keep them tight */
-  .inline-group .toggle-group { flex: 0 0 auto; }
 
-  label { display: block; margin-bottom: 5px; font-weight: 500; color: #444; font-size: 0.9rem; }
-  input[type="text"], input[type="date"], input[type="time"], input[type="number"], select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; box-sizing: border-box; transition: border-color 0.2s; }
-  input:focus, select:focus, textarea:focus { border-color: var(--primary-color); outline: none; }
-  
-  .button { background-color: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 0.95rem; transition: background 0.2s; white-space: nowrap; text-align: center; }
-  .button:hover { background-color: #00203a; }
-  .button:disabled { background-color: #ccc; cursor: not-allowed; }
-  .button.primary { background-color: var(--secondary-color); }
-  .button.primary:hover { background-color: #d95f1a; }
-  .button.secondary { background-color: #fff; color: var(--primary-color); border: 1px solid var(--primary-color); }
-  .button.secondary:hover { background-color: #f0f4f8; }
-  .button.danger { background-color: #d32f2f; color: white; }
-  .button.danger:hover { background-color: #b71c1c; }
-  .button-group { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
-  .btn-sm { font-size: 0.85rem; padding: 6px 12px; }
-
-  /* TABLES - Horizontal Scroll Only */
-  .results-container { margin-top: 15px;  border-radius: 4px; }
-  .data-table, .roster-table, .preference-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: white; min-width: 600px; /* Forces scroll on small screens */ }
-  .data-table th, .roster-table th, .preference-table th { background-color: var(--primary-color); color: white; padding: 12px; text-align: left; position: sticky; top: 0; z-index: 10; }
-  .data-table td, .roster-table td, .preference-table td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
-  .data-table tr:hover, .roster-table tr:hover { background-color: #f9f9f9; }
-  .data-table tr:nth-child(even) { background-color: #f8f9fa; }
-  .not-available { color: #999; font-style: italic; }
-  .zebra-stripes tbody tr:nth-child(odd) { background-color: #f8f9fa; }
-  .zebra-stripes tbody tr:hover { background-color: #e9ecef; }
-  
-  /* STATUS MESSAGES */
-  .status-message { margin: 10px 0; padding: 10px; border-radius: 4px; display: none; font-size: 0.9rem; }
-  .status-message.success { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; display: block; }
-  .status-message.error { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; display: block; }
-  .status-message.loading { background-color: #e3f2fd; color: #0277bd; border: 1px solid #b3e5fc; display: block; }
-  .divider { border: 0; border-top: 1px solid #eee; margin: 25px 0; }
-
-  /* TOGGLES */
-  .toggle-group { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
-  .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
-  .toggle-switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 22px; }
-  .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-  input:checked + .slider { background-color: var(--accent-color); }
-  input:checked + .slider:before { transform: translateX(18px); }
-
-  /* USER GUIDE ACCORDION */
-  details.guide-card { 
-      background: white; 
-      border: 1px solid #eee; 
-      border-left: 5px solid transparent; /* Default state */
-      margin-bottom: 10px; 
-      border-radius: 6px; 
-      overflow: hidden;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      transition: all 0.3s ease-in-out;
-  }
-  details.guide-card[open]:not(.completed) { 
-      border-left-color: var(--secondary-color); /* Active state is Orange */
-      box-shadow: 0 4px 12px rgba(0, 48, 87, 0.15);
-  }
-  details.guide-card.completed {
-      border-left-color: var(--success-color); /* Completed state is Green */
-  }
-  
-  summary.guide-header { 
-      padding: 15px 20px; 
-      cursor: pointer; 
-      font-weight: 600; 
-      color: var(--primary-color); 
+  /* --- Page & Widget Styles --- */
+  .page-view { display: none; }
+  .widget {
       background-color: #fff;
-      list-style: none; 
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: background 0.2s;
-  }
-  summary.guide-header:hover { background-color: #f9f9f9; }
-  summary.guide-header::-webkit-details-marker { display: none; }
-  
-  summary.guide-header::after { 
-      content: '+'; 
-      font-size: 1.2rem; 
-      color: #999;
-      transition: transform 0.2s ease-in-out;
-  }
-  details[open] summary.guide-header::after { 
-      content: '-'; 
-      color: var(--primary-color); 
-  }
-  details.guide-card.completed summary.guide-header::after {
-      content: '\2713'; /* Checkmark */
-      color: var(--success-color);
-      font-size: 1.3rem;
-  }
-
-  .guide-content { 
-      padding: 20px; 
-      border-top: 1px solid #eee; 
-      color: #444; 
-      line-height: 1.6; 
-      background-color: #fcfcfc;
-  }
-
-  /* SUMMARY CARDS */
-  .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 15px;
-      padding: 15px 0;
-  }
-  .summary-card {
-      background-color: #fff;
-      border: 1px solid #e0e0e0;
-      border-top: 4px solid var(--primary-color);
       border-radius: 8px;
-      padding: 15px;
-      display: flex;
-      flex-direction: column;
-      text-align: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
   }
-  .summary-card.courses { border-top-color: var(--success-color); }
-  .summary-card.exams { border-top-color: var(--secondary-color); }
+  .widget h2 {
+      margin-top: 0;
+      color: var(--color-primary-navy);
+      border-bottom: 2px solid var(--color-accent-gray);
+      padding-bottom: 10px;
+  }
 
-  .summary-card-icon { font-size: 2rem; color: var(--primary-color); margin-bottom: 10px; }
-  .summary-card-value { font-size: 2.2rem; font-weight: 700; color: var(--primary-color); line-height: 1.1; }
-  .summary-card-title { font-size: 0.9rem; font-weight: 500; color: #666; margin-top: 5px; }
+  /* --- Tab Navigation --- */
+  .tab-nav {
+    display: flex;
+    border-bottom: 2px solid var(--color-border-light);
+    margin-bottom: 20px;
+  }
+  .tab-link {
+    padding: 10px 20px;
+    margin-bottom: -2px; /* Pulls the link down to overlap the border */
+    border: 2px solid transparent;
+    border-bottom: none;
+    text-decoration: none;
+    color: var(--color-text-dark);
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .tab-link:hover {
+    background-color: var(--color-accent-gray);
+  }
+  .tab-link.active {
+    border-color: var(--color-border-light);
+    border-bottom-color: transparent; /* Allows background to show through */
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    background-color: #fff;
+    color: var(--color-primary-orange);
+    border-top: 4px solid var(--color-primary-orange);
+    padding-top: 8px;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
 
-  /* NESTED ACCORDION FOR EXAM PREVIEW */
-  .course-accordion, .exam-accordion {
-      margin-bottom: 5px;
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid #e0e0e0;
-      border-left: 3px solid transparent; /* Default state */
-      transition: border-left 0.2s ease-in-out;
+  /* --- Enhanced Table Styles --- */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    border-radius: 6px;
+    overflow: hidden; /* Ensures the radius is applied to corners */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
-  .course-accordion[open] { border-left-color: var(--success-color); }
-  .exam-accordion[open] { border-left-color: var(--secondary-color); }
+  .data-table th, .data-table td {
+    padding: 14px;
+    border-bottom: 1px solid var(--color-border-light);
+    text-align: left;
+  }
+  .data-table thead th {
+    background-color: var(--color-primary-navy);
+    color: var(--color-text-light);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .data-table tbody tr:nth-child(even) {
+    background-color: var(--color-accent-gray);
+  }
+  .data-table tbody tr:hover {
+    background-color: #e8f0fe; /* A light blue for hover */
+  }
 
-  .course-accordion > summary, .exam-accordion > summary {
-      padding: 12px 15px;
-      cursor: pointer;
-      font-weight: 600;
-      list-style: none;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background-color: #fff;
-  }
-  .course-accordion > summary { 
-      color: var(--primary-color);
-      background-color: #f5f7fa;
-  }
-   .exam-accordion > summary { 
-      color: #444;
-      font-weight: 500;
-      font-size: 0.9rem;
-      background-color: #fff;
-   }
-  .course-accordion > summary:hover, .exam-accordion > summary:hover { background-color: #eef2f7; }
-  .course-accordion > summary::-webkit-details-marker, 
-  .exam-accordion > summary::-webkit-details-marker { display: none; }
-  
-  .course-accordion > summary::after, .exam-accordion > summary::after {
-      content: '+';
-      font-size: 1rem;
-      color: #777;
-  }
-  .course-accordion[open] > summary::after, .exam-accordion[open] > summary::after { content: '-'; }
+  /* --- Form Styles --- */
+  .form-container, .form-actions { margin-top: 20px; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+  .form-field > label { display: block; margin-bottom: 5px; font-weight: 600; }
+  .form-field > input, .form-field > select { width: 100%; padding: 10px; border: 1px solid var(--color-border-light); border-radius: 4px; box-sizing: border-box; }
+  .inline-form { display: flex; gap: 10px; align-items: center; }
 
-  .exam-details-container { padding: 15px; background-color: #ffffff; border-top: 1px solid #e0e0e0; }
-  .exam-details { display: grid; grid-template-columns: 150px 1fr; gap: 8px; font-size: 0.9rem; }
-  .exam-details-label { font-weight: 600; color: #333; }
-  .exam-details-value { color: #555; word-break: break-word; }
+  /* --- Button Styles --- */
+  button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    background-color: var(--color-primary-green);
+    color: var(--color-text-light);
+    transition: background-color 0.2s ease;
+  }
+  button:hover { opacity: 0.9; }
+  .button-primary { background-color: var(--color-primary-navy); }
+  .button-danger { background-color: var(--color-danger); }
+
+  /* --- Utility Classes --- */
+  .hidden { display: none; }
 
 </style>

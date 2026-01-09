@@ -6,210 +6,140 @@
  */
 
 /**
- * NEW, EFFICIENT WRAPPER FUNCTION
- * Fetches all data required for the dashboard in a single server trip.
- * This avoids redundant lookups and multiple concurrent calls.
+ * Fetches all data required for the dashboard for the CURRENT user.
+ * @returns {object} A payload with the user's availability and preferences.
  */
-function api_getDashboardData(email) {
+function api_getDashboardData() {
     try {
-        // Use active user if no email is provided (for non-admins)
-        if (!email) email = Session.getActiveUser().getEmail();
+        const email = Session.getActiveUser().getEmail();
 
-        const staffListSheet = getSheet('Staff_List');
-        const staffData = staffListSheet.getDataRange().getValues();
-
-        // --- Find Staff ID (The core expensive operation) ---
-        // This is now only done ONCE per dashboard load.
-        let staffId = null;
-        for (let i = 1; i < staffData.length; i++) {
-            // Column B (index 1) is the Email/ID
-            if (String(staffData[i][1]).toLowerCase() === String(email).toLowerCase()) {
-                staffId = String(staffData[i][1]);
-                break;
+        // --- 1. Fetch Availability ---
+        const availabilitySheet = getSheet('Staff_Availability');
+        const availabilityData = availabilitySheet.getDataRange().getValues();
+        const userAvailability = [];
+        for (let i = 1; i < availabilityData.length; i++) {
+            if (availabilityData[i][1] === email) { // Email is index 1
+                let start = availabilityData[i][3];
+                let end = availabilityData[i][4];
+                if (start instanceof Date) start = Utilities.formatDate(start, Session.getScriptTimeZone(), "HH:mm");
+                if (end instanceof Date) end = Utilities.formatDate(end, Session.getScriptTimeZone(), "HH:mm");
+                userAvailability.push({ id: availabilityData[i][0], day: availabilityData[i][2], start: start, end: end });
             }
         }
 
-        if (!staffId) {
-            return { success: false, message: "Could not find a staff record for the email: " + email };
+        // --- 2. Fetch Time Block Preferences ---
+        const preferencesSheet = getSheet('Staff_Preferences');
+        const preferencesData = preferencesSheet.getDataRange().getValues();
+        const userPreferences = {};
+        for (let i = 1; i < preferencesData.length; i++) {
+            if (preferencesData[i][0] === email) { // StaffID (email) is index 0
+                userPreferences[preferencesData[i][1]] = preferencesData[i][2]; // e.g., { "Monday_Morning": "Preferred" }
+            }
         }
 
-        // --- Now, gather the data using the resolved staffId ---
-        const availability = getMyAvailability_DEPRECATED(staffId);
-        const preferences = getMyPreferences_DEPRECATED(staffId);
-
+        // --- 3. Return Combined Payload ---
         return {
             success: true,
             data: {
-                availability: availability,
-                preferences: preferences
+                availability: userAvailability,
+                preferences: userPreferences,
             }
         };
 
     } catch (e) {
-        return { success: false, message: `An error occurred: ${e.message}` };
+        console.error("api_getDashboardData Error: " + e.stack);
+        return { success: false, message: `Failed to load dashboard data. Please refresh and try again. Error: ${e.message}` };
     }
 }
-
-
-// --- HELPER for api_getDashboardData: Fetches Availability ---
-function getMyAvailability_DEPRECATED(staffId) {
-    const sheet = getSheet('Staff_Availability');
-    const data = sheet.getDataRange().getValues();
-    const results = [];
-    for (let i = 1; i < data.length; i++) {
-        // Column B (index 1) is Staff ID
-        if (String(data[i][1]) === staffId) {
-            let s = data[i][3]; // Start time
-            let e = data[i][4]; // End time
-
-            if (s instanceof Date) s = Utilities.formatDate(s, Session.getScriptTimeZone(), "HH:mm");
-            if (e instanceof Date) e = Utilities.formatDate(e, Session.getScriptTimeZone(), "HH:mm");
-
-            results.push({ id: data[i][0], day: data[i][2], start: s, end: e });
-        }
-    }
-    return results;
-}
-
-
-// --- HELPER for api_getDashboardData: Fetches Preferences ---
-function getMyPreferences_DEPRECATED(staffId) {
-    const sheet = getSheet('Staff_Preferences');
-    const data = sheet.getDataRange().getValues();
-    const prefs = {};
-    for (let i = 1; i < data.length; i++) {
-        // Column A (index 0) is Staff ID
-        if (String(data[i][0]) === staffId) {
-            prefs[data[i][1]] = data[i][2]; // Key = Value
-        }
-    }
-    return prefs;
-}
-
 
 /**
- * -------------------------------------------------------------------
- * The original, inefficient functions are left below for other parts
- * of the app that might use them. The dashboard itself will no longer
- * call them directly.
- * -------------------------------------------------------------------
+ * Creates a new availability record for the current user.
+ * @param {object} formData The data from the client: { day, start, end }.
+ * @returns {object} A status object.
  */
-
-function api_getMyAvailability(email) {
+function api_addAvailability(formData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(15000);
     try {
-        if (!email) email = Session.getActiveUser().getEmail();
-        const staffSheet = getSheet('Staff_List');
-        const staffData = staffSheet.getDataRange().getValues();
-        let staffId = null;
-        for (let i = 1; i < staffData.length; i++) {
-            if (String(staffData[i][1]).toLowerCase() === String(email).toLowerCase()) {
-                staffId = String(staffData[i][1]);
-                break;
-            }
-        }
-        if (!staffId) return { success: false, message: "Staff ID not found for email." };
-
-        const data = getMyAvailability_DEPRECATED(staffId);
-        return { success: true, data: data };
-
-    } catch (e) { return { success: false, message: e.message }; }
-}
-
-function api_getMyPreferences(email) {
-    try {
-        if (!email) email = Session.getActiveUser().getEmail();
-        const staffSheet = getSheet('Staff_List');
-        const staffData = staffSheet.getDataRange().getValues();
-        let staffId = null;
-        for (let i = 1; i < staffData.length; i++) {
-            if (String(staffData[i][1]).toLowerCase() === String(email).toLowerCase()) {
-                staffId = String(staffData[i][1]);
-                break;
-            }
-        }
-        if (!staffId) return { success: false, message: "Staff ID not found." };
-        
-        const prefs = getMyPreferences_DEPRECATED(staffId);
-        return { success: true, data: prefs };
-
-    } catch (e) { return { success: false, message: e.message }; }
-}
-
-
-function api_addNotAvailable(day, start, end, email) {
-    try {
-        if (!email) email = Session.getActiveUser().getEmail();
+        const { day, start, end } = formData;
+        const email = Session.getActiveUser().getEmail();
 
         const sheet = getSheet('Staff_Availability');
-
-        // Resolve ID
-        const staffSheet = getSheet('Staff_List');
-        const staffData = staffSheet.getDataRange().getValues();
-        let staffId = null;
-        for (let i = 1; i < staffData.length; i++) {
-            if (String(staffData[i][1]).toLowerCase() === String(email).toLowerCase()) {
-                staffId = String(staffData[i][1]);
-                break;
-            }
-        }
-        if (!staffId) return { success: false, message: "Staff ID not found." };
-
-        const id = Utilities.getUuid();
-        sheet.appendRow([id, staffId, day, start, end]);
-        return { success: true };
-    } catch (e) { return { success: false, message: e.message }; }
+        const newId = 'AV-' + new Date().getTime();
+        sheet.appendRow([newId, email, day, start, end]);
+        
+        return { success: true, message: "Availability slot added successfully!" };
+    } catch (e) {
+        console.error("api_addAvailability Error: " + e.stack);
+        return { success: false, message: `Failed to add availability slot. Error: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
 }
 
-function api_deleteAvailability(id, email) {
+/**
+ * Deletes an availability record for the current user.
+ * @param {string} recordId The unique ID of the availability slot to delete.
+ * @returns {object} A status object.
+ */
+function api_deleteAvailability(recordId) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(15000);
     try {
-        if (!email) email = Session.getActiveUser().getEmail();
-
+        const email = Session.getActiveUser().getEmail();
         const sheet = getSheet('Staff_Availability');
         const data = sheet.getDataRange().getValues();
 
-        for (let i = 1; i < data.length; i++) {
-            if (data[i][0] === id) {
+        for (let i = data.length - 1; i >= 1; i--) {
+            // Check that the record belongs to the current user
+            if (data[i][0] === recordId && data[i][1] === email) {
                 sheet.deleteRow(i + 1);
-                return { success: true };
+                return { success: true, message: "Availability slot has been deleted." };
             }
         }
-        return { success: false, message: "Item not found." };
-    } catch (e) { return { success: false, message: e.message }; }
+        throw new Error("Record not found or permission denied.");
+    } catch (e) {
+        console.error("api_deleteAvailability Error: " + e.stack);
+        return { success: false, message: `Failed to delete availability. Error: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
 }
 
-
-function api_savePreference(key, value, email) {
+/**
+ * Updates the current user's time block preferences.
+ * @param {object} preferences The preferences data from the client.
+ * @returns {object} A status object.
+ */
+function api_updateStaffPreferences(preferences) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(15000);
     try {
-        if (!email) email = Session.getActiveUser().getEmail();
-
+        const email = Session.getActiveUser().getEmail();
         const sheet = getSheet('Staff_Preferences');
         const data = sheet.getDataRange().getValues();
 
-        // Resolve ID
-        const staffSheet = getSheet('Staff_List');
-        const staffData = staffSheet.getDataRange().getValues();
-        let staffId = null;
-        for (let i = 1; i < staffData.length; i++) {
-            if (String(staffData[i][1]).toLowerCase() === String(email).toLowerCase()) {
-                staffId = String(staffData[i][1]);
-                break;
+        // To keep the logic simple and robust, we remove all old preferences and add the new ones.
+        for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][0] === email) {
+                sheet.deleteRow(i + 1);
             }
         }
-        if (!staffId) return { success: false, message: "Staff ID not found." };
-
-        let found = false;
-        for (let i = 1; i < data.length; i++) {
-            if (String(data[i][0]) === staffId && data[i][1] === key) {
-                sheet.getRange(i + 1, 3).setValue(value);
-                found = true;
-                break;
+        
+        // Add back the new preferences, skipping the neutral ones which are default
+        for (const timeBlock in preferences) {
+            const preference = preferences[timeBlock];
+            if (preference !== 'Eh, Sure') {
+                sheet.appendRow([email, timeBlock, preference]);
             }
         }
 
-        if (!found) {
-            sheet.appendRow([staffId, key, value]);
-        }
+        return { success: true, message: "Preferences have been saved successfully!" };
 
-        return { success: true };
-    } catch (e) { return { success: false, message: e.message }; }
+    } catch (e) {
+        console.error("api_updateStaffPreferences Error: " + e.stack);
+        return { success: false, message: `Failed to save preferences. Error: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
 }
