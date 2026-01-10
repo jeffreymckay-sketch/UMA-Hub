@@ -3,9 +3,10 @@
   // 'g' will act as our global capacitor bank, holding all pre-fetched application data.
   const g = {
     userInfo: null,
+    dashboardData: null,
     mstData: null,
-    // Add placeholders for other tools as needed
-    // techHubData: null,
+    mstSettings: null,
+    writableCalendars: null,
   };
 
   // --- Page Router & Initializer ---
@@ -50,14 +51,16 @@
    */
   function handleInitialDataSuccess(response) {
     if (response && response.success) {
-      console.log("Initial data loaded successfully.", response.data);
+      console.log("Initial data loaded successfully:", response.data);
       // Populate the global capacitor bank
       g.userInfo = response.data.userInfo;
+      g.dashboardData = response.data.dashboardData;
       g.mstData = response.data.mstData;
-      // g.techHubData = response.data.techHubData;
+      g.mstSettings = response.data.mstSettings;
+      g.writableCalendars = response.data.writableCalendars;
 
       // Now that data is loaded, populate the UI.
-      populateUserInfo(); // Doesn't need arguments anymore, uses 'g'
+      populateUserInfo(); 
 
       // Determine the initial page from the URL hash and navigate.
       const initialPage = window.location.hash.substring(1) || 'Dashboard';
@@ -67,7 +70,6 @@
       document.getElementById('loader').style.display = 'none';
 
     } else {
-      // Handle cases where the API call is successful but returns a business logic error.
       handleInitialError({ message: response.message || "An unknown error occurred on the server." });
     }
   }
@@ -77,10 +79,10 @@
    */
   function handleInitialError(error) {
     console.error("Catastrophic failure during initial data load:", error);
-    document.getElementById('loader').innerHTML = 'Failed to load critical application data. Please try refreshing. Error: ' + error.message;
+    document.getElementById('loader').innerHTML = 'Failed to load critical application data. Please try refreshing. Error: ' + (error.message || 'Unknown');
   }
 
-  // --- Core Navigation (largely unchanged, but now relies on pre-fetched data) ---
+  // --- Core Navigation ---
 
   function buildMenu() {
     const menu = document.getElementById('main-menu');
@@ -159,7 +161,8 @@
 
     updateActiveMenu(pageId, isInitialLoad);
 
-    // Call the loader function for the specific page. It will now run without a server call.
+    // Call the specific loader function for the page. 
+    // These functions should now be synchronous and use data from 'g'.
     if (pageId === 'Dashboard') {
       loadDashboard();
     } else if (pageId === 'MST') {
@@ -186,7 +189,7 @@
     }
   }
 
-  // --- UI & User Info Handlers (now simplified) ---
+  // --- UI & User Info Handlers ---
 
   function toggleSidebar() {
     document.getElementById('app-sidebar').classList.toggle('collapsed');
@@ -194,9 +197,12 @@
   }
 
   function populateUserInfo() {
-    // Now reads from the global 'g' object. No argument needed.
     const userInfo = g.userInfo || { email: 'Error', photoUrl: '' };
-    if (userInfo.email) document.getElementById('user-email').textContent = userInfo.email;
+    if (userInfo.email && !userInfo.error) {
+       document.getElementById('user-email').textContent = userInfo.email;
+    } else {
+       document.getElementById('user-email').textContent = "Error";
+    }
     if (userInfo.photoUrl) {
       const photo = document.getElementById('user-photo');
       photo.src = userInfo.photoUrl;

@@ -1,18 +1,15 @@
 <script>
 /**
  * Main entry point for the MST page.
- * This function is now responsible for rendering the page using pre-fetched data.
  */
 function loadMstPage() {
   const pageContainer = document.getElementById('page-MST');
-  // Check if the content has already been rendered.
   if (pageContainer.childElementCount > 0) return;
 
   console.log("Loading MST page from pre-fetched data...");
 
-  // Check if the MST data exists in our global cache.
   if (!g.mstData || g.mstData.error) {
-    pageContainer.innerHTML = `<div class="error-message">Could not load MST tool. The initial data load may have failed. Error: ${g.mstData ? g.mstData.error : 'Unknown'}</div>`;
+    pageContainer.innerHTML = `<div class="error-message">Could not load MST tool. Error: ${g.mstData ? g.mstData.error : 'Unknown'}</div>`;
     return;
   }
 
@@ -34,30 +31,21 @@ function loadMstPage() {
     link.addEventListener('click', e => handleMstTabClick(e, pageContainer));
   });
 
-  // Load the initial tab using the cached data.
-  loadMstClassroomTab();
+  loadMstClassroomTab(); // Load initial tab
 }
 
-/**
- * Handles tab navigation clicks specifically for the MST page.
- */
 function handleMstTabClick(e, pageContainer) {
   e.preventDefault();
   const tabId = e.target.dataset.tab;
 
   pageContainer.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
   e.target.classList.add('active');
-
-  pageContainer.querySelectorAll('.tab-content').forEach(c => {
-    c.style.display = 'none';
-    c.classList.remove('active');
-  });
+  pageContainer.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
 
   const activeContent = document.getElementById(`mst-${tabId}`);
   activeContent.style.display = 'block';
-  activeContent.classList.add('active');
 
-  // The data is already loaded, so we just need to render the correct view.
+  // Data is pre-loaded, just call the render function for the tab.
   switch (tabId) {
     case 'classroom': loadMstClassroomTab(); break;
     case 'calendar': loadMstCalendarTab(); break;
@@ -65,13 +53,11 @@ function handleMstTabClick(e, pageContainer) {
   }
 }
 
-// --- Classroom Management Tab (No Server Call) --- //
+// --- Classroom Management Tab ---
 
 function loadMstClassroomTab() {
   const container = document.getElementById('mst-classroom');
-  if (container.childElementCount > 0) return; // Already rendered
-
-  // Data is now pulled directly from the global 'g' object.
+  if (container.childElementCount > 0) return;
   renderScheduleTable(container, g.mstData.courseAssignments, g.mstData.mstStaffList);
 }
 
@@ -96,8 +82,6 @@ function renderScheduleTable(container, schedule, staffList) {
     </table>`;
 }
 
-// NOTE: The 'assignStaff' function still needs to call the server to *update* data.
-// This is expected and correct. The change was to stop *loading* data on navigation.
 function assignStaff(courseId, event) {
   const select = document.getElementById(`select-staff-${courseId}`);
   const staffId = select.value;
@@ -117,18 +101,17 @@ function assignStaff(courseId, event) {
     .api_updateCourseAssignment(courseId, staffId);
 }
 
-// --- Other MST functions (Calendar, Settings) would be updated similarly... ---
-// For now, they will still use google.script.run, but the main navigation is fixed.
+// --- Calendar Sync Tab (No Server Call for Loading) ---
 
 function loadMstCalendarTab() {
   const container = document.getElementById('mst-calendar');
   if (container.childElementCount > 0) return;
-  container.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
 
-  google.script.run
-    .withSuccessHandler(res => res.success ? renderCalendarSyncForm(container, res.data) : container.innerHTML = `<div class="error-message">${res.message}</div>`)
-    .withFailureHandler(err => container.innerHTML = `<div class="error-message">Error: ${err.message}</div>`)
-    .getWritableCalendars();
+  if (!g.writableCalendars || g.writableCalendars.error) {
+    container.innerHTML = `<div class="error-message">Could not load Calendar Sync. Error: ${g.writableCalendars ? g.writableCalendars.error : 'Unknown'}</div>`;
+    return;
+  }
+  renderCalendarSyncForm(container, g.writableCalendars);
 }
 
 function renderCalendarSyncForm(container, calendars) {
@@ -148,6 +131,7 @@ function renderCalendarSyncForm(container, calendars) {
 }
 
 function runMstSync(isPreview, event) {
+  event.preventDefault(); // <-- THE FIX! Stops the browser's default reload action.
   const calId = document.getElementById('mst-calendar-select').value;
   if (!calId) return;
 
@@ -159,68 +143,56 @@ function runMstSync(isPreview, event) {
 
   google.script.run
     .withSuccessHandler(res => {
-      if (!res.success) {
-        resultsDiv.innerHTML = `<div class="error-message">Error: ${res.message}</div>`;
-      } else {
-        resultsDiv.innerHTML = res.isPreview ? renderSyncPreview(res) : renderSyncResults(res);
-      }
-      btn.disabled = false;
-      btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
+        if (!res.success) { resultsDiv.innerHTML = `<div class="error-message">Error: ${res.message}</div>`; } 
+        else { resultsDiv.innerHTML = res.isPreview ? renderSyncPreview(res) : renderSyncResults(res); }
+        btn.disabled = false;
+        btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
     })
     .withFailureHandler(err => {
-      resultsDiv.innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
-      btn.disabled = false;
-      btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
+        resultsDiv.innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+        btn.disabled = false;
+        btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
     })
     .api_runMstCalendarSync(calId, isPreview);
 }
 
 function renderSyncPreview(data) {
-  let list = '';
-  if (data.changes && data.changes.length > 0) {
-    list = data.changes.map(ch => `<li><strong>${ch.action}:</strong> ${ch.title} (Row ${ch.row})<ul>${ch.diffs.map(d => `<li><em>${d.field}:</em> \"${d.old}\" -> \"${d.new}\"</li>`).join('')}</ul></li>`).join('');
-  } else { list = '<li>No changes detected.</li>'; }
+  let list = data.changes && data.changes.length > 0 
+    ? data.changes.map(ch => `<li><strong>${ch.action}:</strong> ${ch.title} (Row ${ch.row})<ul>${ch.diffs.map(d => `<li><em>${d.field}:</em> \"${d.old}\" -> \"${d.new}\"</li>`).join('')}</ul></li>`).join('')
+    : '<li>No changes detected.</li>';
   return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
 }
 
 function renderSyncResults(data) {
-  let list = '';
-  if (data.results && data.results.length > 0) {
-    list = data.results.map(r => `<li><strong>${r.title}:</strong> ${r.status} - <em>${r.details}</em></li>`).join('');
-  } else { list = '<li>Sync complete. No items to report.</li>'; }
+  let list = data.results && data.results.length > 0
+    ? data.results.map(r => `<li><strong>${r.title}:</strong> ${r.status} - <em>${r.details}</em></li>`).join('')
+    : '<li>Sync complete. No items to report.</li>';
   return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
 }
 
-function loadMstSettingsTab() {
-  const container = document.getElementById('mst-settings');
-  if (container.childElementCount > 0 && !container.querySelector('.loader-container')) return;
-  container.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
+// --- Settings Tab (No Server Call for Loading) ---
 
-  google.script.run
-    .withSuccessHandler(res => {
-      if (!res.success) throw new Error(res.message);
-      renderMstSettingsForm(container, res.data);
-    })
-    .withFailureHandler(err => container.innerHTML = `<div class="error-message">Could not load settings: ${err.message}</div>`)
-    .api_getMstSettings();
+function loadMstSettingsTab() {
+    const container = document.getElementById('mst-settings');
+    if (container.childElementCount > 0) return;
+
+    if (!g.mstSettings || g.mstSettings.error) {
+        container.innerHTML = `<div class="error-message">Could not load MST Settings. Error: ${g.mstSettings ? g.mstSettings.error : 'Unknown'}</div>`;
+        return;
+    }
+    renderMstSettingsForm(container, g.mstSettings);
 }
 
 function renderMstSettingsForm(container, data) {
   const savedTab = data.settings.sourceTabName || '';
   const sheetNames = data.sheetNames || [];
-
-  const optionsHtml = sheetNames.map(name =>
-    `<option value="${name}" ${name === savedTab ? 'selected' : ''}>${name}</option>`
-  ).join('');
+  const optionsHtml = sheetNames.map(name => `<option value="${name}" ${name === savedTab ? 'selected' : ''}>${name}</option>`).join('');
 
   container.innerHTML = `
     <div class="form-grid" style="max-width: 800px;">
       <div class="form-field full-width">
         <label for="mst-source-tab-name">Source Sheet Tab Name</label>
-        <select id="mst-source-tab-name" class="form-field">
-          <option value="">-- Select a Sheet --</option>
-          ${optionsHtml}
-        </select>
+        <select id="mst-source-tab-name" class="form-field"><option value="">-- Select a Sheet --</option>${optionsHtml}</select>
         <small>The name of the tab in your Master Sheet that contains the MST course schedule.</small>
       </div>
     </div>
@@ -231,17 +203,12 @@ function renderMstSettingsForm(container, data) {
 }
 
 function saveMstSettings(event) {
+  event.preventDefault(); // Also good to have here!
   const sourceTabName = document.getElementById('mst-source-tab-name').value;
-  if (!sourceTabName) {
-    alert('Please select a Source Sheet Tab.');
-    return;
-  }
+  if (!sourceTabName) { alert('Please select a Source Sheet Tab.'); return; }
 
   const btn = event.target;
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-
-  const settings = { sourceTabName: sourceTabName };
+  btn.disabled = true; btn.textContent = 'Saving...';
   const feedbackDiv = document.getElementById('mst-settings-feedback');
   feedbackDiv.innerHTML = '';
 
@@ -249,19 +216,20 @@ function saveMstSettings(event) {
     .withSuccessHandler(res => {
       if (res.success) {
         feedbackDiv.innerHTML = '<span style="color: var(--color-green);">Saved!</span>';
+        // Also update the global object so the change is reflected without a reload
+        if (g.mstSettings && g.mstSettings.settings) {
+          g.mstSettings.settings.sourceTabName = sourceTabName;
+        }
         setTimeout(() => feedbackDiv.innerHTML = '', 3000);
       } else {
         feedbackDiv.innerHTML = `<span style="color: var(--color-red);">Error: ${res.message || 'Unknown error'}</span>`;
       }
-      btn.disabled = false;
-      btn.textContent = 'Save Settings';
+      btn.disabled = false; btn.textContent = 'Save Settings';
     })
     .withFailureHandler(err => {
       feedbackDiv.innerHTML = `<span style="color: var(--color-red);">Error: ${err.message}</span>`;
-      btn.disabled = false;
-      btn.textContent = 'Save Settings';
+      btn.disabled = false; btn.textContent = 'Save Settings';
     })
-    .api_saveMstSettings(settings);
+    .api_saveMstSettings({ sourceTabName: sourceTabName });
 }
-
 </script>
