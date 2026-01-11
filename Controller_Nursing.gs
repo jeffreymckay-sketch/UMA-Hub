@@ -1,421 +1,309 @@
 /**
- * -------------------------------------------------------------------
- * NURSING EXAM CONTROLLER (FINAL REVISION)
- * Features: Caching, robust validation, and clear error messaging.
- * -------------------------------------------------------------------
+ * ----------------------------------------------------------------------------------------
+ * Controller for the Nursing Proctoring Tool
+ * 
+ * Contains all server-side logic specific to the Nursing feature, including data retrieval,
+ * document creation/updating, and accommodation management.
+ * ----------------------------------------------------------------------------------------
  */
-
-// Placeholder for global configuration.
-const CONFIG = {
-    SETTINGS_KEYS: {
-        NURSING: 'nursing_settings'
-    },
-    NURSING: {
-        URLS: {
-            RED_FLAG_REPORT: 'https://your-red-flag-report-url.com', 
-            PROTOCOL_DOC: 'https://your-protocol-doc-url.com'
-        }
-    }
-};
 
 /**
- * Utility function to extract the file ID from a Google Drive URL.
- * @param {string} url The URL of the Google Drive file or folder.
- * @returns {string|null} The extracted file ID or null if not found.
+ * ----------------------------------------------------------------------------------------
+ * API Endpoints - Nursing Proctoring Tool
+ * ----------------------------------------------------------------------------------------
  */
-function extractIdFromUrl(url) {
-    if (!url) return null;
-    const match = url.match(/\/(?:d|folders)\/([a-zA-Z0-9_-]+)/);
-    return match ? match[1] : null;
-}
 
-/**
- * Client-callable function to analyze the Nursing sheet.
- * @returns {object} A standardized response object.
- */
 function api_getNursingData() {
-    try {
-        const { settings } = nursing_getSettingsAndIDs();
+  try {
+    const settings = getNursingSettings();
+    const spreadsheet = SpreadsheetApp.openById(settings.nursingSheetId);
+    const allSheetData = spreadsheet.getSheets()
+      .map(sheet => {
+        const sheetName = sheet.getName();
+        if (sheetName.toLowerCase().includes('template') || sheetName.toLowerCase().includes('master')) {
+          return null;
+        }
 
-        // 1. Validate and access the main output folder.
-        const targetFolderId = extractIdFromUrl(settings.nursingFolderId);
-        if (!targetFolderId) throw new Error("Output Folder URL is missing or invalid. Please save a valid folder URL in Settings.");
+        const data = sheet.getDataRange().getValues();
+        // --- FIX: Make header row detection more robust by looking for multiple key headers. ---
+        const headerRowIndex = data.findIndex(row => {
+            const joinedRow = row.join('').toLowerCase();
+            return joinedRow.includes('exam name') && joinedRow.includes('course code');
+        });
+
+        if (headerRowIndex === -1) {
+            console.log(`Skipping sheet "${sheetName}" - Header row not found.`);
+            return null; // If no header, skip sheet.
+        }
         
-        let mainOutputFolder;
-        try {
-            mainOutputFolder = DriveApp.getFolderById(targetFolderId);
-        } catch (e) {
-            throw new Error("Invalid Output Folder URL. Please ensure it's a valid Google Drive folder URL and that you have editor permissions.");
+        const headers = data[headerRowIndex].map(h => String(h).trim().toLowerCase());
+        const examData = parseExamData(data, headers, headerRowIndex);
+        
+        // If, after parsing, we have no valid course or no exams, discard this sheet's data.
+        if (!examData.course.code || !examData.course.name || examData.exams.length === 0) {
+            console.log(`Skipping sheet "${sheetName}" - No valid course or exam data found after parsing.`);
+            return null;
         }
+        
+        return {
+          sheetName: sheetName,
+          course: examData.course,
+          exams: examData.exams
+        };
+      })
+      .filter(s => s !== null); // Filter out nulls from skipped sheets
 
-        // 2. Validate and access the spreadsheet.
-        const spreadsheetId = extractIdFromUrl(settings.nursingSheetId);
-        if (!spreadsheetId) throw new Error("Nursing Schedule Sheet URL is missing or invalid. Please save a valid sheet URL in Settings.");
+    // Find document URLs for each valid exam
+    allSheetData.forEach(sheetData => {
+        sheetData.exams.forEach(exam => {
+            exam.docUrl = findDocUrlByName(exam.name, settings.nursingFolderId);
+        });
+    });
 
-        let spreadsheet;
-        try {
-            spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-        } catch (e) {
-            throw new Error("Invalid Nursing Schedule Sheet URL. Please ensure it's a valid Google Sheet URL and that you have access permissions.");
-        }
-
-        // 3. Proceed with analysis if validations pass.
-        return analyzeNursingSheet_(spreadsheet, mainOutputFolder);
-
-    } catch (e) {
-        console.error("api_getNursingData Pre-analysis Error: " + e.stack);
-        return { success: false, message: "ANALYSIS FAILED: " + e.message };
-    }
+    return { success: true, data: { sheets: allSheetData, settings: settings } };
+  } catch (e) {
+    console.error(`Error in api_getNursingData: ${e.toString()}`);
+    return { success: false, message: e.message };
+  }
 }
 
-function analyzeNursingSheet_(spreadsheet, mainOutputFolder) {
-    const cache = CacheService.getScriptCache();
-    const cacheKey = `nursing_analysis_${spreadsheet.getId()}`;
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-        const data = JSON.parse(cachedData);
-        data.fromCache = true; 
-        return { success: true, data: data };
-    }
-
-    const sheets = spreadsheet.getSheets();
-    const allSheetsData = [];
-    const analysisErrors = [];
-
-    for (const sheet of sheets) {
-        try {
-            if (sheet.getLastRow() < 5 || sheet.getName().toLowerCase().includes('template') || sheet.getName().toLowerCase().includes('config')) continue;
-            
-            let parsedData = parseSheetForAnalysis_(sheet, spreadsheet);
-            
-            if (parsedData && parsedData.exams.length > 0) {
-                checkForExistingDocs_Optimized_(parsedData, mainOutputFolder);
-                allSheetsData.push(parsedData);
-            }
-        } catch (e) {
-            analysisErrors.push(`Sheet '${sheet.getName()}': ${e.message}`);
-        }
-    }
-
-    if (allSheetsData.length === 0 && analysisErrors.length > 0) {
-        throw new Error(`Analysis failed on all sheets. Errors: ${analysisErrors.join("; ")}`)
+function api_saveNursingAccommodations(sheetName, examName, accommodationsText) {
+  try {
+    const settings = getNursingSettings();
+    const spreadsheet = SpreadsheetApp.openById(settings.nursingSheetId);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    if (!sheet) {
+      throw new Error(`Sheet '${sheetName}' not found.`);
     }
     
-    const finalData = { spreadsheetId: spreadsheet.getId(), sheets: allSheetsData, analysisErrors };
-    cache.put(cacheKey, JSON.stringify(finalData), 600); // Cache for 10 minutes
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0].map(h => h.trim().toLowerCase());
+    const nameCol = headers.indexOf('exam name');
+    const accommCol = headers.indexOf('accommodations');
 
-    return { success: true, data: finalData };
-}
-
-function checkForExistingDocs_Optimized_(sheetData, mainOutputFolder) {
-    const { course, exams, sheetName } = sheetData;
-    if (!exams || exams.length === 0) return;
-
-    const folderName = sheetName.trim();
-    const existingFolders = mainOutputFolder.getFoldersByName(folderName);
-
-    if (!existingFolders.hasNext()) {
-        exams.forEach(exam => exam.docUrl = null);
-        return;
+    if (nameCol === -1 || accommCol === -1) {
+      throw new Error('Could not find required columns (Exam Name, Accommodations) in sheet: ' + sheetName);
     }
 
-    const targetFolder = existingFolders.next();
-    const docMap = {};
-    const files = targetFolder.getFiles();
-    while (files.hasNext()) {
-        const file = files.next();
-        docMap[file.getName()] = file.getUrl();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][nameCol] === examName) {
+        sheet.getRange(i + 1, accommCol + 1).setValue(accommodationsText);
+        return { success: true, message: 'Accommodations saved!' }; 
+      }
     }
+    
+    throw new Error(`Exam '${examName}' not found in sheet '${sheetName}'.`);
 
-    for (const exam of exams) {
-        const facultyName = course.faculty && course.faculty !== 'N/A' ? ` (${course.faculty})` : '';
-        const docTitle = `${course.code} ${course.name}${facultyName} - ${exam.name}`.replace(/[\/]/g, ' - ');
-        exam.docUrl = docMap[docTitle] || null;
-    }
+  } catch (e) {
+    return { success: false, message: e.message }; 
+  }
 }
 
-function createNursingProctoringDocuments(approvedData) {
-    return processNursingDocuments_(approvedData, false);
-}
+/**
+ * ----------------------------------------------------------------------------------------
+ * Document Creation & Updating Logic
+ * ----------------------------------------------------------------------------------------
+ */
 
-function updateAllNursingDocuments(approvedData) {
-    return processNursingDocuments_(approvedData, true);
-}
+function createNursingProctoringDocuments(data) {
+  try {
+    const settings = data.settings || getNursingSettings();
+    const folder = DriveApp.getFolderById(settings.nursingFolderId);
+    let count = 0;
+    
+    data.sheets.forEach(sheet => {
+      sheet.exams.forEach(exam => {
+        const docName = exam.name;
+        const existingDoc = findDocByName(docName, folder);
 
-function processNursingDocuments_(approvedData, updateOnly) {
-    try {
-        const { settings } = nursing_getSettingsAndIDs();
-        const targetFolderId = extractIdFromUrl(settings.nursingFolderId);
-        if (!targetFolderId) throw new Error("Output folder is not defined in Nursing Settings.");
-
-        const mainOutputFolder = DriveApp.getFolderById(targetFolderId);
-        let docsCreated = 0;
-        let docsUpdated = 0;
-        let docsSkipped = 0;
-        let docUrl = null; 
-
-        for (const sheetData of approvedData.sheets) {
-            const { course, exams, rosters, sheetName } = sheetData;
-            if (!exams || exams.length === 0) continue;
-
-            const folderName = sheetName.trim();
-            const existingFolders = mainOutputFolder.getFoldersByName(folderName);
-            const targetFolder = existingFolders.hasNext() ? existingFolders.next() : mainOutputFolder.createFolder(folderName);
-
-            const existingDocsMap = {};
-            const files = targetFolder.getFiles();
-            while (files.hasNext()) {
-                const file = files.next();
-                existingDocsMap[file.getName()] = file.getId();
-            }
-
-            for (const exam of exams) {
-                const facultyName = course.faculty && course.faculty !== 'N/A' ? ` (${course.faculty})` : '';
-                const docTitle = `${course.code} ${course.name}${facultyName} - ${exam.name}`.replace(/[\/]/g, ' - ');
-                const existingFileId = existingDocsMap[docTitle];
-
-                let finalAccommodations = exam.accommodations || "";
-
-                if (existingFileId) {
-                    const doc = DocumentApp.openById(existingFileId);
-                    docUrl = doc.getUrl();
-                    const body = doc.getBody();
-
-                    if (!exam.accommodations) {
-                        finalAccommodations = findSectionText_(body, "Accommodations");
-                    }
-
-                    body.clear();
-                    populateDocContent_(body, docTitle, course, exam, rosters, settings.customNotes, finalAccommodations);
-                    doc.saveAndClose();
-                    logSystemAction("Nursing", `Updated in folder '${folderName}'`, docTitle, doc.getId(), `Exam Date: ${exam.date}`);
-                    docsUpdated++;
-                } else {
-                    if (updateOnly) {
-                        docsSkipped++;
-                        continue;
-                    }
-                    
-                    const doc = DocumentApp.create(docTitle);
-                    const newFile = DriveApp.getFileById(doc.getId());
-                    targetFolder.addFile(newFile);
-                    DriveApp.getRootFolder().removeFile(newFile);
-                    
-                    docUrl = doc.getUrl();
-                    populateDocContent_(doc.getBody(), docTitle, course, exam, rosters, settings.customNotes, finalAccommodations);
-                    doc.saveAndClose();
-                    logSystemAction("Nursing", `Created in folder '${folderName}'`, docTitle, doc.getId(), `Exam Date: ${exam.date}`);
-                    docsCreated++;
-                }
-            }
-        }
-
-        let message = `Process Complete! `;
-        if (updateOnly) {
-            message += `Updated ${docsUpdated} document(s). Skipped ${docsSkipped} non-existent document(s).`;
+        if (existingDoc) {
+          updateDocContent(existingDoc, exam, sheet.course, settings);
         } else {
-            message += `Created ${docsCreated} and updated ${docsUpdated} document(s).`;
+          const newDoc = DocumentApp.create(docName);
+          const file = DriveApp.getFileById(newDoc.getId());
+          folder.addFile(file);
+          DriveApp.getRootFolder().removeFile(file); 
+          updateDocContent(newDoc, exam, sheet.course, settings);
         }
-        if (docsCreated === 0 && docsUpdated === 0 && !updateOnly) {
-             message = "Analysis complete. No documents needed to be created or updated.";
-        }
-        
-        const isSingleDocOperation = approvedData.sheets.length === 1 && approvedData.sheets[0].exams.length === 1;
-        return { success: true, message, docUrl: isSingleDocOperation ? docUrl : null };
+        count++;
+      });
+    });
+    
+    const docUrl = data.sheets[0]?.exams[0] ? findDocUrlByName(data.sheets[0].exams[0].name, settings.nursingFolderId) : null;
+    return { success: true, message: `${count} document(s) created/updated.`, docUrl: docUrl };
 
-    } catch (e) {
-        console.error("processNursingDocuments_ Error: " + e.stack);
-        return { success: false, message: `DOCUMENT PROCESSING FAILED: ${e.message}` };
-    }
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
 }
 
-function populateDocContent_(body, docTitle, course, exam, rosters, customNotes, accommodationsText) {
-    body.appendParagraph(docTitle).setHeading(DocumentApp.ParagraphHeading.TITLE);
-    body.appendParagraph('Exam Details').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    const addDetail = (label, val, highlight) => {
-        if (!val || String(val).trim() === '') return;
-        const item = body.appendListItem('');
-        item.appendText(`${label}: `).setBold(true);
-        const text = item.appendText(String(val));
-        if (highlight) text.setBackgroundColor('#FFFF00');
-    };
-    addDetail('Faculty', course.faculty, false);
-    addDetail('Date', exam.date, true);
-    addDetail('Start Time (On Site)', exam.siteTime, true);
-    addDetail('Start Time (Zoom)', exam.zoomTime, true);
-    addDetail('Duration', exam.duration, true);
-    addDetail('Room', exam.room, false);
-    addDetail('Password', exam.password, true);
+function updateAllNursingDocuments(data) {
+  try {
+    const settings = data.settings || getNursingSettings();
+    const folder = DriveApp.getFolderById(settings.nursingFolderId);
+    let count = 0;
+
+    data.sheets.forEach(sheet => {
+      sheet.exams.forEach(exam => {
+        const doc = findDocByName(exam.name, folder);
+        if (doc) {
+          updateDocContent(doc, exam, sheet.course, settings);
+          count++;
+        }
+      });
+    });
+
+    if (count === 0) {
+        return { success: false, message: "No matching documents found to update." };
+    }
+    const docUrl = data.sheets[0]?.exams[0] ? findDocUrlByName(data.sheets[0].exams[0].name, settings.nursingFolderId) : null;
+    return { success: true, message: `${count} document(s) updated successfully.`, docUrl: docUrl };
+
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * ----------------------------------------------------------------------------------------
+ * Helper Functions
+ * ----------------------------------------------------------------------------------------
+ */
+
+function getNursingSettings() {
+  const props = PropertiesService.getUserProperties().getProperty('nursing_settings');
+  if (!props) throw new Error("Nursing settings not found. Please save your settings first.");
+  const settings = JSON.parse(props);
+  settings.nursingSheetId = extractIdFromUrl(settings.nursingSheetId);
+  settings.nursingFolderId = extractIdFromUrl(settings.nursingFolderId);
+  if (!settings.nursingSheetId || !settings.nursingFolderId) {
+    throw new Error("Nursing Sheet URL or Folder URL is missing or invalid in settings.");
+  }
+  return settings;
+}
+
+function extractIdFromUrl(url) {
+    if (!url) return null;
+    const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : url; 
+}
+
+function parseExamData(data, headers, headerRowIndex) {
+  const dataRows = data.slice(headerRowIndex + 1);
+  const courseCodeIndex = headers.indexOf('course code');
+  const courseNameIndex = headers.indexOf('course name');
+  const examNameIndex = headers.indexOf('exam name'); // Make sure we have this for filtering
+
+  // Find the first row that actually has course data. Skips blank rows after the header.
+  const firstDataRow = dataRows.find(row => row[courseCodeIndex] && row[courseNameIndex]);
+
+  const course = {
+    code: firstDataRow ? firstDataRow[courseCodeIndex] : null,
+    name: firstDataRow ? firstDataRow[courseNameIndex] : null,
+  };
+
+  // If no course info could be found at all, we can't proceed.
+  if (!course.code || !course.name) {
+      return { course: {}, exams: [] };
+  }
+
+  const exams = dataRows
+    .filter(row => {
+      // A row is valid if it's not completely empty and has an exam name.
+      const hasExamName = row[examNameIndex] && String(row[examNameIndex]).trim() !== '';
+      const isNotEmpty = row.some(cell => String(cell).trim() !== '');
+      return hasExamName && isNotEmpty;
+    })
+    .map(row => {
+      const examObj = {};
+      headers.forEach((header, i) => {
+        if (!header) return; // Skip empty header cells
+        // Robust camelCase conversion
+        const camelCaseHeader = header.replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase());
+        examObj[camelCaseHeader] = row[i];
+      });
+
+      // Standardize the 'name' property
+      if (examObj.examName) {
+        examObj.name = examObj.examName;
+        // delete examObj.examName; // Keep original property for now if needed, or delete.
+      }
+
+      // Format date if it's a Date object
+      if (examObj.date && examObj.date instanceof Date) {
+        examObj.date = examObj.date.toLocaleDateString();
+      }
+
+      return examObj;
+    });
+
+  return { course, exams };
+}
+
+
+function findDocByName(name, folder) {
+  const files = folder.getFilesByName(name);
+  return files.hasNext() ? DocumentApp.openById(files.next().getId()) : null;
+}
+
+function findDocUrlByName(name, folderId) {
+    const folder = DriveApp.getFolderById(folderId);
+    const files = folder.getFilesByName(name);
+    return files.hasNext() ? files.next().getUrl() : null;
+}
+
+function updateDocContent(doc, exam, course, settings) {
+    const body = doc.getBody().clear();
+    const FONT_FAMILY = 'Calibri';
+    const FONT_SIZE = 11;
+    const HEADER_BG = '#f3f3f3';
+
+    const docAttributes = {};
+    docAttributes[DocumentApp.Attribute.FONT_FAMILY] = FONT_FAMILY;
+    docAttributes[DocumentApp.Attribute.FONT_SIZE] = FONT_SIZE;
+    body.setAttributes(docAttributes);
+    body.setMarginTop(72).setMarginBottom(72).setMarginLeft(72).setMarginRight(72);
+
+    const header = doc.getHeader() || doc.addHeader();
+    header.clear();
+    const headerTable = header.appendTable([[' ','']]);
+    headerTable.setBorderWidth(0);
+    const courseCell = headerTable.getCell(0,0).setWidth(300);
+    const examCell = headerTable.getCell(0,1).setWidth(150);
+
+    courseCell.getChild(0).asParagraph().setIndentFirstLine(0).setIndentStart(0).appendText(`${course.code}\n${course.name}`);
+    examCell.getChild(0).asParagraph().setIndentFirstLine(0).setIndentStart(0).setAlignment(DocumentApp.HorizontalAlignment.RIGHT).appendText(exam.name);
+    header.appendHorizontalRule();
+
+    const title = body.appendParagraph(`${course.code} ${course.name}`);
+    title.setHeading(DocumentApp.ParagraphHeading.HEADING1).setBold(true).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
     body.appendParagraph('');
 
-    if (accommodationsText && accommodationsText.trim() !== '') {
-        body.appendParagraph('Accommodations').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        body.appendParagraph(accommodationsText);
+    const tableData = [
+        ['Exam Name', exam.name || 'N/A'],
+        ['Exam Password', exam.password || 'N/A'],
+        ['Date', exam.date ? new Date(exam.date).toLocaleDateString() : 'N/A'],
+        ['Time', exam.siteTime || 'N/A'],
+        ['Testing Site', exam.testingSite || 'N/A']
+    ];
+
+    if (tableData.length > 0) {
+        const table = body.appendTable(tableData);
+        const headerStyle = { [DocumentApp.Attribute.BACKGROUND_COLOR]: HEADER_BG, [DocumentApp.Attribute.BOLD]: true };
+        table.getRow(0).setAttributes(headerStyle);
+    }
+    body.appendParagraph('');
+
+    if (exam.accommodations) {
+        body.appendParagraph('Accommodations').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        body.appendParagraph(exam.accommodations);
         body.appendParagraph('');
     }
 
-    body.appendParagraph('Important Links').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    body.appendParagraph('').appendText('Red Flag Reporting Form').setLinkUrl(CONFIG.NURSING.URLS.RED_FLAG_REPORT);
-    body.appendParagraph('').appendText('Nursing Protocol').setLinkUrl(CONFIG.NURSING.URLS.PROTOCOL_DOC);
-    body.appendParagraph('');
-    
-    body.appendParagraph('Location Rosters').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    const locations = Object.keys(rosters).sort((a, b) => {
-        const aIsUmaal = a.toUpperCase().trim() === 'UMAAL';
-        const bIsUmaal = b.toUpperCase().trim() === 'UMAAL';
-        if (aIsUmaal && !bIsUmaal) return -1;
-        if (!aIsUmaal && bIsUmaal) return 1;
-        return a.localeCompare(b);
-    });
-
-    if (locations.length > 0) {
-        for (const location of locations) {
-            body.appendParagraph(location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-            const students = rosters[location];
-            if (students && students.length > 0) {
-                for (const student of students) {
-                    const listItem = body.appendListItem(student.name);
-                    if (student.color && student.color !== '#000000') {
-                        listItem.setForegroundColor(student.color);
-                    }
-                    listItem.setGlyphType(DocumentApp.GlyphType.BULLET);
-                }
-            }
-        }
-    } else {
-        body.appendParagraph("No student rosters were found in the analyzed data.");
+    if (settings.customNotes) {
+        body.appendParagraph('General Instructions').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        body.appendParagraph(settings.customNotes);
     }
-    
-    body.appendParagraph('');
-    if (customNotes) {
-        body.appendParagraph('General Notes').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        body.appendParagraph(customNotes);
-    }
-}
 
-function findSectionText_(body, heading) {
-    const paragraphs = body.getParagraphs();
-    for (let i = 0; i < paragraphs.length; i++) {
-        if (paragraphs[i].getHeading() == DocumentApp.ParagraphHeading.HEADING1 && paragraphs[i].getText() == heading) {
-            if (i + 1 < paragraphs.length && paragraphs[i + 1].getHeading() == DocumentApp.ParagraphHeading.NORMAL && paragraphs[i+1].getText().trim() !== '') {
-                return paragraphs[i + 1].getText();
-            }
-        }
-    }
-    return "";
-}
-
-function formatTimeValue_(timeValue, timezone) {
-    if (timeValue instanceof Date && !isNaN(timeValue.getTime())) {
-        return Utilities.formatDate(timeValue, timezone, 'h:mm a');
-    }
-    return String(timeValue || '').trim();
-}
-
-function parseSheetForAnalysis_(sheet, spreadsheet) {
-    const allValues = sheet.getDataRange().getValues();
-    const richTextValues = sheet.getDataRange().getRichTextValues();
-    let warnings = [];
-    let examHeaderRowIndex = -1;
-    let rosterHeaderRowIndex = -1;
-    for (let i = 0; i < allValues.length; i++) {
-        const rowString = allValues[i].join(' ').toLowerCase();
-        if (examHeaderRowIndex === -1 && rowString.includes('exam') && rowString.includes('date')) examHeaderRowIndex = i;
-        if (rosterHeaderRowIndex === -1 && String(allValues[i][0]).toLowerCase().trim() === 'augusta') rosterHeaderRowIndex = i;
-    }
-    if (examHeaderRowIndex === -1) return null;
-    const course = parseCourseInfo_(allValues[0][0]);
-    const exams = parseExamBlock_(allValues, examHeaderRowIndex, rosterHeaderRowIndex, warnings, spreadsheet);
-    let rosters = {};
-    if (rosterHeaderRowIndex !== -1) {
-        rosters = parseRosterBlock_(richTextValues, rosterHeaderRowIndex, warnings);
-    } else {
-        warnings.push("Could not find the student roster section.");
-    }
-    return { sheetName: sheet.getName(), course, exams, rosters, warnings };
-}
-
-function parseCourseInfo_(rawString) {
-    if (!rawString) return { code: 'N/A', name: 'N/A', faculty: 'N/A' };
-    const parts = rawString.split(/[-–—|:]/);
-    let coursePart = parts[0] || "";
-    let faculty = (parts.length > 1) ? parts.slice(1).join(' ').replace(/Professor/i, '').trim() : "N/A";
-    const codeMatch = coursePart.match(/[A-Z]{2,4}\s?\d{3,4}/);
-    let code = "N/A";
-    let name = coursePart.trim();
-    if (codeMatch) {
-        code = codeMatch[0];
-        name = coursePart.replace(codeMatch[0], '').trim();
-    }
-    return { code, name, faculty };
-}
-
-function parseExamBlock_(allValues, headerRowIndex, endRowIndex, warnings, spreadsheet) {
-    const exams = [];
-    const headers = allValues[headerRowIndex].map(h => String(h).toLowerCase().trim());
-    const timezone = spreadsheet.getSpreadsheetTimeZone();
-    const stopIndex = (endRowIndex !== -1) ? endRowIndex : allValues.length;
-    const colMap = { name: headers.indexOf('exam'), date: headers.indexOf('date'), siteTime: headers.indexOf('start time (on site)'), zoomTime: headers.indexOf('start time (zoom)'), duration: headers.indexOf('duration'), room: headers.indexOf('room: on campus'), password: headers.indexOf('password') };
-    if (colMap.name === -1 || colMap.date === -1) throw new Error("Crucial 'Exam' or 'Date' column is missing.");
-
-    for (let i = headerRowIndex + 1; i < stopIndex; i++) {
-        const row = allValues[i];
-        const examName = row[colMap.name];
-        if (!examName || String(examName).trim().length < 2) continue;
-        
-        const dateValue = row[colMap.date];
-        let displayDate;
-        if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
-            displayDate = Utilities.formatDate(dateValue, timezone, "EEEE, MMMM d");
-        } else {
-            displayDate = String(dateValue || '').trim();
-            if(displayDate) warnings.push(`Could not parse a valid date for "${examName}". Using original text.`);
-        }
-
-        exams.push({
-            name: String(examName).trim(),
-            date: displayDate,
-            siteTime: formatTimeValue_(row[colMap.siteTime], timezone),
-            zoomTime: formatTimeValue_(row[colMap.zoomTime], timezone),
-            duration: colMap.duration > -1 ? String(row[colMap.duration]).trim() : 'N/A',
-            room: colMap.room > -1 ? String(row[colMap.room]).trim() : 'N/A',
-            password: colMap.password > -1 ? String(row[colMap.password]).trim() : 'N/A'
-        });
-    }
-    return exams;
-}
-
-function parseRosterBlock_(richTextValues, headerRowIndex, warnings) {
-    const rosters = {};
-    const headers = richTextValues[headerRowIndex].map(rtv => rtv.getText().trim());
-    let addressRowIndex = headerRowIndex + 1;
-    while(addressRowIndex < richTextValues.length && richTextValues[addressRowIndex].every(c => c.getText().trim() === '')) {
-        addressRowIndex++;
-    }
-    const studentDataStartIndex = addressRowIndex + 1;
-    for (let c = 0; c < headers.length; c++) {
-        const locationName = headers[c];
-        if (!locationName) continue;
-        rosters[locationName] = [];
-        for (let r = studentDataStartIndex; r < richTextValues.length; r++) {
-            if (!richTextValues[r] || !richTextValues[r][c]) continue;
-            const richTextCell = richTextValues[r][c];
-            const studentName = richTextCell.getText().trim();
-            if (!studentName || studentName.toLowerCase().includes('students with accommodations')) continue;
-            const color = richTextCell.getRuns()[0].getTextStyle().getForegroundColor();
-            rosters[locationName].push({ name: studentName, color: color });
-        }
-    }
-    return rosters;
-}
-
-function nursing_getSettingsAndIDs() {
-    const properties = PropertiesService.getUserProperties();
-    const settingsString = properties.getProperty(CONFIG.SETTINGS_KEYS.NURSING);
-    const settings = settingsString ? JSON.parse(settingsString) : {};
-    return { settings };
-}
-
-function nursing_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
-    return { success: false, message: "Calendar Sync is temporarily disabled." };
+    doc.saveAndClose();
 }

@@ -64,6 +64,7 @@
       g.mstData = response.data.mstData;
       g.allSettings = response.data.settings || {}; // NEW: Populate the settings cache
       g.writableCalendars = response.data.writableCalendars;
+      g.nursingData = response.data.nursingData;
 
       // Now that data is loaded, populate the UI.
       populateUserInfo(); 

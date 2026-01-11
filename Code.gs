@@ -1,43 +1,53 @@
 /**
- * @OnlyCurrentDoc
+ * ----------------------------------------------------------------------------------------
+ * Main Code File for Google Apps Script
+ * 
+ * Contains server-side logic for the Proctoring Tool application, including the main
+ * web app entry point (doGet) and general API functions.
+ * ----------------------------------------------------------------------------------------
  */
 
+// --- Global Variable --- //
+const g = {};
+
 /**
- * Serves the main HTML page of the web app.
- * @returns {HtmlOutput} The HTML page to be displayed.
+ * ----------------------------------------------------------------------------------------
+ * Web App & Add-on UI Functions
+ * ----------------------------------------------------------------------------------------
  */
+
+// Main entry point for the web application
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('Index')
-      .evaluate()
-      .setTitle('University Dept. Management')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+  // Use createTemplateFromFile and evaluate() to process the scriptlets (<?!= ... ?>)
+  const html = HtmlService.createTemplateFromFile('Index.html').evaluate();
+  return html
+      .setTitle('Proctoring Tool')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); // Allows embedding in sites
+}
+
+// Entry point for launching as a Google Sheets Add-on
+function onOpen(e) {
+  SpreadsheetApp.getUi().createAddonMenu()
+    .addItem('Launch Proctoring Tool', 'showSidebar')
+    .addToUi();
+}
+
+function onInstall(e) {
+  onOpen(e);
+}
+
+function showSidebar() {
+  // Also correct the sidebar to use the templating engine
+  const ui = HtmlService.createTemplateFromFile('Index.html').evaluate().setTitle('Proctoring Tool');
+  SpreadsheetApp.getUi().showSidebar(ui);
 }
 
 /**
- * Includes the content of another HTML file.
- * This is a common pattern in Google Apps Script web apps.
+ * Includes the content of another file in the current HTML template.
+ * This is a standard Apps Script templating feature.
  * @param {string} filename The name of the file to include.
- * @returns {string} The content of the file.
+ * @return {string} The content of the included file.
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-/**
- * Fetches the current user's information.
- * This is called by the client-side JavaScript on page load.
- * @returns {object} An object containing the user's email and a success flag.
- */
-function api_getUserInfo() {
-  try {
-    return {
-      success: true,
-      data: {
-        email: Session.getEffectiveUser().getEmail(),
-        photoUrl: '' // Placeholder for a profile photo URL
-      }
-    };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
 }

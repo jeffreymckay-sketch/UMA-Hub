@@ -18,6 +18,7 @@ function api_getInitialAppData() {
         const mstViewData = getMstViewData();
         const allSettings = getAllSettings_();
         const calendars = getWritableCalendarsInternal();
+        const nursingData = api_getNursingData();
 
         // Assemble the grand payload
         return {
@@ -26,7 +27,8 @@ function api_getInitialAppData() {
                 userInfo: userInfo.success ? userInfo.data : { error: userInfo.message },
                 mstData: mstViewData.success ? mstViewData.data : { error: mstViewData.error },
                 settings: allSettings.success ? allSettings.data : { error: allSettings.message },
-                writableCalendars: calendars.success ? calendars.data : { error: calendars.message }
+                writableCalendars: calendars.success ? calendars.data : { error: calendars.message },
+                nursingData: nursingData // This already has a {success, data/message} structure
             }
         };
     } catch (e) {
@@ -136,7 +138,8 @@ function getAllSettings_() {
 function getUserInfo() {
     try {
         const email = Session.getActiveUser().getEmail();
-        const photoUrl = Session.getActiveUser().getPhotoUrl();
+        // --- FIX: Removed invalid call to getPhotoUrl --- //
+        const photoUrl = ""; // This method does not exist and was breaking the initial load.
         return { success: true, data: { email, photoUrl } };
     } catch (e) {
         console.error("getUserInfo Error: " + e.stack);
