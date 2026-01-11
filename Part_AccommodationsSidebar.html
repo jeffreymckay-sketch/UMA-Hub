@@ -1,0 +1,164 @@
+<style>
+#accommodations-sidebar {
+  position: fixed;
+  top: 0;
+  right: -450px; /* Start off-screen */
+  width: 450px;
+  max-width: 90%;
+  height: 100%;
+  background-color: #fff;
+  box-shadow: -4px 0 15px rgba(0,0,0,0.15);
+  z-index: 10000;
+  transition: right 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+
+#accommodations-sidebar.open {
+  right: 0;
+}
+
+#accommodations-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.4);
+  z-index: 9999;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+#accommodations-overlay.open {
+  display: block;
+  opacity: 1;
+}
+
+.accommodations-header {
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.accommodations-header h3 {
+  margin: 0;
+  font-size: 1.3em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accommodations-content {
+  padding: 20px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.accommodations-content textarea {
+  width: 100%;
+  flex-grow: 1;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 1em;
+  resize: vertical;
+}
+
+.accommodations-footer {
+  padding: 20px;
+  border-top: 1px solid #eee;
+  text-align: right;
+  flex-shrink: 0;
+}
+</style>
+
+<div id="accommodations-overlay" onclick="closeAccommodationsSidebar()"></div>
+<div id="accommodations-sidebar">
+  <div class="accommodations-header">
+    <h3 id="accommodations-title">Edit Accommodations</h3>
+  </div>
+  <div class="accommodations-content">
+    <textarea id="accommodations-text" placeholder="Enter individual accommodations for this exam..."></textarea>
+  </div>
+  <div class="accommodations-footer">
+    <button class="button-secondary" onclick="closeAccommodationsSidebar()">Cancel</button>
+    <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save</button>
+  </div>
+</div>
+
+<script>
+  function openAccommodationsSidebar(sheetName, examName) {
+    const sidebar = document.getElementById('accommodations-sidebar');
+    const overlay = document.getElementById('accommodations-overlay');
+    const title = document.getElementById('accommodations-title');
+    const textarea = document.getElementById('accommodations-text');
+    
+    // Store identifiers on the sidebar element itself
+    sidebar.dataset.sheetName = sheetName;
+    sidebar.dataset.examName = examName;
+    
+    // Find the exam data to get the current accommodations text
+    const examData = g.nursingData.sheets.find(s => s.sheetName === sheetName)?.exams.find(e => e.name === examName);
+    
+    title.textContent = `Accommodations: ${examName}`;
+    textarea.value = examData?.accommodations || '';
+
+    overlay.classList.add('open');
+    sidebar.classList.add('open');
+    textarea.focus();
+  }
+
+  function closeAccommodationsSidebar() {
+    document.getElementById('accommodations-sidebar').classList.remove('open');
+    document.getElementById('accommodations-overlay').classList.remove('open');
+  }
+
+  function saveAccommodations() {
+    const sidebar = document.getElementById('accommodations-sidebar');
+    const saveBtn = document.getElementById('accommodations-save-btn');
+    const sheetName = sidebar.dataset.sheetName;
+    const examName = sidebar.dataset.examName;
+    const accommodationsText = document.getElementById('accommodations-text').value;
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    
+    google.script.run
+      .withSuccessHandler(response => handleSaveAccommodationsSuccess(response, sheetName, examName, accommodationsText))
+      .withFailureHandler(handleSaveAccommodationsFailure)
+      .api_saveNursingAccommodations(sheetName, examName, accommodationsText);
+  }
+  
+  function handleSaveAccommodationsSuccess(response, sheetName, examName, newText) {
+      const saveBtn = document.getElementById('accommodations-save-btn');
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+
+      if (response.success) {
+          showNotification('Accommodations saved successfully!', 'success');
+          
+          // Update the local data object to keep the UI in sync without a full reload
+          const examData = g.nursingData.sheets.find(s => s.sheetName === sheetName)?.exams.find(e => e.name === examName);
+          if (examData) {
+              examData.accommodations = newText;
+          }
+          
+          closeAccommodationsSidebar();
+      } else {
+          showNotification(response.message, 'error');
+      }
+  }
+
+  function handleSaveAccommodationsFailure(error) {
+      const saveBtn = document.getElementById('accommodations-save-btn');
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+      showNotification('Error saving accommodations: ' + error.message, 'error');
+  }
+
+</script>

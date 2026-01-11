@@ -1,63 +1,110 @@
 /**
  * -------------------------------------------------------------------
- * NURSING EXAM CONTROLLER (OPTIMIZED for Warp 9 Performance)
- * Features: Caching, Bulk-Manifest lookups, and robust document generation.
+ * NURSING EXAM CONTROLLER (FINAL REVISION)
+ * Features: Caching, robust validation, and clear error messaging.
  * -------------------------------------------------------------------
  */
 
-function analyzeNursingSheet(sheetUrl) {
+// Placeholder for global configuration.
+const CONFIG = {
+    SETTINGS_KEYS: {
+        NURSING: 'nursing_settings'
+    },
+    NURSING: {
+        URLS: {
+            RED_FLAG_REPORT: 'https://your-red-flag-report-url.com', 
+            PROTOCOL_DOC: 'https://your-protocol-doc-url.com'
+        }
+    }
+};
+
+/**
+ * Utility function to extract the file ID from a Google Drive URL.
+ * @param {string} url The URL of the Google Drive file or folder.
+ * @returns {string|null} The extracted file ID or null if not found.
+ */
+function extractIdFromUrl(url) {
+    if (!url) return null;
+    const match = url.match(/\/(?:d|folders)\/([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Client-callable function to analyze the Nursing sheet.
+ * @returns {object} A standardized response object.
+ */
+function api_getNursingData() {
+    try {
+        const { settings } = nursing_getSettingsAndIDs();
+
+        // 1. Validate and access the main output folder.
+        const targetFolderId = extractIdFromUrl(settings.nursingFolderId);
+        if (!targetFolderId) throw new Error("Output Folder URL is missing or invalid. Please save a valid folder URL in Settings.");
+        
+        let mainOutputFolder;
+        try {
+            mainOutputFolder = DriveApp.getFolderById(targetFolderId);
+        } catch (e) {
+            throw new Error("Invalid Output Folder URL. Please ensure it's a valid Google Drive folder URL and that you have editor permissions.");
+        }
+
+        // 2. Validate and access the spreadsheet.
+        const spreadsheetId = extractIdFromUrl(settings.nursingSheetId);
+        if (!spreadsheetId) throw new Error("Nursing Schedule Sheet URL is missing or invalid. Please save a valid sheet URL in Settings.");
+
+        let spreadsheet;
+        try {
+            spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+        } catch (e) {
+            throw new Error("Invalid Nursing Schedule Sheet URL. Please ensure it's a valid Google Sheet URL and that you have access permissions.");
+        }
+
+        // 3. Proceed with analysis if validations pass.
+        return analyzeNursingSheet_(spreadsheet, mainOutputFolder);
+
+    } catch (e) {
+        console.error("api_getNursingData Pre-analysis Error: " + e.stack);
+        return { success: false, message: "ANALYSIS FAILED: " + e.message };
+    }
+}
+
+function analyzeNursingSheet_(spreadsheet, mainOutputFolder) {
     const cache = CacheService.getScriptCache();
-    const cacheKey = `nursing_analysis_${sheetUrl.trim()}`;
+    const cacheKey = `nursing_analysis_${spreadsheet.getId()}`;
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
         const data = JSON.parse(cachedData);
-        data.fromCache = true; // Let the front-end know it was a cached response
+        data.fromCache = true; 
         return { success: true, data: data };
     }
 
-    try {
-        const { settings, targetFolderId } = nursing_getSettingsAndIDs();
-        if (!targetFolderId) throw new Error("Output folder is not defined in Nursing Settings.");
-        const mainOutputFolder = DriveApp.getFolderById(targetFolderId);
+    const sheets = spreadsheet.getSheets();
+    const allSheetsData = [];
+    const analysisErrors = [];
 
-        if (!sheetUrl) {
-            sheetUrl = settings.nursingSheetId;
-        }
-        if (!sheetUrl) throw new Error("No sheet URL was provided, and none is saved in Settings.");
-
-        const spreadsheetId = extractFileIdFromUrl(sheetUrl);
-        if (!spreadsheetId) throw new Error("The provided URL is not a valid Google Sheet URL.");
-
-        const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-        const sheets = spreadsheet.getSheets();
-        const allSheetsData = [];
-        const analysisErrors = [];
-
-        for (const sheet of sheets) {
-            try {
-                if (sheet.getLastRow() < 5 || sheet.getName().toLowerCase().includes('template') || sheet.getName().toLowerCase().includes('config')) continue;
-                
-                let parsedData = parseSheetForAnalysis_(sheet, spreadsheet);
-                
-                if (parsedData && parsedData.exams.length > 0) {
-                    checkForExistingDocs_Optimized_(parsedData, mainOutputFolder);
-                    allSheetsData.push(parsedData);
-                }
-            } catch (e) {
-                analysisErrors.push(`Sheet '${sheet.getName()}': ${e.message}`);
+    for (const sheet of sheets) {
+        try {
+            if (sheet.getLastRow() < 5 || sheet.getName().toLowerCase().includes('template') || sheet.getName().toLowerCase().includes('config')) continue;
+            
+            let parsedData = parseSheetForAnalysis_(sheet, spreadsheet);
+            
+            if (parsedData && parsedData.exams.length > 0) {
+                checkForExistingDocs_Optimized_(parsedData, mainOutputFolder);
+                allSheetsData.push(parsedData);
             }
+        } catch (e) {
+            analysisErrors.push(`Sheet '${sheet.getName()}': ${e.message}`);
         }
-
-        if (allSheetsData.length === 0 && analysisErrors.length > 0) throw new Error(`Analysis failed on all sheets. Errors: ${analysisErrors.join("; ")}`)
-        
-        const finalData = { spreadsheetId, sheets: allSheetsData, analysisErrors };
-        cache.put(cacheKey, JSON.stringify(finalData), 600); // Cache for 10 minutes
-
-        return { success: true, data: finalData };
-    } catch (e) {
-        console.error("analyzeNursingSheet Error: " + e.stack);
-        return { success: false, message: "ANALYSIS FAILED: " + e.message };
     }
+
+    if (allSheetsData.length === 0 && analysisErrors.length > 0) {
+        throw new Error(`Analysis failed on all sheets. Errors: ${analysisErrors.join("; ")}`)
+    }
+    
+    const finalData = { spreadsheetId: spreadsheet.getId(), sheets: allSheetsData, analysisErrors };
+    cache.put(cacheKey, JSON.stringify(finalData), 600); // Cache for 10 minutes
+
+    return { success: true, data: finalData };
 }
 
 function checkForExistingDocs_Optimized_(sheetData, mainOutputFolder) {
@@ -97,11 +144,11 @@ function updateAllNursingDocuments(approvedData) {
 
 function processNursingDocuments_(approvedData, updateOnly) {
     try {
-        const { settings, targetFolderId } = nursing_getSettingsAndIDs();
+        const { settings } = nursing_getSettingsAndIDs();
+        const targetFolderId = extractIdFromUrl(settings.nursingFolderId);
         if (!targetFolderId) throw new Error("Output folder is not defined in Nursing Settings.");
 
         const mainOutputFolder = DriveApp.getFolderById(targetFolderId);
-        const templateId = settings.nursingTemplateId ? extractFileIdFromUrl(settings.nursingTemplateId) : null;
         let docsCreated = 0;
         let docsUpdated = 0;
         let docsSkipped = 0;
@@ -149,16 +196,11 @@ function processNursingDocuments_(approvedData, updateOnly) {
                         continue;
                     }
                     
-                    let doc;
-                    if (templateId) {
-                        const newFile = DriveApp.getFileById(templateId).makeCopy(docTitle, targetFolder);
-                        doc = DocumentApp.openById(newFile.getId());
-                    } else {
-                        doc = DocumentApp.create(docTitle);
-                        const newFile = DriveApp.getFileById(doc.getId());
-                        targetFolder.addFile(newFile);
-                        DriveApp.getRootFolder().removeFile(newFile);
-                    }
+                    const doc = DocumentApp.create(docTitle);
+                    const newFile = DriveApp.getFileById(doc.getId());
+                    targetFolder.addFile(newFile);
+                    DriveApp.getRootFolder().removeFile(newFile);
+                    
                     docUrl = doc.getUrl();
                     populateDocContent_(doc.getBody(), docTitle, course, exam, rosters, settings.customNotes, finalAccommodations);
                     doc.saveAndClose();
@@ -368,10 +410,10 @@ function parseRosterBlock_(richTextValues, headerRowIndex, warnings) {
 }
 
 function nursing_getSettingsAndIDs() {
-    const settings = getSettings(CONFIG.SETTINGS_KEYS.NURSING);
-    const spreadsheetId = extractFileIdFromUrl(settings.nursingSheetId);
-    const targetFolderId = extractFileIdFromUrl(settings.nursingFolderId);
-    return { settings, spreadsheetId, targetFolderId };
+    const properties = PropertiesService.getUserProperties();
+    const settingsString = properties.getProperty(CONFIG.SETTINGS_KEYS.NURSING);
+    const settings = settingsString ? JSON.parse(settingsString) : {};
+    return { settings };
 }
 
 function nursing_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {

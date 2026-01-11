@@ -1,0 +1,346 @@
+<style>
+  /* Nursing Proctoring UI Enhancements */
+  .proctoring-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  /* Add specific button color styles */
+  .button-success {
+    background-color: #4CAF50 !important; /* Green */
+    color: white !important;
+  }
+  .button-success:hover {
+    background-color: #45a049 !important;
+  }
+  
+  .button-warning {
+    background-color: #f0ad4e !important; /* Orange */
+    color: white !important;
+  }
+  .button-warning:hover {
+    background-color: #ec9a29 !important;
+  }
+
+  #select-all-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    margin-bottom: 15px;
+  }
+
+  /* Collapsible Course Section Styles */
+  .course-section {
+    margin-bottom: 15px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+  }
+
+  .course-header {
+    background-color: #f7f9fc;
+    padding: 12px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .course-header:hover {
+      background-color: #eff3f8;
+  }
+
+  .course-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+  }
+  
+  .course-header::after {
+    content: '\25B6'; /* Right-pointing triangle */
+    font-size: 1em;
+    color: #666;
+    transition: transform 0.2s ease-in-out;
+    transform-origin: center;
+  }
+
+  .course-content {
+    padding: 20px;
+    display: none; /* Collapsed by default */
+    background-color: #fff;
+  }
+
+  .course-section.open .course-content {
+    display: block;
+  }
+  
+  .course-section.open .course-header::after {
+    transform: rotate(90deg);
+  }
+
+  .exam-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .exam-card {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s;
+  }
+
+  .exam-card-header {
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: #fdfdfd;
+    border-bottom: 1px solid #eee;
+  }
+
+  .exam-details {
+    padding: 15px;
+    font-size: 0.9em;
+    flex-grow: 1;
+  }
+
+  .exam-details p {
+    margin: 0 0 8px 0;
+  }
+
+  .exam-card-footer {
+      padding: 10px 15px;
+      border-top: 1px solid #ddd;
+      background: #f7f9fc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+</style>
+
+<script>
+  /**
+   * -------------------------------------------------------------------
+   * NURSING PROCTORING TOOL - CLIENT-SIDE LOGIC (FINAL REVISION)
+   * -------------------------------------------------------------------
+   */
+
+  function loadNursingPage() {
+    renderNursingSettings();
+    loadNursingDocManagement();
+  }
+
+  function loadNursingDocManagement() {
+    const view = document.getElementById('Nursing-DocManagement');
+    const settings = g.allSettings.nursing_settings || {};
+    if (!settings.nursingSheetId || !settings.nursingFolderId) {
+      view.innerHTML = `<div class="error-message">Nursing settings are incomplete. Please configure them in the 'Settings' tab.</div>`;
+      return;
+    }
+    view.innerHTML = '<div class="loader-ring"></div>';
+    google.script.run.withSuccessHandler(handleNursingDataSuccess).withFailureHandler(handleNursingDataFailure).api_getNursingData(); 
+  }
+
+  function handleNursingDataSuccess(response) {
+    if (response.success) {
+      g.nursingData = response.data;
+      renderNursingDocManagement(g.nursingData);
+    } else {
+      handleNursingDataFailure({ message: response.message });
+    }
+  }
+
+  function handleNursingDataFailure(error) {
+    const view = document.getElementById('Nursing-DocManagement');
+    view.innerHTML = `<div class="error-message">Could not load Nursing Doc Management. Error: ${error.message}</div>`;
+    showNotification(error.message, 'error');
+  }
+
+  function renderNursingDocManagement(data) {
+    const view = document.getElementById('Nursing-DocManagement');
+    view.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'proctoring-header';
+    header.innerHTML = `
+      <h2>Nursing Doc Management</h2>
+      <div class="proctoring-actions">
+        <input type="text" id="exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterExams()">
+      </div>
+    `;
+    view.appendChild(header);
+
+    // Remove the 'Select All' checkbox as it's no longer needed with per-card actions
+
+    const courses = {};
+    data.sheets.forEach(sheet => {
+      sheet.exams.forEach(exam => {
+        const courseKey = `${sheet.course.code} - ${sheet.course.name}`;
+        if (!courses[courseKey]) {
+          courses[courseKey] = {
+            ...sheet,
+            exams: []
+          };
+        }
+        courses[courseKey].exams.push(exam);
+      });
+    });
+
+    const courseContainer = document.createElement('div');
+    courseContainer.id = 'course-container';
+    for (const courseName in courses) {
+        courseContainer.appendChild(buildCourseSection(courseName, courses[courseName]));
+    }
+    view.appendChild(courseContainer);
+  }
+  
+  function buildCourseSection(courseName, courseData) {
+      const section = document.createElement('div');
+      section.className = 'course-section';
+
+      const header = document.createElement('div');
+      header.className = 'course-header';
+      header.innerHTML = `<h3>${courseName}</h3>`;
+      header.onclick = () => section.classList.toggle('open');
+      
+      const content = document.createElement('div');
+      content.className = 'course-content';
+      
+      const grid = document.createElement('div');
+      grid.className = 'exam-grid';
+      courseData.exams.forEach(exam => {
+          grid.appendChild(buildExamCard(exam, courseData.sheetName));
+      });
+      content.appendChild(grid);
+
+      section.appendChild(header);
+      section.appendChild(content);
+      return section;
+  }
+
+  function buildExamCard(exam, sheetName) {
+      const card = document.createElement('div');
+      card.className = 'exam-card';
+      card.dataset.sheetName = sheetName;
+      card.dataset.examName = exam.name;
+
+      const safeSheetName = sheetName.replace(/'/g, "\\'");
+      const safeExamName = exam.name.replace(/'/g, "\\'");
+
+      const docExists = !!exam.docUrl;
+      const buttonText = docExists ? 'Update' : 'Create';
+      const buttonClass = docExists ? 'button-warning' : 'button-success';
+      const viewLink = docExists ? `<a href="${exam.docUrl}" target="_blank" class="button-tertiary">View</a>` : '';
+
+      card.innerHTML = `
+          <div class="exam-card-header">
+              <h4>${exam.name}</h4>
+          </div>
+          <div class="exam-details">
+              <p><strong>Date:</strong> ${exam.date}</p>
+              <p><strong>Time:</strong> ${exam.siteTime || 'N/A'}</p>
+              <p><strong>Password:</strong> <span class="password">${exam.password || 'N/A'}</span></p>
+          </div>
+          <div class="exam-card-footer">
+             <button class="button-tertiary" onclick="openAccommodationsSidebar('${safeSheetName}', '${safeExamName}')">Accommodations</button>
+             <div class="footer-actions">
+                <button class="button-tertiary ${buttonClass}" onclick="handleDocAction(this, '${safeSheetName}', '${safeExamName}')">${buttonText}</button>
+                ${viewLink}
+             </div>
+          </div>
+      `;
+      return card;
+  }
+  
+  function handleDocAction(button, sheetName, examName) {
+      button.disabled = true;
+      button.textContent = '...';
+
+      const sheet = g.nursingData.sheets.find(s => s.sheetName === sheetName);
+      if (!sheet) return handleDocActionFailure({ message: 'Critical Error: Sheet data not found.' }, button);
+      
+      const exam = sheet.exams.find(e => e.name === examName);
+      if (!exam) return handleDocActionFailure({ message: 'Critical Error: Exam data not found.' }, button);
+
+      const action = exam.docUrl ? 'update' : 'create';
+
+      const singleExamData = {
+          sheets: [{
+              ...sheet,
+              exams: [exam]
+          }]
+      };
+
+      const backendFunction = action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
+      
+      google.script.run
+        .withSuccessHandler(response => handleDocActionSuccess(response, button, sheetName, examName))
+        .withFailureHandler(error => handleDocActionFailure(error, button))
+        [backendFunction](singleExamData);
+  }
+
+  function handleDocActionSuccess(response, button, sheetName, examName) {
+      if (response.success) {
+          showNotification(response.message, 'success');
+          
+          // Update local data
+          const examData = g.nursingData.sheets.find(s => s.sheetName === sheetName)?.exams.find(e => e.name === examName);
+          if(examData) examData.docUrl = response.docUrl;
+          
+          // Re-render the specific card to reflect the new state
+          const oldCard = button.closest('.exam-card');
+          if (oldCard && examData) {
+              const newCard = buildExamCard(examData, sheetName);
+              oldCard.parentNode.replaceChild(newCard, oldCard);
+          }
+
+      } else {
+          handleDocActionFailure({ message: response.message }, button);
+      }
+  }
+
+  function handleDocActionFailure(error, button) {
+      showNotification('Action failed: ' + error.message, 'error');
+      // Re-render card to restore button state
+      const card = button.closest('.exam-card');
+      const sheetName = card.dataset.sheetName;
+      const examName = card.dataset.examName;
+      const examData = g.nursingData.sheets.find(s => s.sheetName === sheetName)?.exams.find(e => e.name === examName);
+      if (card && examData) {
+          const newCard = buildExamCard(examData, sheetName);
+          card.parentNode.replaceChild(newCard, card);
+      }
+  }
+
+  function filterExams() {
+    const searchTerm = document.getElementById('exam-search').value.toLowerCase();
+    document.querySelectorAll('.course-section').forEach(section => {
+      let visibleExams = 0;
+      section.querySelectorAll('.exam-card').forEach(card => {
+        const examName = card.dataset.examName.toLowerCase();
+        if (examName.includes(searchTerm)) {
+          card.style.display = 'flex';
+          visibleExams++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      section.style.display = visibleExams > 0 ? 'block' : 'none';
+    });
+  }
+  
+  // ... (Settings functions remain the same) ...
+
+</script>

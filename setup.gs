@@ -5,6 +5,40 @@
 
 /**
  * ===================================================================
+ *  AUTHORIZATION FIX (RUN FROM THE SCRIPT EDITOR OR SHEET MENU)
+ * ===================================================================
+ */
+
+/**
+ * Run this function ONCE from the script editor or the 'Admin Setup' menu 
+ * in your sheet to grant the necessary permissions for the script to access 
+ * Google Drive and create documents. This is required to fix permission errors 
+ * when running the tool from the sidebar.
+ */
+function requestPermissions() {
+  try {
+    // Dummy call to DriveApp to request Drive permissions.
+    DriveApp.getFolders(); 
+    
+    // Dummy call to DocumentApp to request Document creation permissions.
+    const tempDoc = DocumentApp.create('Temporary Permission Check');
+    DriveApp.getFileById(tempDoc.getId()).setTrashed(true);
+    
+    // Dummy call to SpreadsheetApp (already likely has permissions, but good practice).
+    SpreadsheetApp.getActiveSpreadsheet();
+    
+    SpreadsheetApp.getUi().alert('Permissions have been successfully granted. You can now use the Nursing tool.');
+
+  } catch (e) {
+    // This error is expected if the user denies permission.
+    console.error("Permission request failed or was denied. " + e.message);
+    SpreadsheetApp.getUi().alert('Permission request failed. Please try again and ensure you grant all requested permissions. Error: ' + e.message);
+  }
+}
+
+
+/**
+ * ===================================================================
  *  DEVELOPER SETUP (RUN FROM THE SCRIPT EDITOR)
  * ===================================================================
  */
@@ -32,9 +66,11 @@ function runFullSetup() {
   
   // Sync the sheet names
   _syncSheetTabsToProperties(sheetId);
+  
+  // Also request permissions as part of the full setup.
+  requestPermissions();
 
-  // You can add other setup steps here if needed.
-  SpreadsheetApp.getUi().alert('Full setup complete! The Master Sheet ID and tab names have been saved.');
+  SpreadsheetApp.getUi().alert('Full setup complete! The Master Sheet ID and tab names have been saved, and necessary permissions have been requested.');
 }
 
 
@@ -44,7 +80,8 @@ function runFullSetup() {
  * @returns {string|null} The Sheet ID or null if not found.
  */
 function _extractSheetIdFromUrl(url) {
-  const regex = /spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+  // Using new RegExp() to avoid issues with escaping slashes in regex literals.
+  const regex = new RegExp("spreadsheets/d/([a-zA-Z0-9-_]+)");
   const match = url.match(regex);
   return match ? match[1] : null;
 }
@@ -91,10 +128,12 @@ function _syncSheetTabsToProperties(sheetId) {
 /**
  * Creates a custom menu in the spreadsheet to run setup.
  */
-function onOpen() {
+function onOpen(e) {
   SpreadsheetApp.getUi()
     .createMenu('Admin Setup')
     .addItem('Set Master Sheet URL', '_promptForMasterSheet')
+    .addSeparator()
+    .addItem('FIX: Grant Permissions', 'requestPermissions')
     .addToUi();
 }
 

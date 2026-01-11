@@ -15,9 +15,8 @@ function api_getInitialAppData() {
     try {
         // Fetch data from various new internal helper functions
         const userInfo = getUserInfo();
-        const dashboardData = getDashboardData();
         const mstViewData = getMstViewData();
-        const mstSettings = getMstSettings();
+        const allSettings = getAllSettings_();
         const calendars = getWritableCalendarsInternal();
 
         // Assemble the grand payload
@@ -25,9 +24,8 @@ function api_getInitialAppData() {
             success: true,
             data: {
                 userInfo: userInfo.success ? userInfo.data : { error: userInfo.message },
-                dashboardData: dashboardData.success ? dashboardData.data : { error: dashboardData.message },
                 mstData: mstViewData.success ? mstViewData.data : { error: mstViewData.error },
-                mstSettings: mstSettings.success ? mstSettings.data : { error: mstSettings.message },
+                settings: allSettings.success ? allSettings.data : { error: allSettings.message },
                 writableCalendars: calendars.success ? calendars.data : { error: calendars.message }
             }
         };
@@ -40,26 +38,40 @@ function api_getInitialAppData() {
     }
 }
 
-// --- INTERNAL DATA-FETCHING FUNCTIONS ---
-
 /**
- * Internal function to fetch user information.
+ * NEW: Generic function to save a settings object for a specific tool.
+ * @param {string} key The property key to save the settings under.
+ * @param {object} settingsObject The settings object for the tool.
+ * @returns {object} A response object with the full, updated settings cache.
  */
-function getUserInfo() {
+function api_saveSettings(key, settingsObject) {
     try {
-        const email = Session.getActiveUser().getEmail();
-        const photoUrl = Session.getActiveUser().getPhotoUrl();
-        return { success: true, data: { email, photoUrl } };
+        if (!key || !settingsObject) {
+            throw new Error("A key and settings object are required.");
+        }
+        const userProperties = PropertiesService.getUserProperties();
+        userProperties.setProperty(key, JSON.stringify(settingsObject));
+        
+        // Return all settings again so the client can update its cache
+        const allSettings = getAllSettings_();
+        if (allSettings.success) {
+            return { success: true, message: 'Settings saved!', data: allSettings.data };
+        } else {
+            throw new Error('Could not retrieve updated settings after saving.');
+        }
     } catch (e) {
-        console.error("getUserInfo Error: " + e.stack);
-        return { success: false, message: e.message };
+        console.error("api_saveSettings Error: " + e.stack);
+        return { success: false, message: 'Failed to save settings: ' + e.message };
     }
 }
 
+
 /**
- * Internal function to fetch all data for the user's dashboard.
+ * Fetches all data for the user's dashboard.
+ * This is called on-demand by the client.
+ * @returns {object} An object containing dashboard data.
  */
-function getDashboardData() {
+function api_getDashboardData() {
     try {
         const email = Session.getActiveUser().getEmail();
         const availabilitySheet = getSheet('Staff_Availability');
@@ -87,6 +99,47 @@ function getDashboardData() {
         return { success: true, data: { availability: userAvailability, preferences: userPreferences } };
     } catch (e) {
         console.error("getDashboardData Error: " + e.stack);
+        return { success: false, message: e.message };
+    }
+}
+
+
+// --- INTERNAL DATA-FETCHING FUNCTIONS ---
+
+/**
+ * NEW: Internal function to get all settings stored in UserProperties.
+ */
+function getAllSettings_() {
+    try {
+        const userProperties = PropertiesService.getUserProperties();
+        const allSettings = userProperties.getProperties();
+        const parsedSettings = {};
+        for (const key in allSettings) {
+            try {
+                // Assume settings are stored as JSON strings
+                parsedSettings[key] = JSON.parse(allSettings[key]);
+            } catch (e) {
+                // If not a JSON string, use the value as is.
+                parsedSettings[key] = allSettings[key];
+            }
+        }
+        return { success: true, data: parsedSettings };
+    } catch (e) {
+        console.error('getAllSettings_ Error: ' + e.stack);
+        return { success: false, message: 'Failed to retrieve settings.' };
+    }
+}
+
+/**
+ * Internal function to fetch user information.
+ */
+function getUserInfo() {
+    try {
+        const email = Session.getActiveUser().getEmail();
+        const photoUrl = Session.getActiveUser().getPhotoUrl();
+        return { success: true, data: { email, photoUrl } };
+    } catch (e) {
+        console.error("getUserInfo Error: " + e.stack);
         return { success: false, message: e.message };
     }
 }
@@ -137,24 +190,6 @@ function getMstViewData() {
         console.error("Error in getMstViewData: " + e.stack);
         return { success: false, error: e.message };
     }
-}
-
-/**
- * Internal function to get MST settings.
- */
-function getMstSettings() {
-  try {
-    const allSettings = getSettings();
-    let mstSettings = {};
-    if (allSettings.mstSettings) {
-      mstSettings = JSON.parse(allSettings.mstSettings);
-    }
-    const ss = getMasterDataHub();
-    const sheetNames = ss.getSheets().map(s => s.getName());
-    return { success: true, data: { settings: mstSettings, sheetNames: sheetNames } };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
 }
 
 /**

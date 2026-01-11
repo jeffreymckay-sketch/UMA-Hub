@@ -3,10 +3,11 @@
   // 'g' will act as our global capacitor bank, holding all pre-fetched application data.
   const g = {
     userInfo: null,
-    dashboardData: null,
+    dashboardData: null, // This will be loaded on-demand
     mstData: null,
-    mstSettings: null,
+    allSettings: {}, // NEW: Central cache for all tool settings
     writableCalendars: null,
+    nursingData: null, // This will be loaded on-demand
   };
 
   // --- Page Router & Initializer ---
@@ -20,7 +21,13 @@
         { id: 'TechHub', title: 'Tech Hub' }
       ]
     },
-    { id: 'Proctoring', title: 'Proctoring' },
+    {
+      id: 'Proctoring',
+      title: 'Proctoring',
+      children: [
+        { id: 'Nursing', title: 'Nursing' }
+      ]
+    },
     { id: 'Zoom', title: 'Zoom' },
     { id: 'Settings', title: 'Settings' }
   ];
@@ -54,9 +61,8 @@
       console.log("Initial data loaded successfully:", response.data);
       // Populate the global capacitor bank
       g.userInfo = response.data.userInfo;
-      g.dashboardData = response.data.dashboardData;
       g.mstData = response.data.mstData;
-      g.mstSettings = response.data.mstSettings;
+      g.allSettings = response.data.settings || {}; // NEW: Populate the settings cache
       g.writableCalendars = response.data.writableCalendars;
 
       // Now that data is loaded, populate the UI.
@@ -161,12 +167,13 @@
 
     updateActiveMenu(pageId, isInitialLoad);
 
-    // Call the specific loader function for the page. 
-    // These functions should now be synchronous and use data from 'g'.
+    // Call the specific loader function for the page.
     if (pageId === 'Dashboard') {
-      loadDashboard();
+      loadDashboardPage();
     } else if (pageId === 'MST') {
       loadMstPage();
+    } else if (pageId === 'Nursing') {
+      loadNursingPage();
     }
   }
 
@@ -187,6 +194,24 @@
         }
       }
     }
+  }
+  
+  function openTab(evt, tabName) {
+    let i, tabcontent, tablinks;
+    const parentPage = evt.currentTarget.closest('.page-view');
+    
+    tabcontent = parentPage.getElementsByClassName("tab-content");
+    for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+    }
+    
+    tablinks = parentPage.getElementsByClassName("tab-link");
+    for (i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+    }
+    
+    document.getElementById(tabName).style.display = "block";
+    evt.currentTarget.className += " active";
   }
 
   // --- UI & User Info Handlers ---
