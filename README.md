@@ -29,7 +29,6 @@ To deploy and use the Staff Portal, follow these steps:
     *   Configure the web app settings as needed (e.g., access permissions).
     *   Click **Deploy**.
 6.  **Access the Application:** Once deployed, you will be given a URL to access the Staff Portal.
-7. **All tools are modular** Tools can be removed or added without impacting any other tools.  Any common logic that is used by multiple tools is housed in Controller_Core.gs, while and logic related to an individual tool is located within that tool exclusively.  
 
 ## Additional Notes
 

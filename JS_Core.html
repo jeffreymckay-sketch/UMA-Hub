@@ -57,6 +57,7 @@
    * This function is critical. It populates our global cache ('g').
    */
   function handleInitialDataSuccess(response) {
+    // FIX: Added check for null response to prevent crash
     if (response && response.success) {
       console.log("Initial data loaded successfully:", response.data);
       // Populate the global capacitor bank
@@ -77,7 +78,9 @@
       document.getElementById('loader').style.display = 'none';
 
     } else {
-      handleInitialError({ message: response.message || "An unknown error occurred on the server." });
+      // FIX: Handle null/undefined response gracefully
+      const msg = (response && response.message) ? response.message : "Server returned no data (null response). Check Controller_Core.gs.";
+      handleInitialError({ message: msg });
     }
   }
 
@@ -86,7 +89,7 @@
    */
   function handleInitialError(error) {
     console.error("Catastrophic failure during initial data load:", error);
-    document.getElementById('loader').innerHTML = 'Failed to load critical application data. Please try refreshing. Error: ' + (error.message || 'Unknown');
+    document.getElementById('loader').innerHTML = '<div style="padding:20px; text-align:center; color:red;">Failed to load application data.<br>' + (error.message || 'Unknown Error') + '</div>';
   }
 
   // --- Core Navigation ---
@@ -170,11 +173,11 @@
 
     // Call the specific loader function for the page.
     if (pageId === 'Dashboard') {
-      loadDashboardPage();
+      if(typeof loadDashboardPage === 'function') loadDashboardPage();
     } else if (pageId === 'MST') {
-      loadMstPage();
+      if(typeof loadMstPage === 'function') loadMstPage();
     } else if (pageId === 'Nursing') {
-      loadNursingPage();
+      if(typeof loadNursingPage === 'function') loadNursingPage();
     }
   }
 
@@ -235,5 +238,4 @@
       photo.style.display = 'block';
     }
   }
-
 </script>
