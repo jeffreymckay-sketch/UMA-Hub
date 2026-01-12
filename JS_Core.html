@@ -1,13 +1,13 @@
 <script>
   // --- Global Data Cache ---
-  // 'g' will act as our global capacitor bank, holding all pre-fetched application data.
   const g = {
     userInfo: null,
-    dashboardData: null, // This will be loaded on-demand
+    dashboardData: null,
     mstData: null,
-    allSettings: {}, // NEW: Central cache for all tool settings
+    allSettings: {},
     writableCalendars: null,
-    nursingData: null, // This will be loaded on-demand
+    allCalendars: null, // NEW: Holds the read-only calendar list
+    nursingData: null,
   };
 
   // --- Page Router & Initializer ---
@@ -28,65 +28,50 @@
         { id: 'Nursing', title: 'Nursing' }
       ]
     },
+    { id: 'Reporting', title: 'Stats & Reports' },
     { id: 'Zoom', title: 'Zoom' },
     { id: 'Settings', title: 'Settings' }
   ];
 
-  /**
-   * Runs when the document is fully loaded. This is the main startup sequence.
-   */
   document.addEventListener('DOMContentLoaded', function() {
     console.log("Initializing application...");
     buildMenu();
 
-    // Call the new, unified data endpoint to pre-load everything.
     google.script.run
       .withSuccessHandler(handleInitialDataSuccess)
       .withFailureHandler(handleInitialError)
       .api_getInitialAppData();
 
-    // Listen for hash changes to handle back/forward browser buttons.
     window.addEventListener('popstate', function(e) {
       const pageId = window.location.hash.substring(1) || 'Dashboard';
       navigateToPage(pageId);
     });
   });
 
-  /**
-   * SUCCESS HANDLER for the main data load.
-   * This function is critical. It populates our global cache ('g').
-   */
   function handleInitialDataSuccess(response) {
-    // FIX: Added check for null response to prevent crash
     if (response && response.success) {
       console.log("Initial data loaded successfully:", response.data);
-      // Populate the global capacitor bank
+      
       g.userInfo = response.data.userInfo;
       g.mstData = response.data.mstData;
-      g.allSettings = response.data.settings || {}; // NEW: Populate the settings cache
+      g.allSettings = response.data.settings || {};
       g.writableCalendars = response.data.writableCalendars;
+      g.allCalendars = response.data.allCalendars; // NEW: Capture the calendar list
       g.nursingData = response.data.nursingData;
 
-      // Now that data is loaded, populate the UI.
       populateUserInfo(); 
 
-      // Determine the initial page from the URL hash and navigate.
       const initialPage = window.location.hash.substring(1) || 'Dashboard';
       navigateToPage(initialPage, true);
 
-      // Everything is ready. Hide the main loader.
       document.getElementById('loader').style.display = 'none';
 
     } else {
-      // FIX: Handle null/undefined response gracefully
-      const msg = (response && response.message) ? response.message : "Server returned no data (null response). Check Controller_Core.gs.";
+      const msg = (response && response.message) ? response.message : "Server returned no data.";
       handleInitialError({ message: msg });
     }
   }
 
-  /**
-   * FAILURE HANDLER for the main data load.
-   */
   function handleInitialError(error) {
     console.error("Catastrophic failure during initial data load:", error);
     document.getElementById('loader').innerHTML = '<div style="padding:20px; text-align:center; color:red;">Failed to load application data.<br>' + (error.message || 'Unknown Error') + '</div>';
@@ -107,7 +92,7 @@
         link.classList.add('has-submenu');
         link.id = `nav-toggle-${item.id}`;
         link.innerHTML = `${item.title} <span class="submenu-arrow">&#9654;</span>`;
-        link.href = '#'; // Parent items just toggle
+        link.href = '#'; 
 
         const subMenu = document.createElement('div');
         subMenu.className = 'sub-menu';
@@ -171,13 +156,14 @@
 
     updateActiveMenu(pageId, isInitialLoad);
 
-    // Call the specific loader function for the page.
     if (pageId === 'Dashboard') {
       if(typeof loadDashboardPage === 'function') loadDashboardPage();
     } else if (pageId === 'MST') {
       if(typeof loadMstPage === 'function') loadMstPage();
     } else if (pageId === 'Nursing') {
       if(typeof loadNursingPage === 'function') loadNursingPage();
+    } else if (pageId === 'Reporting') {
+      if(typeof loadReportingPage === 'function') loadReportingPage();
     }
   }
 
@@ -217,8 +203,6 @@
     document.getElementById(tabName).style.display = "block";
     evt.currentTarget.className += " active";
   }
-
-  // --- UI & User Info Handlers ---
 
   function toggleSidebar() {
     document.getElementById('app-sidebar').classList.toggle('collapsed');
