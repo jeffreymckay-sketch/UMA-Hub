@@ -40,6 +40,32 @@
   .btn-create:hover { opacity: 0.9; }
   .btn-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; background: #eee; color: #999; border: 1px solid #ddd; }
 
+  /* --- Progress Modal Styles --- */
+  #progress-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); z-index: 20000;
+    display: flex; justify-content: center; align-items: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  #progress-overlay.active { opacity: 1; pointer-events: all; }
+  
+  .progress-box {
+    background: #fff; width: 400px; padding: 25px; border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2); text-align: center;
+  }
+  .progress-box h3 { margin-top: 0; color: var(--color-primary-navy); }
+  
+  .progress-bar-bg {
+    background: #eee; height: 20px; border-radius: 10px; overflow: hidden;
+    margin: 15px 0; border: 1px solid #ddd;
+  }
+  .progress-bar-fill {
+    background: var(--color-primary-green); height: 100%; width: 0%;
+    transition: width 0.5s ease;
+  }
+  .progress-stats { font-weight: bold; color: #555; margin-bottom: 5px; }
+  .progress-subtext { font-size: 0.9em; color: #888; }
+
   /* --- Accommodations Sidebar Styles (Embedded) --- */
   #accommodations-sidebar {
     position: fixed; top: 0; right: -450px; width: 450px; max-width: 90%; height: 100%;
@@ -58,6 +84,18 @@
   .accommodations-footer { padding: 20px; border-top: 1px solid #eee; text-align: right; }
 </style>
 
+<!-- Progress Modal HTML -->
+<div id="progress-overlay">
+  <div class="progress-box">
+    <h3 id="progress-title">Processing...</h3>
+    <div class="progress-stats" id="progress-stats">0 / 0</div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-subtext" id="progress-subtext">Initializing...</div>
+  </div>
+</div>
+
 <!-- Accommodations Sidebar HTML -->
 <div id="accommodations-overlay" onclick="closeAccommodationsSidebar()"></div>
 <div id="accommodations-sidebar">
@@ -74,6 +112,15 @@
 </div>
 
 <script>
+  // --- Global State for Batching ---
+  let batchState = {
+    queue: [],
+    total: 0,
+    processed: 0,
+    action: '', // 'create' or 'update'
+    isRunning: false
+  };
+
   function loadNursingPage() {
     // Ensure tab is active
     const docTabBtn = document.querySelector('button[onclick*="Nursing-DocManagement"]');
@@ -188,7 +235,7 @@
       card.innerHTML = `
           <div class="exam-card-header">${exam.name}</div>
           <div class="exam-card-body">
-              <div class="exam-info-row"><span class="exam-label">Date:</span> <span class="exam-value">${exam.date ? new Date(exam.date).toLocaleDateString() : '-'}</span></div>
+              <div class="exam-info-row"><span class="exam-label">Date:</span> <span class="exam-value">${exam.date || '-'}</span></div>
               <div class="exam-info-row"><span class="exam-label">Site Time:</span> <span class="exam-value">${exam.siteTime || '-'}</span></div>
               <div class="exam-info-row"><span class="exam-label">Zoom Time:</span> <span class="exam-value">${exam.zoomTime || '-'}</span></div>
               <div class="exam-info-row"><span class="exam-label">Password:</span> <span class="password-badge">${exam.password || '-'}</span></div>
@@ -204,7 +251,7 @@
       return card;
   }
 
-  // --- Actions ---
+  // --- Single Actions ---
 
   function handleSingleAction(btn, action, sheetName, examName) {
       btn.disabled = true;
@@ -222,9 +269,7 @@
             if(res.success) {
                 showNotification(res.message, 'success');
                 // Update local data
-                exam.docUrl = res.docUrl || exam.docUrl; // Keep old if not returned
-                if (action === 'create' && res.docUrl) exam.docUrl = res.docUrl; // Ensure new URL is captured
-                
+                exam.docUrl = res.docUrl || exam.docUrl; 
                 // Re-render card
                 const newCard = buildExamCard({ ...exam, _sheetName: sheetName });
                 btn.closest('.exam-card').replaceWith(newCard);
@@ -241,23 +286,128 @@
         [func](payload);
   }
 
+  // --- Bulk Actions (Chunking Strategy) ---
+
   function handleBulkAction(action) {
-      const createBtn = document.getElementById('nursing-create-btn');
-      const updateBtn = document.getElementById('nursing-update-btn');
-      createBtn.disabled = true; updateBtn.disabled = true;
+      if (!g.nursingData || !g.nursingData.data) return;
+
+      // 1. Flatten all exams into a single list
+      const allExams = [];
+      g.nursingData.data.sheets.forEach(sheet => {
+          sheet.exams.forEach(exam => {
+              allExams.push({
+                  sheetName: sheet.sheetName,
+                  course: sheet.course,
+                  exam: exam
+              });
+          });
+      });
+
+      if (allExams.length === 0) {
+          showNotification("No exams found to process.", "error");
+          return;
+      }
+
+      // 2. Initialize Batch State
+      batchState = {
+          queue: allExams,
+          total: allExams.length,
+          processed: 0,
+          action: action,
+          isRunning: true
+      };
+
+      // 3. Disable Buttons & Show Modal
+      document.getElementById('nursing-create-btn').disabled = true;
+      document.getElementById('nursing-update-btn').disabled = true;
+      showProgressModal(true);
+      updateProgressUI(0, batchState.total, "Starting batch process...");
+
+      // 4. Start Processing
+      processNextBatch();
+  }
+
+  function processNextBatch() {
+      const BATCH_SIZE = 5;
       
-      const func = action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
+      // Check if done
+      if (batchState.processed >= batchState.total) {
+          finishBatchProcess();
+          return;
+      }
+
+      // Get next chunk
+      const chunk = batchState.queue.slice(batchState.processed, batchState.processed + BATCH_SIZE);
       
+      // Reconstruct Payload for this chunk
+      // We need to group exams back into sheets for the server function
+      const tempSheetsMap = {};
+      
+      chunk.forEach(item => {
+          if (!tempSheetsMap[item.sheetName]) {
+              tempSheetsMap[item.sheetName] = {
+                  sheetName: item.sheetName,
+                  course: item.course,
+                  exams: []
+              };
+          }
+          tempSheetsMap[item.sheetName].exams.push(item.exam);
+      });
+
+      const payload = {
+          settings: g.nursingData.data.settings,
+          sheets: Object.values(tempSheetsMap)
+      };
+
+      const func = batchState.action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
+
+      updateProgressUI(batchState.processed, batchState.total, `Processing items ${batchState.processed + 1} - ${Math.min(batchState.processed + BATCH_SIZE, batchState.total)}...`);
+
       google.script.run
-        .withSuccessHandler(res => {
-            showNotification(res.message, res.success ? 'success' : 'error');
-            createBtn.disabled = false; updateBtn.disabled = false;
-            if(res.success) {
-                g.nursingData = null; // Reload
-                loadNursingPage();
-            }
-        })
-        [func](g.nursingData.data);
+          .withSuccessHandler(res => {
+              if (res.success) {
+                  batchState.processed += chunk.length;
+                  updateProgressUI(batchState.processed, batchState.total, "Batch complete.");
+                  processNextBatch(); // Recursive call
+              } else {
+                  // If a batch fails, we stop and alert
+                  showNotification("Batch failed: " + res.message, "error");
+                  finishBatchProcess(false);
+              }
+          })
+          .withFailureHandler(err => {
+              showNotification("Server error: " + err.message, "error");
+              finishBatchProcess(false);
+          })
+          [func](payload);
+  }
+
+  function finishBatchProcess(success = true) {
+      showProgressModal(false);
+      document.getElementById('nursing-create-btn').disabled = false;
+      document.getElementById('nursing-update-btn').disabled = false;
+      
+      if (success) {
+          showNotification("All documents processed successfully!", "success");
+          // Reload data to get new URLs
+          g.nursingData = null;
+          loadNursingPage();
+      }
+  }
+
+  // --- Progress UI Helpers ---
+
+  function showProgressModal(show) {
+      const el = document.getElementById('progress-overlay');
+      if (show) el.classList.add('active');
+      else el.classList.remove('active');
+  }
+
+  function updateProgressUI(current, total, message) {
+      const pct = Math.round((current / total) * 100);
+      document.getElementById('progress-stats').textContent = `${current} / ${total}`;
+      document.getElementById('progress-fill').style.width = `${pct}%`;
+      document.getElementById('progress-subtext').textContent = message;
   }
 
   // --- Accommodations Sidebar Logic ---
@@ -335,9 +485,6 @@
   
   // Settings (Preserved)
   function renderNursingSettings() {
-      // ... (Same as before, ensure IDs match) ...
-      // For brevity, assuming the previous settings render function is used or copied here.
-      // If you need the full settings code again, let me know, but it was in the previous artifact.
       const settings = g.allSettings.nursing_settings || {};
       const view = document.getElementById('Nursing-Settings');
       view.innerHTML = `
@@ -352,7 +499,6 @@
   }
   
   function saveNursingSettings(btn) {
-      // ... (Standard save logic) ...
       const settings = {
           nursingSheetId: document.getElementById('nursing-sheet-id').value,
           nursingFolderId: document.getElementById('nursing-folder-id').value,
