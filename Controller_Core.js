@@ -6,14 +6,12 @@
  */
 
 // --- CONFIGURATION ---
-// The ID of the Master Data Hub Spreadsheet
 const MASTER_SPREADSHEET_ID = '1J0bMQamssoKD9OFO5HLVampKYWhWUfaljlUY3O--7us'; 
 
 /**
  * Fetches all necessary data for the initial application load.
  */
 function api_getInitialAppData() {
-    // Initialize default responses
     var userInfo = { success: false, message: "Not loaded" };
     var mstViewData = { success: false, error: "Not loaded" };
     var allSettings = { success: false, message: "Not loaded" };
@@ -22,46 +20,42 @@ function api_getInitialAppData() {
     var nursingData = { success: false, message: "Not loaded" };
 
     try {
-        // 1. Get User Info
+        // 1. User Info
         try {
             var userRes = getUserInfo();
             userInfo = userRes.success ? userRes.data : { error: userRes.message };
         } catch (e) { userInfo = { error: "Failed to load user info." }; }
 
-        // 2. Get Settings
+        // 2. Settings
         try {
             var settingsRes = getAllSettings_();
             allSettings = settingsRes.success ? settingsRes.data : { error: settingsRes.message };
         } catch (e) { allSettings = { error: "Failed to load settings." }; }
 
-        // 3. Get Writable Calendars (For editing)
+        // 3. Calendars
         try {
             var calRes = getWritableCalendarsInternal();
             writableCalendars = calRes.success ? calRes.data : { error: calRes.message };
-        } catch (e) { writableCalendars = { error: "Failed to load writable calendars." }; }
-
-        // 4. Get ALL Calendars (For Inspector/Reporting - Read Only)
-        try {
+            
             var allCalRes = getAllCalendarsInternal();
             allCalendars = allCalRes.success ? allCalRes.data : { error: allCalRes.message };
-        } catch (e) { allCalendars = { error: "Failed to load all calendars." }; }
+        } catch (e) { writableCalendars = { error: "Calendar Error" }; }
 
-        // 5. Get MST Data
+        // 4. MST Data
         try {
             if (typeof getMstViewData === 'function') {
                 var mstRes = getMstViewData();
                 mstViewData = mstRes.success ? mstRes.data : { error: mstRes.error };
-            } else { mstViewData = { error: "MST function missing." }; }
+            }
         } catch (e) { mstViewData = { error: "MST Data Error: " + e.message }; }
 
-        // 6. Get Nursing Data
+        // 5. Nursing Data
         try {
             if (typeof api_getNursingData === 'function') {
                 nursingData = api_getNursingData();
-            } else { nursingData = { success: false, message: "Nursing function missing." }; }
+            }
         } catch (e) { nursingData = { success: false, message: "Nursing Load Error: " + e.message }; }
 
-        // Construct Payload
         var payload = {
             success: true,
             data: {
@@ -74,7 +68,6 @@ function api_getInitialAppData() {
             }
         };
 
-        // Safety Check
         try { JSON.stringify(payload); } 
         catch (jsonError) { throw new Error("Data Serialization Failed: " + jsonError.message); }
 
@@ -86,9 +79,6 @@ function api_getInitialAppData() {
     }
 }
 
-/**
- * Generic function to save a settings object.
- */
 function api_saveSettings(key, settingsObject) {
     try {
         if (!key || !settingsObject) throw new Error("Key and settings object required.");
@@ -99,9 +89,6 @@ function api_saveSettings(key, settingsObject) {
     }
 }
 
-/**
- * Fetches dashboard data.
- */
 function api_getDashboardData() {
     try {
         const email = Session.getActiveUser().getEmail();
@@ -133,12 +120,151 @@ function api_getDashboardData() {
 
         return { success: true, data: { availability: userAvailability, preferences: userPreferences } };
     } catch (e) {
-        console.error("getDashboardData Error: " + e.stack);
         return { success: false, message: e.message };
     }
 }
 
-// --- INTERNAL DATA-FETCHING FUNCTIONS ---
+// --- MST DATA LOGIC ---
+
+function getMstViewData() {
+    try {
+        const staffSheet = getSheet('Staff_List');
+        const assignSheet = getSheet('Staff_Assignments');
+        const courseSheet = getSheet('Course_Schedule');
+
+        if (!staffSheet || !assignSheet || !courseSheet) {
+            return { success: false, error: "Missing required MST sheets." };
+        }
+
+        const staffData = staffSheet.getDataRange().getValues();
+        const assignmentData = assignSheet.getDataRange().getValues();
+        const courseData = courseSheet.getDataRange().getValues();
+
+        const staffHeaders = getColumnMap(staffData[0]);
+        const assignmentHeaders = getColumnMap(assignmentData[0]);
+        
+        // Find header row for courses (Row 2 usually, based on "eventID")
+        const courseHeaderRow = courseData.find(row => row.join('').toLowerCase().includes('eventid'));
+        if (!courseHeaderRow) throw new Error("Missing 'eventID' header in Course Schedule.");
+        const courseHeaders = getColumnMap(courseHeaderRow);
+        const courseHeaderIndex = courseData.indexOf(courseHeaderRow);
+
+        const allStaff = staffData.slice(1).map(row => parseStaff(row, staffHeaders)).filter(s => s && s.isActive);
+        const allAssignments = assignmentData.slice(1).map(row => parseAssignment(row, assignmentHeaders)).filter(Boolean);
+        const allCourses = courseData.slice(courseHeaderIndex + 1).map(row => parseCourse(row, courseHeaders)).filter(Boolean);
+
+        const staffMap = new Map(allStaff.map(s => [String(s.id).toLowerCase(), s]));
+        const assignmentMap = new Map(allAssignments.map(a => [String(a.eventId), a]));
+
+        const courseAssignmentsView = allCourses.map(course => {
+            const assignment = assignmentMap.get(String(course.id));
+            const staff = assignment && assignment.staffId ? staffMap.get(String(assignment.staffId).toLowerCase()) : null;
+            
+            // Use the "Run Time" string if available, otherwise fallback to dates
+            let timeDisplay = course.timeString || "TBD";
+            if (!course.timeString && course.startDate && course.endDate) {
+                 const fmt = (d) => (d instanceof Date) ? Utilities.formatDate(d, Session.getScriptTimeZone(), 'h:mm a') : String(d);
+                 timeDisplay = fmt(course.startDate) + ' - ' + fmt(course.endDate);
+            }
+
+            return {
+                id: course.id,
+                assignmentId: assignment ? assignment.id : null,
+                itemName: course.name,
+                courseFaculty: course.faculty,
+                courseDay: course.daysOfWeek.join(' / '),
+                courseTime: timeDisplay,
+                location: course.location,
+                staffName: staff ? staff.name : "Unassigned",
+                staffId: staff ? staff.id : null
+            };
+        });
+        
+        // Filter staff for dropdown (Role contains MST)
+        const mstStaffList = allStaff.filter(s => s.role && s.role.toLowerCase().includes('mst')).map(s => ({ id: s.id, name: s.name }));
+
+        return { success: true, data: { courseAssignments: courseAssignmentsView, mstStaffList: mstStaffList } };
+    } catch (e) {
+        console.error("Error in getMstViewData: " + e.stack);
+        return { success: false, error: e.message };
+    }
+}
+
+// --- PARSING HELPERS (Customized for your Headers) ---
+
+function getColumnMap(headerRow) {
+    const map = {};
+    headerRow.forEach((col, index) => {
+        if (col) map[String(col).trim().toLowerCase().replace(/\s+/g, '')] = index;
+    });
+    return map;
+}
+
+function parseStaff(row, map) {
+    // Headers: FullName, StaffID, Roles, IsActive
+    const nameIdx = map['fullname'] !== undefined ? map['fullname'] : map['name'];
+    const idIdx = map['staffid'] !== undefined ? map['staffid'] : map['id'];
+    const roleIdx = map['roles'] !== undefined ? map['roles'] : map['role'];
+    const activeIdx = map['isactive'] !== undefined ? map['isactive'] : map['active'];
+
+    if (nameIdx === undefined) return null;
+
+    return {
+        id: row[idIdx],
+        name: row[nameIdx],
+        role: roleIdx !== undefined ? row[roleIdx] : '',
+        isActive: activeIdx !== undefined ? (String(row[activeIdx]).toLowerCase() === 'true' || row[activeIdx] === true) : true
+    };
+}
+
+function parseAssignment(row, map) {
+    // Headers: AssignmentID, StaffID, AssignmentType, ReferenceID
+    const idIdx = map['assignmentid'];
+    const eventIdx = map['referenceid'];
+    const staffIdx = map['staffid'];
+
+    if (eventIdx === undefined || staffIdx === undefined) return null;
+
+    return {
+        id: row[idIdx],
+        eventId: row[eventIdx],
+        staffId: row[staffIdx]
+    };
+}
+
+function parseCourse(row, map) {
+    // Headers: Session, Start Date, End Date, Day, Course, Faculty, Run Time, Time of Day, BX Location, eventID
+    const idIdx = map['eventid'];
+    const nameIdx = map['course']; // Header is "Course"
+    const facultyIdx = map['faculty'];
+    const daysIdx = map['day']; // Header is "Day"
+    const runTimeIdx = map['runtime']; // Header is "Run Time"
+    const locIdx = map['bxlocation']; // Header is "BX Location"
+    
+    // Fallbacks for dates if needed
+    const startIdx = map['startdate'];
+    const endIdx = map['enddate'];
+
+    if (idIdx === undefined || nameIdx === undefined) return null;
+
+    let days = [];
+    if (daysIdx !== undefined && row[daysIdx]) {
+        days = String(row[daysIdx]).split(',').map(d => d.trim());
+    }
+
+    return {
+        id: row[idIdx],
+        name: row[nameIdx],
+        faculty: facultyIdx !== undefined ? row[facultyIdx] : '',
+        daysOfWeek: days,
+        timeString: runTimeIdx !== undefined ? row[runTimeIdx] : '', // Capture "9:00 - 11:00" string
+        startDate: startIdx !== undefined ? row[startIdx] : null,
+        endDate: endIdx !== undefined ? row[endIdx] : null,
+        location: locIdx !== undefined ? row[locIdx] : ''
+    };
+}
+
+// --- SHARED HELPERS ---
 
 function getAllSettings_() {
     try {
@@ -156,10 +282,6 @@ function getUserInfo() {
     try {
         return { success: true, data: { email: Session.getActiveUser().getEmail(), photoUrl: "" } };
     } catch (e) { return { success: false, message: e.message }; }
-}
-
-function getMstViewData() {
-    return { success: false, error: "MST Logic Placeholder" };
 }
 
 function getWritableCalendarsInternal() {
@@ -242,14 +364,9 @@ function normalizeTime(input) {
   return String(input); 
 }
 
-/**
- * UPDATED: Helper to get a sheet by name safely.
- * Checks for a hardcoded ID first, then falls back to active sheet.
- */
 function getSheet(sheetName) {
     try {
         let ss;
-        // 1. Try opening by ID if provided
         if (MASTER_SPREADSHEET_ID && MASTER_SPREADSHEET_ID !== 'PASTE_YOUR_ID_HERE') {
             try {
                 ss = SpreadsheetApp.openById(MASTER_SPREADSHEET_ID);
@@ -257,12 +374,9 @@ function getSheet(sheetName) {
                 console.warn("Could not open spreadsheet by ID. Falling back to Active.");
             }
         }
-        
-        // 2. Fallback to Active Spreadsheet (Bound script)
         if (!ss) {
             ss = SpreadsheetApp.getActiveSpreadsheet();
         }
-
         if (!ss) throw new Error("Script is not bound to a spreadsheet and no ID provided.");
         
         const sheet = ss.getSheetByName(sheetName);

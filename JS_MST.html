@@ -1,3 +1,159 @@
+<style>
+  /* --- MST Card Layout Styles --- */
+  
+  /* Robust Button Styles */
+  button { cursor: pointer; font-family: inherit; transition: opacity 0.2s; }
+  
+  .button-primary {
+    background-color: var(--color-primary-navy, #00274c);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  
+  .button-success {
+    background-color: var(--color-primary-green, #28a745);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .button-primary:hover, .button-success:hover { opacity: 0.9; }
+  .button-primary:disabled, .button-success:disabled { background-color: #ccc; cursor: not-allowed; }
+
+  /* --- Compact Table Styles --- */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+  }
+  
+  .data-table th {
+    background-color: #f8f9fa;
+    color: #333;
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 2px solid #ddd;
+  }
+  
+  .data-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+  }
+  
+  .data-table tr:hover { background-color: #f9f9f9; }
+
+  /* Assignment Cell Styles */
+  .assign-wrapper {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  
+  .assign-select {
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.95em;
+    max-width: 150px;
+  }
+
+  /* --- Calendar Sync Layout --- */
+  .sync-controls {
+    background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #ddd;
+    margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end;
+  }
+  
+  .sync-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px;
+    padding-bottom: 40px;
+  }
+
+  .sync-card {
+    background: #fff; border: 1px solid #ddd; border-radius: 6px;
+    display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .sync-card.status-new { border-left: 5px solid #28a745; }
+  .sync-card.status-update { border-left: 5px solid #f39c12; }
+  .sync-card.status-synced { border-left: 5px solid #bdc3c7; opacity: 0.7; }
+  
+  .sync-card-header {
+    padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #eee;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  
+  .sync-card-body { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+  
+  .sync-input-group { display: flex; flex-direction: column; font-size: 0.9em; }
+  .sync-input-group label { font-size: 0.8em; color: #666; margin-bottom: 2px; font-weight: 600; }
+  .sync-input { 
+    padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; 
+    font-size: 1em;
+  }
+  
+  /* Diff Styles */
+  .diff-container {
+    background: #fff3cd; border: 1px solid #ffeeba; padding: 8px; border-radius: 4px; margin-bottom: 5px;
+  }
+  .diff-item {
+    display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; font-size: 0.85em; color: #856404;
+  }
+  .diff-item:last-child { margin-bottom: 0; }
+  .diff-item input { margin-top: 2px; }
+
+  .sync-info-section {
+    background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.85em; color: #555;
+    border: 1px solid #eee;
+  }
+  .sync-info-row { margin-bottom: 2px; }
+  .sync-info-label { font-weight: bold; color: #333; margin-right: 5px; }
+
+  .sync-card-footer {
+    padding: 8px 12px; background: #fff; border-top: 1px solid #eee;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  .status-badge {
+    padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .status-badge.new { background: #d4edda; color: #155724; }
+  .status-badge.update { background: #fff3cd; color: #856404; }
+  .status-badge.synced { background: #e2e3e5; color: #383d41; }
+
+  /* Filters */
+  .filter-bar { 
+    margin-bottom: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; 
+    padding: 5px; background: #f8f9fa; border-radius: 30px; border: 1px solid #eee;
+  }
+  .filter-btn { 
+    padding: 5px 12px; border: 1px solid transparent; background: transparent; 
+    border-radius: 20px; cursor: pointer; font-size: 0.85em; color: #666; font-weight: 500;
+  }
+  .filter-btn:hover { background: #e9ecef; }
+  .filter-btn.active { 
+    background: var(--color-primary-navy, #00274c); 
+    color: #fff; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  /* Form Elements */
+  .form-field { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+  .form-field label { display: block; margin-bottom: 4px; font-weight: bold; }
+
+</style>
+
 <script>
 /**
  * Main entry point for the MST page.
@@ -6,7 +162,7 @@ function loadMstPage() {
   const pageContainer = document.getElementById('page-MST');
   if (pageContainer.childElementCount > 0) return;
 
-  console.log("Loading MST page from pre-fetched data...");
+  console.log("Loading MST page...");
 
   if (!g.mstData || g.mstData.error) {
     pageContainer.innerHTML = `<div class="error-message">Could not load MST tool. Error: ${g.mstData ? g.mstData.error : 'Unknown'}</div>`;
@@ -31,7 +187,7 @@ function loadMstPage() {
     link.addEventListener('click', e => handleMstTabClick(e, pageContainer));
   });
 
-  loadMstClassroomTab(); // Load initial tab
+  loadMstClassroomTab(); 
 }
 
 function handleMstTabClick(e, pageContainer) {
@@ -45,7 +201,6 @@ function handleMstTabClick(e, pageContainer) {
   const activeContent = document.getElementById(`mst-${tabId}`);
   activeContent.style.display = 'block';
 
-  // Data is pre-loaded, just call the render function for the tab.
   switch (tabId) {
     case 'classroom': loadMstClassroomTab(); break;
     case 'calendar': loadMstCalendarTab(); break;
@@ -62,46 +217,87 @@ function loadMstClassroomTab() {
 }
 
 function renderScheduleTable(container, schedule, staffList) {
-  const staffOptions = staffList.map(staff => `<option value="${staff.id}">${staff.name}</option>`).join('');
   container.innerHTML = `
     <table class="data-table">
-      <thead><tr><th>Course</th><th>Day</th><th>Time</th><th>Location</th><th>Assigned Staff</th><th>Actions</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Course</th>
+          <th>Faculty</th>
+          <th>Day</th>
+          <th>Time</th>
+          <th>Location</th>
+          <th>Staff Assignment</th>
+        </tr>
+      </thead>
       <tbody>
-        ${schedule.map(item => `
+        ${schedule.map(item => {
+          const options = staffList.map(staff => 
+            `<option value="${staff.id}" ${String(staff.id) === String(item.staffId) ? 'selected' : ''}>${staff.name}</option>`
+          ).join('');
+          
+          return `
           <tr data-course-id="${item.id}">
-            <td>${item.itemName}</td><td>${item.courseDay}</td><td>${item.courseTime}</td><td>${item.location}</td>
-            <td id="staff-cell-${item.id}">${item.staffName || 'Not Assigned'}</td>
+            <td>${item.itemName}</td>
+            <td>${item.courseFaculty}</td>
+            <td>${item.courseDay}</td>
+            <td>${item.courseTime}</td>
+            <td>${item.location}</td>
             <td>
-              <div class="inline-form">
-                <select id="select-staff-${item.id}" class="form-field"><option value="">-- Select --</option>${staffOptions}</select>
-                <button onclick="assignStaff('${item.id}', event)">Assign</button>
+              <div class="assign-wrapper">
+                <select id="select-staff-${item.id}" class="assign-select">
+                  <option value="">-- Unassigned --</option>
+                  ${options}
+                </select>
+                <button type="button" class="button-primary" id="btn-assign-${item.id}">Save</button>
               </div>
             </td>
-          </tr>`).join('') || '<tr><td colspan="6">No schedule data found.</td></tr>'}
+          </tr>`;
+        }).join('') || '<tr><td colspan="6">No schedule data found.</td></tr>'}
       </tbody>
     </table>`;
+    
+    // Attach Listeners
+    schedule.forEach(item => {
+        const btn = document.getElementById(`btn-assign-${item.id}`);
+        if(btn) btn.addEventListener('click', (e) => assignStaff(item.id, e));
+    });
 }
 
 function assignStaff(courseId, event) {
+  if(event) { event.preventDefault(); event.stopPropagation(); }
+  
   const select = document.getElementById(`select-staff-${courseId}`);
   const staffId = select.value;
-  if (!staffId) { alert('Please select a staff member.'); return; }
   
   const btn = event.target;
+  const originalText = btn.textContent;
   btn.disabled = true; btn.textContent = '...';
 
   google.script.run
     .withSuccessHandler(res => {
       if (res.success) {
-        document.getElementById(`staff-cell-${courseId}`).textContent = select.options[select.selectedIndex].text;
-      } else { alert('Save Failed: ' + res.error); }
-      btn.disabled = false; btn.textContent = 'Assign';
+        btn.textContent = 'Saved!';
+        btn.style.backgroundColor = 'var(--color-primary-green, #28a745)';
+        setTimeout(() => {
+            btn.disabled = false; 
+            btn.textContent = originalText;
+            btn.style.backgroundColor = ''; 
+        }, 2000);
+      } else { 
+        alert('Save Failed: ' + res.error); 
+        btn.disabled = false; btn.textContent = originalText;
+      }
     })
-    .withFailureHandler(err => { alert('Error: ' + err.message); btn.disabled = false; btn.textContent = 'Assign'; })
+    .withFailureHandler(err => { 
+        alert('Error: ' + err.message); 
+        btn.disabled = false; btn.textContent = originalText; 
+    })
     .api_updateCourseAssignment(courseId, staffId);
 }
 
-// --- Calendar Sync Tab (No Server Call for Loading) ---
+// --- Calendar Sync Tab (New Card Layout) ---
+
+let mstSyncData = []; // Store the preview data globally
 
 function loadMstCalendarTab() {
   const container = document.getElementById('mst-calendar');
@@ -111,66 +307,245 @@ function loadMstCalendarTab() {
     container.innerHTML = `<div class="error-message">Could not load Calendar Sync. Error: ${g.writableCalendars ? g.writableCalendars.error : 'Unknown'}</div>`;
     return;
   }
-  renderCalendarSyncForm(container, g.writableCalendars);
-}
-
-function renderCalendarSyncForm(container, calendars) {
-  const calOptions = calendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  
+  const calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  
   container.innerHTML = `
-    <div class="form-grid" style="max-width: 800px;">
-      <div class="form-field full-width">
-        <label for="mst-calendar-select">Select Google Calendar</label>
+    <div class="sync-controls">
+      <div style="flex-grow:1;">
+        <label style="display:block; font-weight:bold; margin-bottom:5px;">Select Target Calendar</label>
         <select id="mst-calendar-select" class="form-field">${calOptions}</select>
       </div>
+      <button type="button" class="button-primary" id="btn-preview">Preview Changes</button>
     </div>
-    <div class="form-actions">
-      <button class="button-primary" onclick="runMstSync(true, event)">Preview Changes</button>
-      <button onclick="runMstSync(false, event)">Run Sync</button>
+    
+    <div id="mst-sync-area" style="display:none;">
+        <div class="filter-bar">
+            <button type="button" class="filter-btn active" id="filter-all">All</button>
+            <button type="button" class="filter-btn" id="filter-new">New</button>
+            <button type="button" class="filter-btn" id="filter-update">Updates</button>
+            <button type="button" class="filter-btn" id="filter-synced">Synced</button>
+            <div style="flex-grow:1"></div>
+            <button type="button" class="button-success" id="btn-sync-selected">Sync Selected</button>
+        </div>
+        <div id="mst-sync-grid" class="sync-grid"></div>
     </div>
-    <div id="mst-sync-results" class="feedback-container"></div>`;
-}
-
-function runMstSync(isPreview, event) {
-  event.preventDefault(); // <-- THE FIX! Stops the browser's default reload action.
-  const calId = document.getElementById('mst-calendar-select').value;
-  if (!calId) return;
-
-  const resultsDiv = document.getElementById('mst-sync-results');
-  resultsDiv.innerHTML = '<div class="loader-container"><div class="loader-ring"></div></div>';
+    <div id="mst-sync-loader" class="loader-container" style="display:none;"><div class="loader-ring"></div></div>
+  `;
   
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = isPreview ? 'Previewing...' : 'Syncing...';
-
-  google.script.run
-    .withSuccessHandler(res => {
-        if (!res.success) { resultsDiv.innerHTML = `<div class="error-message">Error: ${res.message}</div>`; } 
-        else { resultsDiv.innerHTML = res.isPreview ? renderSyncPreview(res) : renderSyncResults(res); }
-        btn.disabled = false;
-        btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
-    })
-    .withFailureHandler(err => {
-        resultsDiv.innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
-        btn.disabled = false;
-        btn.textContent = isPreview ? 'Preview Changes' : 'Run Sync';
-    })
-    .api_runMstCalendarSync(calId, isPreview);
+  // Attach Listeners
+  document.getElementById('btn-preview').addEventListener('click', runMstPreview);
+  document.getElementById('btn-sync-selected').addEventListener('click', runMstCommit);
+  document.getElementById('filter-all').addEventListener('click', (e) => filterSyncGrid('all', e.target));
+  document.getElementById('filter-new').addEventListener('click', (e) => filterSyncGrid('new', e.target));
+  document.getElementById('filter-update').addEventListener('click', (e) => filterSyncGrid('update', e.target));
+  document.getElementById('filter-synced').addEventListener('click', (e) => filterSyncGrid('synced', e.target));
 }
 
-function renderSyncPreview(data) {
-  let list = data.changes && data.changes.length > 0 
-    ? data.changes.map(ch => `<li><strong>${ch.action}:</strong> ${ch.title} (Row ${ch.row})<ul>${ch.diffs.map(d => `<li><em>${d.field}:</em> \"${d.old}\" -> \"${d.new}\"</li>`).join('')}</ul></li>`).join('')
-    : '<li>No changes detected.</li>';
-  return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
+function runMstPreview(e) {
+    if(e) { e.preventDefault(); e.stopPropagation(); }
+    console.log("Preview Button Clicked");
+    
+    const calId = document.getElementById('mst-calendar-select').value;
+    if(!calId) return;
+
+    document.getElementById('mst-sync-area').style.display = 'none';
+    document.getElementById('mst-sync-loader').style.display = 'flex';
+    
+    google.script.run
+        .withSuccessHandler(res => {
+            document.getElementById('mst-sync-loader').style.display = 'none';
+            if(res.success) {
+                mstSyncData = res.data; // Store data
+                renderSyncGrid();
+                document.getElementById('mst-sync-area').style.display = 'block';
+            } else {
+                alert("Error: " + res.message);
+            }
+        })
+        .api_previewMstCalendarSync(calId);
 }
 
-function renderSyncResults(data) {
-  let list = data.results && data.results.length > 0
-    ? data.results.map(r => `<li><strong>${r.title}:</strong> ${r.status} - <em>${r.details}</em></li>`).join('')
-    : '<li>Sync complete. No items to report.</li>';
-  return `<h4>${data.message}</h4><ul class="feedback-list">${list}</ul>`;
+function renderSyncGrid() {
+    const grid = document.getElementById('mst-sync-grid');
+    grid.innerHTML = '';
+    
+    if(mstSyncData.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:20px;">No events found in sheet.</div>';
+        return;
+    }
+
+    mstSyncData.forEach((item, index) => {
+        const p = item.payload;
+        const statusClass = item.status.toLowerCase();
+        
+        // Format Date for Input
+        const startObj = new Date(p.startTime);
+        const endObj = new Date(p.endTime);
+        const fmtTime = d => d.toTimeString().substring(0,5);
+        
+        // Diff HTML with Checkboxes
+        let diffHtml = '';
+        if(item.diffs && item.diffs.length > 0) {
+            const diffItems = item.diffs.map((d, dIdx) => `
+                <div class="diff-item">
+                    <input type="checkbox" class="diff-check" data-diff-idx="${dIdx}" checked>
+                    <span>${d.text}</span>
+                </div>
+            `).join('');
+            diffHtml = `<div class="diff-container">${diffItems}</div>`;
+        }
+        
+        // Guests Formatting
+        const guestListStr = (item.currentGuests && item.currentGuests.length > 0) 
+            ? item.currentGuests.join(', ') 
+            : 'None';
+
+        const card = document.createElement('div');
+        card.className = `sync-card status-${statusClass}`;
+        card.dataset.status = statusClass;
+        card.dataset.index = index;
+        
+        const isChecked = (item.status !== 'SYNCED') ? 'checked' : '';
+
+        card.innerHTML = `
+            <div class="sync-card-header">
+                <span class="status-badge ${statusClass}">${item.status}</span>
+                <input type="checkbox" class="sync-check" data-index="${index}" ${isChecked}>
+            </div>
+            <div class="sync-card-body">
+                ${diffHtml}
+                <div class="sync-input-group">
+                    <label>Title</label>
+                    <input type="text" class="sync-input field-title" value="${p.title}">
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div class="sync-input-group" style="flex:1">
+                        <label>Start Time</label>
+                        <input type="time" class="sync-input field-start" value="${fmtTime(startObj)}">
+                    </div>
+                    <div class="sync-input-group" style="flex:1">
+                        <label>End Time</label>
+                        <input type="time" class="sync-input field-end" value="${fmtTime(endObj)}">
+                    </div>
+                </div>
+                <div class="sync-input-group">
+                    <label>Location</label>
+                    <input type="text" class="sync-input field-loc" value="${p.location}">
+                </div>
+                
+                <div class="sync-info-section">
+                    <div class="sync-info-row">
+                        <span class="sync-info-label">Series:</span> ${item.seriesStartStr} - ${item.seriesEndStr}
+                    </div>
+                    <div class="sync-info-row">
+                        <span class="sync-info-label">Current Guests:</span> ${guestListStr}
+                    </div>
+                </div>
+            </div>
+            <div class="sync-card-footer">
+                <small style="color:#888;">${p.dayStr || 'Single Event'}</small>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
 }
 
-// --- Settings Tab (No Server Call for Loading) ---
+function filterSyncGrid(filter, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    document.querySelectorAll('.sync-card').forEach(card => {
+        if(filter === 'all' || card.dataset.status === filter) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function runMstCommit(e) {
+    if(e) { e.preventDefault(); e.stopPropagation(); }
+    const btn = e.target;
+    const calId = document.getElementById('mst-calendar-select').value;
+    
+    // Gather Data
+    const selectedEvents = [];
+    document.querySelectorAll('.sync-card').forEach(card => {
+        const checkbox = card.querySelector('.sync-check');
+        if(checkbox.checked) {
+            const index = parseInt(card.dataset.index);
+            const original = mstSyncData[index];
+            
+            // Clone payload
+            let finalPayload = JSON.parse(JSON.stringify(original.payload));
+            
+            // Check Diffs for SKIP logic
+            const diffChecks = card.querySelectorAll('.diff-check');
+            diffChecks.forEach(dc => {
+                if (!dc.checked) {
+                    const diffIdx = parseInt(dc.dataset.diffIdx);
+                    const diff = original.diffs[diffIdx];
+                    
+                    // If unchecked, set field to SKIP
+                    if (diff.key === 'title') finalPayload.title = "SKIP";
+                    if (diff.key === 'location') finalPayload.location = "SKIP";
+                    if (diff.key === 'guest_add' || diff.key === 'guest_remove') finalPayload.guests = "SKIP";
+                }
+            });
+
+            // Capture Edits (Only if not skipped)
+            if(finalPayload.title !== "SKIP") finalPayload.title = card.querySelector('.field-title').value;
+            if(finalPayload.location !== "SKIP") finalPayload.location = card.querySelector('.field-loc').value;
+            
+            const newStartStr = card.querySelector('.field-start').value;
+            const newEndStr = card.querySelector('.field-end').value;
+            const startDt = new Date(original.payload.startTime);
+            const [sh, sm] = newStartStr.split(':');
+            startDt.setHours(sh, sm);
+            const endDt = new Date(original.payload.endTime);
+            const [eh, em] = newEndStr.split(':');
+            endDt.setHours(eh, em);
+            
+            finalPayload.startTime = startDt.getTime();
+            finalPayload.endTime = endDt.getTime();
+            
+            const finalEvent = {
+                ...original,
+                payload: finalPayload
+            };
+            selectedEvents.push(finalEvent);
+        }
+    });
+
+    if(selectedEvents.length === 0) {
+        alert("No events selected.");
+        return;
+    }
+
+    if(!confirm(`Sync ${selectedEvents.length} events to Calendar?`)) return;
+
+    btn.disabled = true; btn.textContent = 'Syncing...';
+    document.getElementById('mst-sync-loader').style.display = 'flex';
+    document.getElementById('mst-sync-grid').style.opacity = '0.5';
+
+    google.script.run
+        .withSuccessHandler(res => {
+            document.getElementById('mst-sync-loader').style.display = 'none';
+            document.getElementById('mst-sync-grid').style.opacity = '1';
+            btn.disabled = false; btn.textContent = 'Sync Selected';
+            
+            if(res.success) {
+                alert(`Sync Complete!\nCreated: ${res.stats.created}\nUpdated: ${res.stats.updated}\nErrors: ${res.stats.errors}`);
+                runMstPreview(null);
+            } else {
+                alert("Error: " + res.message);
+            }
+        })
+        .api_commitMstCalendarEvents(calId, selectedEvents);
+}
+
+// --- Settings Tab ---
 
 function loadMstSettingsTab() {
     const container = document.getElementById('mst-settings');
@@ -196,14 +571,17 @@ function renderMstSettingsForm(container, data) {
         <small>The name of the tab in your Master Sheet that contains the MST course schedule.</small>
       </div>
     </div>
-    <div class="form-actions">
-      <button class="button-primary" onclick="saveMstSettings(event)">Save Settings</button>
+    <div class="form-actions" style="margin-top:20px;">
+      <button type="button" class="button-primary" id="btn-save-settings">Save Settings</button>
       <div id="mst-settings-feedback" style="display: inline-block; margin-left: 10px;"></div>
     </div>`;
+    
+    document.getElementById('btn-save-settings').addEventListener('click', saveMstSettings);
 }
 
 function saveMstSettings(event) {
-  event.preventDefault(); // Also good to have here!
+  if(event) { event.preventDefault(); event.stopPropagation(); }
+  
   const sourceTabName = document.getElementById('mst-source-tab-name').value;
   if (!sourceTabName) { alert('Please select a Source Sheet Tab.'); return; }
 
@@ -215,19 +593,18 @@ function saveMstSettings(event) {
   google.script.run
     .withSuccessHandler(res => {
       if (res.success) {
-        feedbackDiv.innerHTML = '<span style="color: var(--color-green);">Saved!</span>';
-        // Also update the global object so the change is reflected without a reload
+        feedbackDiv.innerHTML = '<span style="color: var(--color-primary-green, green);">Saved!</span>';
         if (g.mstSettings && g.mstSettings.settings) {
           g.mstSettings.settings.sourceTabName = sourceTabName;
         }
         setTimeout(() => feedbackDiv.innerHTML = '', 3000);
       } else {
-        feedbackDiv.innerHTML = `<span style="color: var(--color-red);">Error: ${res.message || 'Unknown error'}</span>`;
+        feedbackDiv.innerHTML = `<span style="color: red;">Error: ${res.message || 'Unknown error'}</span>`;
       }
       btn.disabled = false; btn.textContent = 'Save Settings';
     })
     .withFailureHandler(err => {
-      feedbackDiv.innerHTML = `<span style="color: var(--color-red);">Error: ${err.message}</span>`;
+      feedbackDiv.innerHTML = `<span style="color: red;">Error: ${err.message}</span>`;
       btn.disabled = false; btn.textContent = 'Save Settings';
     })
     .api_saveMstSettings({ sourceTabName: sourceTabName });
