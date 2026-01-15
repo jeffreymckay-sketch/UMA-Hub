@@ -259,7 +259,9 @@ function renderScheduleTable(container, schedule, staffList) {
     // Attach Listeners
     schedule.forEach(item => {
         const btn = document.getElementById(`btn-assign-${item.id}`);
-        if(btn) btn.addEventListener('click', (e) => assignStaff(item.id, e));
+        if(btn) {
+            btn.onclick = function(e) { assignStaff(item.id, e); return false; };
+        }
     });
 }
 
@@ -333,21 +335,21 @@ function loadMstCalendarTab() {
     <div id="mst-sync-loader" class="loader-container" style="display:none;"><div class="loader-ring"></div></div>
   `;
   
-  // Attach Listeners
-  document.getElementById('btn-preview').addEventListener('click', runMstPreview);
-  document.getElementById('btn-sync-selected').addEventListener('click', runMstCommit);
-  document.getElementById('filter-all').addEventListener('click', (e) => filterSyncGrid('all', e.target));
-  document.getElementById('filter-new').addEventListener('click', (e) => filterSyncGrid('new', e.target));
-  document.getElementById('filter-update').addEventListener('click', (e) => filterSyncGrid('update', e.target));
-  document.getElementById('filter-synced').addEventListener('click', (e) => filterSyncGrid('synced', e.target));
+  // Attach Listeners via JS Property (Strict Binding)
+  document.getElementById('btn-preview').onclick = function(e) { runMstPreview(e); return false; };
+  document.getElementById('btn-sync-selected').onclick = function(e) { runMstCommit(e); return false; };
+  
+  document.getElementById('filter-all').onclick = function(e) { filterSyncGrid('all', e.target); return false; };
+  document.getElementById('filter-new').onclick = function(e) { filterSyncGrid('new', e.target); return false; };
+  document.getElementById('filter-update').onclick = function(e) { filterSyncGrid('update', e.target); return false; };
+  document.getElementById('filter-synced').onclick = function(e) { filterSyncGrid('synced', e.target); return false; };
 }
 
 function runMstPreview(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
-    console.log("Preview Button Clicked");
     
     const calId = document.getElementById('mst-calendar-select').value;
-    if(!calId) return;
+    if(!calId) return false;
 
     document.getElementById('mst-sync-area').style.display = 'none';
     document.getElementById('mst-sync-loader').style.display = 'flex';
@@ -364,6 +366,8 @@ function runMstPreview(e) {
             }
         })
         .api_previewMstCalendarSync(calId);
+        
+    return false;
 }
 
 function renderSyncGrid() {
@@ -490,6 +494,7 @@ function runMstCommit(e) {
                     // If unchecked, set field to SKIP
                     if (diff.key === 'title') finalPayload.title = "SKIP";
                     if (diff.key === 'location') finalPayload.location = "SKIP";
+                    if (diff.key === 'time') finalPayload.startTime = "SKIP"; // Skip Time Update
                     if (diff.key === 'guest_add' || diff.key === 'guest_remove') finalPayload.guests = "SKIP";
                 }
             });
@@ -498,17 +503,19 @@ function runMstCommit(e) {
             if(finalPayload.title !== "SKIP") finalPayload.title = card.querySelector('.field-title').value;
             if(finalPayload.location !== "SKIP") finalPayload.location = card.querySelector('.field-loc').value;
             
-            const newStartStr = card.querySelector('.field-start').value;
-            const newEndStr = card.querySelector('.field-end').value;
-            const startDt = new Date(original.payload.startTime);
-            const [sh, sm] = newStartStr.split(':');
-            startDt.setHours(sh, sm);
-            const endDt = new Date(original.payload.endTime);
-            const [eh, em] = newEndStr.split(':');
-            endDt.setHours(eh, em);
-            
-            finalPayload.startTime = startDt.getTime();
-            finalPayload.endTime = endDt.getTime();
+            if(finalPayload.startTime !== "SKIP") {
+                const newStartStr = card.querySelector('.field-start').value;
+                const newEndStr = card.querySelector('.field-end').value;
+                const startDt = new Date(original.payload.startTime);
+                const [sh, sm] = newStartStr.split(':');
+                startDt.setHours(sh, sm);
+                const endDt = new Date(original.payload.endTime);
+                const [eh, em] = newEndStr.split(':');
+                endDt.setHours(eh, em);
+                
+                finalPayload.startTime = startDt.getTime();
+                finalPayload.endTime = endDt.getTime();
+            }
             
             const finalEvent = {
                 ...original,
@@ -520,10 +527,10 @@ function runMstCommit(e) {
 
     if(selectedEvents.length === 0) {
         alert("No events selected.");
-        return;
+        return false;
     }
 
-    if(!confirm(`Sync ${selectedEvents.length} events to Calendar?`)) return;
+    if(!confirm(`Sync ${selectedEvents.length} events to Calendar?`)) return false;
 
     btn.disabled = true; btn.textContent = 'Syncing...';
     document.getElementById('mst-sync-loader').style.display = 'flex';
@@ -543,6 +550,8 @@ function runMstCommit(e) {
             }
         })
         .api_commitMstCalendarEvents(calId, selectedEvents);
+        
+    return false;
 }
 
 // --- Settings Tab ---
@@ -576,7 +585,7 @@ function renderMstSettingsForm(container, data) {
       <div id="mst-settings-feedback" style="display: inline-block; margin-left: 10px;"></div>
     </div>`;
     
-    document.getElementById('btn-save-settings').addEventListener('click', saveMstSettings);
+    document.getElementById('btn-save-settings').onclick = function(e) { saveMstSettings(e); return false; };
 }
 
 function saveMstSettings(event) {

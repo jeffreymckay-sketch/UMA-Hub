@@ -207,7 +207,15 @@ function api_previewMstCalendarSync(targetCalendarId) {
         maxDate.setHours(23,59,59,999);
         const existingEvents = calendar.getEvents(minDate, maxDate);
         existingEvents.forEach(e => {
-            const tagId = e.getTag('StaffHub_EventID');
+            // Check Event Tag
+            let tagId = e.getTag('StaffHub_EventID');
+            // If not found, check Series Tag
+            if (!tagId) {
+                try {
+                    const series = e.getEventSeries();
+                    if (series) tagId = series.getTag('StaffHub_EventID');
+                } catch(err) {}
+            }
             if (tagId) eventIdMap.set(tagId, e);
         });
     }
@@ -322,8 +330,14 @@ function api_previewMstCalendarSync(targetCalendarId) {
                     status = "UPDATE";
                     diffs.push({ key: 'location', type: 'update', text: `Location: "${loc1}" -> "${loc2}"` });
                 }
+                
+                // Get Tag from Series if possible
+                let storedSig = existing.getTag('StaffHub_TimeSignature');
+                if(!storedSig) {
+                    try { storedSig = existing.getEventSeries().getTag('StaffHub_TimeSignature'); } catch(e){}
+                }
+
                 const timeSig = `${startDt.toISOString()}_${endDt.toISOString()}_${dayStr}`;
-                const storedSig = existing.getTag('StaffHub_TimeSignature');
                 if (storedSig !== timeSig) {
                      status = "UPDATE";
                      diffs.push({ key: 'time', type: 'update', text: "Time/Schedule Changed" });
@@ -395,10 +409,10 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
                 const startDt = new Date(p.startTime);
                 const endDt = new Date(p.endTime);
                 
-                // --- SKIP LOGIC ---
                 const skipTitle = p.title === "SKIP";
                 const skipLocation = p.location === "SKIP";
-                const skipGuests = p.guests === "SKIP"; // If true, DO NOT TOUCH GUESTS
+                const skipGuests = p.guests === "SKIP";
+                const skipTime = p.startTime === "SKIP"; // New Skip Flag for Time
 
                 let recurrence = null;
                 if (p.seriesEndDate && p.dayStr) {
@@ -411,7 +425,7 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
 
                 const options = { description: p.description };
                 if (!skipLocation) options.location = p.location;
-                if (!skipGuests && p.guests && p.guests.length > 0) options.guests = p.guests.join(',');
+                if (!skipGuests && p.guests && p.guests.length > 0 && p.guests !== "SKIP") options.guests = p.guests.join(',');
 
                 const timeSig = `${startDt.toISOString()}_${endDt.toISOString()}_${p.dayStr || ''}`;
 
@@ -434,9 +448,14 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
                         else calendar.createEvent(p.title, startDt, endDt, options).setTag('StaffHub_EventID', evt.rowId).setTag('StaffHub_TimeSignature', timeSig);
                         stats.created++;
                     } else {
-                        const currentSig = eventObj.getTag('StaffHub_TimeSignature');
+                        // Get tag from series if needed
+                        let currentSig = eventObj.getTag('StaffHub_TimeSignature');
+                        if(!currentSig) {
+                            try { currentSig = eventObj.getEventSeries().getTag('StaffHub_TimeSignature'); } catch(e){}
+                        }
                         
-                        if (currentSig && currentSig !== timeSig) {
+                        // Only recreate if Time changed AND user didn't skip time update
+                        if (!skipTime && currentSig && currentSig !== timeSig) {
                             try { eventObj.getEventSeries().deleteEventSeries(); } catch(e) { eventObj.deleteEvent(); }
                             if (recurrence) calendar.createEventSeries(p.title, startDt, endDt, recurrence, options).setTag('StaffHub_EventID', evt.rowId).setTag('StaffHub_TimeSignature', timeSig);
                             else calendar.createEvent(p.title, startDt, endDt, options).setTag('StaffHub_EventID', evt.rowId).setTag('StaffHub_TimeSignature', timeSig);
@@ -446,8 +465,6 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
                             if (!skipLocation) eventObj.setLocation(p.location);
                             eventObj.setDescription(p.description);
 
-                            // --- STRICT GUEST SYNC ---
-                            // Only runs if user did NOT uncheck the guest box
                             if (!skipGuests) {
                                 const desiredGuests = (p.guests || []);
                                 const desiredGuestsLower = desiredGuests.map(e => e.toLowerCase());
@@ -521,7 +538,13 @@ function recoverMstEventIds_(sheetName, calendarId) {
             const candidates = calendarEvents.filter(e => {
                 const eDate = formatDate(e.getStartTime(), "yyyy-MM-dd");
                 if (eDate !== dateKey) return false;
-                const tag = e.getTag('StaffHub_EventID');
+                
+                // CRITICAL FIX: Check Series Tag if Event Tag is missing
+                let tag = e.getTag('StaffHub_EventID');
+                if (!tag) {
+                    try { tag = e.getEventSeries().getTag('StaffHub_EventID'); } catch(err){}
+                }
+                
                 if (tag && assignedIds.has(tag)) return false;
                 const eTitle = e.getTitle().toLowerCase();
                 return eTitle.includes(courseName);
@@ -541,7 +564,12 @@ function recoverMstEventIds_(sheetName, calendarId) {
             }
 
             if (match) {
-                foundId = match.getTag('StaffHub_EventID');
+                // Get Tag from Series if needed
+                let tag = match.getTag('StaffHub_EventID');
+                if (!tag) {
+                    try { tag = match.getEventSeries().getTag('StaffHub_EventID'); } catch(err){}
+                }
+                foundId = tag;
                 if(foundId) assignedIds.add(foundId);
             }
 

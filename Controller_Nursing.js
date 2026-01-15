@@ -220,17 +220,13 @@ function updateDocContent(doc, exam, course, settings) {
         if (colonSplit.length > 1) facultyName = colonSplit[1].trim();
     }
 
-    // Format Date with Ordinals (e.g., February 24th, 2026)
+    // Format Date with Ordinals
     let dateStr = exam.date;
     if (dateStr) { 
-        // We expect exam.date to be yyyy-MM-dd from our parser
-        // We need to parse it back to a Date object to format it nicely
-        // Note: new Date("yyyy-MM-dd") treats it as UTC, which can shift the day.
-        // We split manually to avoid timezone shifts.
         const parts = dateStr.split('-');
         if (parts.length === 3) {
             const year = parseInt(parts[0]);
-            const month = parseInt(parts[1]) - 1; // JS months are 0-11
+            const month = parseInt(parts[1]) - 1; 
             const day = parseInt(parts[2]);
             const d = new Date(year, month, day);
             
@@ -238,7 +234,6 @@ function updateDocContent(doc, exam, course, settings) {
               "July", "August", "September", "October", "November", "December"
             ];
             
-            // Ordinal suffix logic
             const getOrdinal = (n) => {
                 const s = ["th", "st", "nd", "rd"];
                 const v = n % 100;
@@ -257,8 +252,8 @@ function updateDocContent(doc, exam, course, settings) {
     body.appendParagraph(`3. Start Time (On Site): ${exam.siteTime || 'N/A'}`);
     body.appendParagraph(`4. Start Time (Zoom): ${exam.zoomTime || 'N/A'}`);
     body.appendParagraph(`5. Duration: ${exam.duration || 'N/A'}`);
-    body.appendParagraph(`6. Room: ${exam.room || 'N/A'}`);
-    body.appendParagraph(`7. Password: ${exam.password || 'N/A'}`);
+    // Room removed as requested
+    body.appendParagraph(`6. Password: ${exam.password || 'N/A'}`);
 
     body.appendParagraph(''); 
 
@@ -271,11 +266,33 @@ function updateDocContent(doc, exam, course, settings) {
 
     // --- Location Rosters ---
     body.appendParagraph('Location Rosters').setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    const locations = [
-        'UMAAL', 'Augusta', 'Bangor', 'Brunswick', 'East Millinocket',
-        'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco', 'UMF Testing Ctr'
+    
+    // Define the standard order of locations
+    const locationOrder = [
+        'Augusta', 'UMAAL', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 
+        'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco'
     ];
-    locations.forEach(loc => body.appendParagraph(loc));
+
+    locationOrder.forEach(locName => {
+        // Create Header for every location (even if empty)
+        const header = body.appendParagraph(locName);
+        header.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+        
+        // Check if we have students
+        const students = (exam.rosters && exam.rosters[locName]) ? exam.rosters[locName] : [];
+        
+        if (students.length > 0) {
+            students.forEach(student => {
+                body.appendListItem(student).setGlyphType(DocumentApp.GlyphType.BULLET);
+            });
+        } else {
+            // Placeholder for empty locations
+            body.appendParagraph("(No students assigned)").setAttributes({
+                [DocumentApp.Attribute.ITALIC]: true,
+                [DocumentApp.Attribute.FOREGROUND_COLOR]: '#666666'
+            });
+        }
+    });
 
     // --- Accommodations ---
     if (exam.accommodations) {
@@ -318,38 +335,28 @@ function extractIdFromUrl(url) {
     return url; 
 }
 
-/**
- * Parses a date input flexibly.
- * Handles: Date objects, "2/15/26", "February 15th, 2026", etc.
- * Returns: "yyyy-MM-dd" string or null.
- */
 function parseFlexibleDate(input) {
     if (!input) return null;
-    
-    // 1. Already a Date object
     if (input instanceof Date) {
         return Utilities.formatDate(input, Session.getScriptTimeZone(), "yyyy-MM-dd");
     }
-
     let str = String(input).trim();
-    
-    // 2. Remove ordinal suffixes (st, nd, rd, th) to make it parsable by JS
-    // Regex: look for digits followed immediately by st/nd/rd/th, case insensitive
     str = str.replace(/(\d+)(st|nd|rd|th)/ig, "$1");
-
-    // 3. Try parsing
     const d = new Date(str);
-    if (isNaN(d.getTime())) {
-        return null; // Failed to parse
-    }
-
+    if (isNaN(d.getTime())) return null;
     return Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 
+/**
+ * Parses the sheet using a Two-Zone strategy.
+ * Zone A: Exam Table (Top)
+ * Zone B: Roster Table (Bottom)
+ */
 function parseNursingSheet(sheet) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 5) return null; 
 
+  // --- Parse Course Info (A1) ---
   const a1 = String(data[0][0]).trim(); 
   let courseCode = "Unknown";
   let courseName = a1;
@@ -366,55 +373,90 @@ function parseNursingSheet(sheet) {
       }
   }
 
-  let headerRowIndex = -1;
-  for (let i = 0; i < 15; i++) { 
+  // --- ZONE A: Find Exam Table ---
+  let examHeaderRowIndex = -1;
+  for (let i = 0; i < 20; i++) { 
       if (!data[i]) continue;
       const rowStr = data[i].join(' ').toLowerCase();
       if (rowStr.includes('exam') && rowStr.includes('date')) {
-          headerRowIndex = i;
+          examHeaderRowIndex = i;
           break;
       }
   }
 
-  if (headerRowIndex === -1) return null;
+  if (examHeaderRowIndex === -1) return null;
 
-  const headers = data[headerRowIndex].map(h => String(h).trim().toLowerCase());
-  
+  // Map Exam Columns
+  const examHeaders = data[examHeaderRowIndex].map(h => String(h).trim().toLowerCase());
   const colMap = {
-      name: headers.findIndex(h => h.includes('exam')),
-      date: headers.findIndex(h => h === 'date'), 
-      timeSite: headers.findIndex(h => h.includes('time') && !h.includes('zoom')),
-      timeZoom: headers.findIndex(h => h.includes('time') && h.includes('zoom')),
-      duration: headers.findIndex(h => h.includes('duration')),
-      room: headers.findIndex(h => h.includes('room') || h.includes('location')),
-      password: headers.findIndex(h => h.includes('password')),
-      accommodations: headers.findIndex(h => h.includes('accommodations'))
+      name: examHeaders.findIndex(h => h.includes('exam')),
+      date: examHeaders.findIndex(h => h === 'date'), 
+      timeSite: examHeaders.findIndex(h => h.includes('time') && !h.includes('zoom')),
+      timeZoom: examHeaders.findIndex(h => h.includes('time') && h.includes('zoom')),
+      duration: examHeaders.findIndex(h => h.includes('duration')),
+      room: examHeaders.findIndex(h => h.includes('room') || h.includes('location')),
+      password: examHeaders.findIndex(h => h.includes('password')),
+      accommodations: examHeaders.findIndex(h => h.includes('accommodations'))
   };
 
   if (colMap.name === -1 || colMap.date === -1) return null;
 
+  // --- ZONE B: Find Roster Table ---
+  // We look for a row containing ANY of our specific location names
+  const locationKeywords = [
+      'Augusta', 'UMAAL', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 
+      'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco'
+  ];
+  
+  let rosterHeaderRowIndex = -1;
+  
+  // Start searching *after* the exam header
+  for (let i = examHeaderRowIndex + 1; i < data.length; i++) {
+      const rowValues = data[i].map(v => String(v).trim());
+      // Check if this row contains at least one known location header
+      const match = rowValues.some(v => locationKeywords.includes(v));
+      
+      if (match) {
+          rosterHeaderRowIndex = i;
+          break;
+      }
+  }
+
+  // Parse Rosters if found
+  let rosters = {};
+  if (rosterHeaderRowIndex > -1) {
+      rosters = parseRosterData(data, rosterHeaderRowIndex);
+  }
+
+  // --- Extract Exams ---
   const exams = [];
-  for (let i = headerRowIndex + 1; i < data.length; i++) {
+  const safeNormalize = (typeof normalizeTime === 'function') ? normalizeTime : String;
+
+  // Iterate from Exam Header down to Roster Header (or end of sheet)
+  const endRow = (rosterHeaderRowIndex > -1) ? rosterHeaderRowIndex : data.length;
+
+  for (let i = examHeaderRowIndex + 1; i < endRow; i++) {
       const row = data[i];
       const examName = row[colMap.name];
 
-      if (!examName || String(examName).trim() === '') break;
-      if (String(examName).toLowerCase().includes('exam') && String(row[colMap.date]).toLowerCase().includes('date')) break;
+      // Stop if empty or looks like a new header
+      if (!examName || String(examName).trim() === '') continue;
+      
+      // Safety check: if we accidentally hit the roster header
+      if (locationKeywords.some(kw => String(examName).includes(kw))) break;
 
-      const safeNormalize = (typeof normalizeTime === 'function') ? normalizeTime : String;
-
-      // Use new flexible date parser
       const dateVal = parseFlexibleDate(row[colMap.date]);
 
       exams.push({
           name: String(examName).trim(),
-          date: dateVal, // Now consistently yyyy-MM-dd or null
+          date: dateVal, 
           siteTime: safeNormalize(row[colMap.timeSite]), 
           zoomTime: safeNormalize(row[colMap.timeZoom]), 
           duration: colMap.duration > -1 ? row[colMap.duration] : '',
           room: colMap.room > -1 ? row[colMap.room] : '',
           password: colMap.password > -1 ? row[colMap.password] : '',
-          accommodations: colMap.accommodations > -1 ? row[colMap.accommodations] : ''
+          accommodations: colMap.accommodations > -1 ? row[colMap.accommodations] : '',
+          rosters: rosters // Attach the parsed rosters to every exam
       });
   }
 
@@ -422,4 +464,54 @@ function parseNursingSheet(sheet) {
       course: { code: courseCode, name: courseName },
       exams: exams
   };
+}
+
+/**
+ * Helper to parse the Roster Zone.
+ * Hard-coded to look for the "Students with accommodations..." text block.
+ */
+function parseRosterData(data, headerRowIndex) {
+    const headers = data[headerRowIndex].map(h => String(h).trim());
+    const rosters = {};
+    
+    // 1. Determine where the actual data starts
+    // We expect: Header -> Address -> Merged Note -> DATA
+    let dataStartIndex = headerRowIndex + 3; // Default fallback (skip 2 rows after header)
+
+    // Scan the next 5 rows to find the specific "Students with accommodations" text
+    for (let i = headerRowIndex + 1; i < Math.min(data.length, headerRowIndex + 6); i++) {
+        const rowStr = data[i].join(' ').toLowerCase();
+        if (rowStr.includes('students with accommodations')) {
+            dataStartIndex = i + 1; // Data starts immediately after this row
+            break;
+        }
+    }
+
+    const targetLocations = [
+        'Augusta', 'UMAAL', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 
+        'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco'
+    ];
+
+    targetLocations.forEach(loc => {
+        const colIndex = headers.findIndex(h => h === loc); // Exact match preferred
+        
+        if (colIndex > -1) {
+            const students = [];
+            
+            // Read down from the calculated start index
+            for (let i = dataStartIndex; i < data.length; i++) {
+                const cell = String(data[i][colIndex]).trim();
+                
+                if (!cell) continue; // Skip empty
+                if (cell.length < 2) continue; // Skip junk
+
+                students.push(cell);
+            }
+            rosters[loc] = students;
+        } else {
+            rosters[loc] = [];
+        }
+    });
+
+    return rosters;
 }
