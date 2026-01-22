@@ -2,9 +2,12 @@
   /* --- MST Card Layout Styles --- */
   
   /* Robust Button Styles */
-  button { cursor: pointer; font-family: inherit; transition: opacity 0.2s; }
-  
+  /* Added display:inline-block to support DIV buttons */
   .button-primary {
+    display: inline-block; 
+    cursor: pointer; 
+    font-family: inherit; 
+    transition: opacity 0.2s;
     background-color: var(--color-primary-navy, #00274c);
     color: white;
     border: none;
@@ -12,9 +15,15 @@
     border-radius: 4px;
     font-size: 14px;
     font-weight: 500;
+    text-align: center;
+    user-select: none;
   }
   
   .button-success {
+    display: inline-block;
+    cursor: pointer; 
+    font-family: inherit; 
+    transition: opacity 0.2s;
     background-color: var(--color-primary-green, #28a745);
     color: white;
     border: none;
@@ -22,10 +31,19 @@
     border-radius: 4px;
     font-size: 14px;
     font-weight: 500;
+    text-align: center;
+    user-select: none;
   }
 
   .button-primary:hover, .button-success:hover { opacity: 0.9; }
-  .button-primary:disabled, .button-success:disabled { background-color: #ccc; cursor: not-allowed; }
+  
+  /* Disabled state for DIVs */
+  .button-primary[disabled], .button-success[disabled], 
+  .button-primary.disabled, .button-success.disabled { 
+    background-color: #ccc; 
+    cursor: not-allowed; 
+    pointer-events: none;
+  }
 
   /* --- Compact Table Styles --- */
   .data-table {
@@ -64,6 +82,19 @@
     border-radius: 4px;
     font-size: 0.95em;
     max-width: 150px;
+  }
+  
+  /* Zoom Input Style */
+  .zoom-input {
+    width: 100%;
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  .zoom-input.saved {
+    border-color: #28a745;
+    background-color: #f0fff4;
   }
 
   /* --- Calendar Sync Layout --- */
@@ -226,6 +257,7 @@ function renderScheduleTable(container, schedule, staffList) {
           <th>Day</th>
           <th>Time</th>
           <th>Location</th>
+          <th style="width:200px;">Zoom Link</th>
           <th>Staff Assignment</th>
         </tr>
       </thead>
@@ -243,6 +275,9 @@ function renderScheduleTable(container, schedule, staffList) {
             <td>${item.courseTime}</td>
             <td>${item.location}</td>
             <td>
+                <input type="text" class="zoom-input" id="zoom-${item.id}" value="${item.zoomLink || ''}" placeholder="Paste link..." onchange="updateZoomLink('${item.id}', this)">
+            </td>
+            <td>
               <div class="assign-wrapper">
                 <select id="select-staff-${item.id}" class="assign-select">
                   <option value="">-- Unassigned --</option>
@@ -252,7 +287,7 @@ function renderScheduleTable(container, schedule, staffList) {
               </div>
             </td>
           </tr>`;
-        }).join('') || '<tr><td colspan="6">No schedule data found.</td></tr>'}
+        }).join('') || '<tr><td colspan="7">No schedule data found.</td></tr>'}
       </tbody>
     </table>`;
     
@@ -263,6 +298,30 @@ function renderScheduleTable(container, schedule, staffList) {
             btn.onclick = function(e) { assignStaff(item.id, e); return false; };
         }
     });
+}
+
+function updateZoomLink(courseId, inputEl) {
+    const newVal = inputEl.value;
+    inputEl.disabled = true;
+    inputEl.style.opacity = '0.7';
+    
+    google.script.run
+        .withSuccessHandler(res => {
+            inputEl.disabled = false;
+            inputEl.style.opacity = '1';
+            if(res.success) {
+                inputEl.classList.add('saved');
+                setTimeout(() => inputEl.classList.remove('saved'), 2000);
+            } else {
+                alert("Failed to save Zoom link: " + res.message);
+            }
+        })
+        .withFailureHandler(err => {
+            inputEl.disabled = false;
+            inputEl.style.opacity = '1';
+            alert("Error saving Zoom link: " + err.message);
+        })
+        .api_updateCourseZoom(courseId, newVal);
 }
 
 function assignStaff(courseId, event) {
@@ -312,13 +371,14 @@ function loadMstCalendarTab() {
   
   const calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   
+  // FIX: Changed button to DIV to prevent form submission
   container.innerHTML = `
     <div class="sync-controls">
       <div style="flex-grow:1;">
         <label style="display:block; font-weight:bold; margin-bottom:5px;">Select Target Calendar</label>
         <select id="mst-calendar-select" class="form-field">${calOptions}</select>
       </div>
-      <button type="button" class="button-primary" id="btn-preview">Preview Changes</button>
+      <div class="button-primary" id="btn-preview" role="button">Preview Changes</div>
     </div>
     
     <div id="mst-sync-area" style="display:none;">
@@ -328,25 +388,26 @@ function loadMstCalendarTab() {
             <button type="button" class="filter-btn" id="filter-update">Updates</button>
             <button type="button" class="filter-btn" id="filter-synced">Synced</button>
             <div style="flex-grow:1"></div>
-            <button type="button" class="button-success" id="btn-sync-selected">Sync Selected</button>
+            <div class="button-success" id="btn-sync-selected" role="button">Sync Selected</div>
         </div>
         <div id="mst-sync-grid" class="sync-grid"></div>
     </div>
     <div id="mst-sync-loader" class="loader-container" style="display:none;"><div class="loader-ring"></div></div>
   `;
   
-  // Attach Listeners via JS Property (Strict Binding)
-  document.getElementById('btn-preview').onclick = function(e) { runMstPreview(e); return false; };
-  document.getElementById('btn-sync-selected').onclick = function(e) { runMstCommit(e); return false; };
+  // FIX: Using container.querySelector to avoid ID collisions with global document
+  container.querySelector('#btn-preview').onclick = function(e) { runMstPreview(e); return false; };
+  container.querySelector('#btn-sync-selected').onclick = function(e) { runMstCommit(e); return false; };
   
-  document.getElementById('filter-all').onclick = function(e) { filterSyncGrid('all', e.target); return false; };
-  document.getElementById('filter-new').onclick = function(e) { filterSyncGrid('new', e.target); return false; };
-  document.getElementById('filter-update').onclick = function(e) { filterSyncGrid('update', e.target); return false; };
-  document.getElementById('filter-synced').onclick = function(e) { filterSyncGrid('synced', e.target); return false; };
+  container.querySelector('#filter-all').onclick = function(e) { filterSyncGrid('all', e.target); return false; };
+  container.querySelector('#filter-new').onclick = function(e) { filterSyncGrid('new', e.target); return false; };
+  container.querySelector('#filter-update').onclick = function(e) { filterSyncGrid('update', e.target); return false; };
+  container.querySelector('#filter-synced').onclick = function(e) { filterSyncGrid('synced', e.target); return false; };
 }
 
 function runMstPreview(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
+    console.log("Starting Preview...");
     
     const calId = document.getElementById('mst-calendar-select').value;
     if(!calId) return false;
@@ -356,6 +417,7 @@ function runMstPreview(e) {
     
     google.script.run
         .withSuccessHandler(res => {
+            console.log("Preview Success:", res);
             document.getElementById('mst-sync-loader').style.display = 'none';
             if(res.success) {
                 mstSyncData = res.data; // Store data
@@ -363,7 +425,14 @@ function runMstPreview(e) {
                 document.getElementById('mst-sync-area').style.display = 'block';
             } else {
                 alert("Error: " + res.message);
+                document.getElementById('mst-sync-area').style.display = 'block'; // Show area again
             }
+        })
+        .withFailureHandler(err => {
+            console.error("Preview Failed:", err);
+            document.getElementById('mst-sync-loader').style.display = 'none';
+            document.getElementById('mst-sync-area').style.display = 'block';
+            alert("System Error: " + err.message);
         })
         .api_previewMstCalendarSync(calId);
         
@@ -438,6 +507,11 @@ function renderSyncGrid() {
                     <input type="text" class="sync-input field-loc" value="${p.location}">
                 </div>
                 
+                <div class="sync-input-group">
+                    <label>Description</label>
+                    <textarea class="sync-input field-desc" rows="3" style="font-size:0.85em;">${p.description}</textarea>
+                </div>
+                
                 <div class="sync-info-section">
                     <div class="sync-info-row">
                         <span class="sync-info-label">Series:</span> ${item.seriesStartStr} - ${item.seriesEndStr}
@@ -451,6 +525,22 @@ function renderSyncGrid() {
                 <small style="color:#888;">${p.dayStr || 'Single Event'}</small>
             </div>
         `;
+        
+        // Attach generic input listener for auto-selection
+        card.querySelectorAll('.sync-input').forEach(input => {
+            input.addEventListener('input', () => {
+                const checkbox = card.querySelector('.sync-check');
+                if (!checkbox.checked) {
+                    checkbox.checked = true;
+                    card.classList.remove('status-synced');
+                    card.classList.add('status-update');
+                    const badge = card.querySelector('.status-badge');
+                    badge.className = 'status-badge update';
+                    badge.textContent = 'MODIFIED';
+                }
+            });
+        });
+
         grid.appendChild(card);
     });
 }
@@ -471,6 +561,10 @@ function filterSyncGrid(filter, btn) {
 function runMstCommit(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
     const btn = e.target;
+    
+    // Check if button is disabled (simulated for DIV)
+    if(btn.classList.contains('disabled')) return false;
+
     const calId = document.getElementById('mst-calendar-select').value;
     
     // Gather Data
@@ -503,6 +597,12 @@ function runMstCommit(e) {
             if(finalPayload.title !== "SKIP") finalPayload.title = card.querySelector('.field-title').value;
             if(finalPayload.location !== "SKIP") finalPayload.location = card.querySelector('.field-loc').value;
             
+            // Capture Description (Always capture, as it might be auto-updated by Zoom logic)
+            finalPayload.description = card.querySelector('.field-desc').value;
+
+            // Note: Zoom Link is no longer captured here for write-back, as it's handled in the Classroom tab.
+            // However, the description (which contains the zoom link) is captured above.
+            
             if(finalPayload.startTime !== "SKIP") {
                 const newStartStr = card.querySelector('.field-start').value;
                 const newEndStr = card.querySelector('.field-end').value;
@@ -532,7 +632,10 @@ function runMstCommit(e) {
 
     if(!confirm(`Sync ${selectedEvents.length} events to Calendar?`)) return false;
 
-    btn.disabled = true; btn.textContent = 'Syncing...';
+    // Disable button (Visual)
+    btn.classList.add('disabled');
+    btn.textContent = 'Syncing...';
+    
     document.getElementById('mst-sync-loader').style.display = 'flex';
     document.getElementById('mst-sync-grid').style.opacity = '0.5';
 
@@ -540,7 +643,10 @@ function runMstCommit(e) {
         .withSuccessHandler(res => {
             document.getElementById('mst-sync-loader').style.display = 'none';
             document.getElementById('mst-sync-grid').style.opacity = '1';
-            btn.disabled = false; btn.textContent = 'Sync Selected';
+            
+            // Re-enable button
+            btn.classList.remove('disabled');
+            btn.textContent = 'Sync Selected';
             
             if(res.success) {
                 alert(`Sync Complete!\nCreated: ${res.stats.created}\nUpdated: ${res.stats.updated}\nErrors: ${res.stats.errors}`);
@@ -548,6 +654,13 @@ function runMstCommit(e) {
             } else {
                 alert("Error: " + res.message);
             }
+        })
+        .withFailureHandler(err => {
+            document.getElementById('mst-sync-loader').style.display = 'none';
+            document.getElementById('mst-sync-grid').style.opacity = '1';
+            btn.classList.remove('disabled');
+            btn.textContent = 'Sync Selected';
+            alert("System Error: " + err.message);
         })
         .api_commitMstCalendarEvents(calId, selectedEvents);
         

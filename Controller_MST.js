@@ -44,7 +44,10 @@ function api_getMstViewData() {
             } catch(e){}
         }
 
-        if (targetCalId) recoverMstEventIds_(sourceTab, targetCalId);
+        // Recover IDs surgically (only if needed)
+        if (targetCalId) {
+            try { recoverMstEventIds_(sourceTab, targetCalId); } catch(e) { console.warn("ID Recovery warning:", e); }
+        }
 
         var staffData = getSheet('Staff_List').getDataRange().getValues();
         var assignmentData = getSheet('Staff_Assignments').getDataRange().getValues();
@@ -76,6 +79,7 @@ function api_getMstViewData() {
                 courseDay: course.daysOfWeek.join(' / '),
                 courseTime: formatDate(course.startDate, 'h:mm') + ' - ' + formatDate(course.endDate, 'h:mm aa'),
                 location: course.location,
+                zoomLink: course.zoomLink, 
                 staffName: staff ? staff.name : "Unassigned",
                 staffId: staff ? staff.id : null
             };
@@ -131,10 +135,64 @@ function api_updateCourseAssignment(courseId, staffId) {
     }
 }
 
+function api_updateCourseZoom(courseId, zoomLink) {
+    const lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(10000);
+        
+        const settings = getSettings();
+        let sourceTab = 'Course_Schedule';
+        if (settings.mstSettings) {
+            try { 
+                const parsed = JSON.parse(settings.mstSettings);
+                sourceTab = parsed.sourceTabName || sourceTab; 
+            } catch(e){}
+        }
+        
+        const sheet = getSheet(sourceTab);
+        if(!sheet) return { success: false, message: "Sheet not found" };
+        
+        const data = sheet.getDataRange().getValues();
+        
+        let headerRowIdx = -1;
+        for(let r=0; r<Math.min(data.length, 10); r++) {
+            const rowStr = data[r].join(' ').toLowerCase();
+            if(rowStr.includes('start date') && (rowStr.includes('time of day') || rowStr.includes('run time'))) {
+                headerRowIdx = r; break;
+            }
+        }
+        if (headerRowIdx === -1) return { success: false, message: "Header row not found" };
+
+        const headers = data[headerRowIdx];
+        const hMap = headers.map(h => String(h).toLowerCase().replace(/[\s_]/g, ''));
+        const idColIdx = hMap.indexOf('eventid');
+        const zoomColIdx = hMap.indexOf('zoomlink');
+
+        if (idColIdx === -1 || zoomColIdx === -1) return { success: false, message: "Columns not found" };
+
+        let foundRow = -1;
+        for (let i = headerRowIdx + 1; i < data.length; i++) {
+            if (String(data[i][idColIdx]).trim() === String(courseId).trim()) {
+                foundRow = i + 1;
+                break;
+            }
+        }
+
+        if (foundRow > -1) {
+            sheet.getRange(foundRow, zoomColIdx + 1).setValue(zoomLink);
+            return { success: true };
+        } else {
+            return { success: false, message: "Course ID not found" };
+        }
+    } catch (e) {
+        return { success: false, error: e.message };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
 function api_previewMstCalendarSync(targetCalendarId) {
-  const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(30000);
     const allSettings = getSettings();
     let mstSettings = {};
     try { mstSettings = JSON.parse(allSettings.mstSettings || '{}'); } catch (e) {}
@@ -142,6 +200,7 @@ function api_previewMstCalendarSync(targetCalendarId) {
     if (!mstSettings.sourceTabName) return { success: false, message: "MST Source Tab not configured." };
     if (!targetCalendarId) return { success: false, message: "No Calendar Selected." };
 
+    // 1. Recover IDs (Optimized)
     recoverMstEventIds_(mstSettings.sourceTabName, targetCalendarId);
 
     const sheet = getSheet(mstSettings.sourceTabName);
@@ -188,12 +247,16 @@ function api_previewMstCalendarSync(targetCalendarId) {
     const calendar = CalendarApp.getCalendarById(targetCalendarId);
     if (!calendar) return { success: false, message: "Target Calendar not found." };
     
+    // 2. Calculate Precise Date Range from Sheet Data
     let minDate = new Date(8640000000000000);
     let maxDate = new Date(-8640000000000000);
+    let hasValidDates = false;
+
     rows.forEach(row => {
         if (colIdx.startDate > -1 && row[colIdx.startDate]) {
             const d = new Date(row[colIdx.startDate]);
             if (!isNaN(d.getTime())) {
+                hasValidDates = true;
                 if (d < minDate) minDate = d;
                 const ed = (colIdx.endDate > -1 && row[colIdx.endDate]) ? new Date(row[colIdx.endDate]) : d;
                 if (ed > maxDate) maxDate = ed;
@@ -202,14 +265,16 @@ function api_previewMstCalendarSync(targetCalendarId) {
     });
 
     const eventIdMap = new Map();
-    if (minDate < maxDate) {
+    
+    // 3. Fetch Calendar Events (Only if we have dates, and only for that range)
+    if (hasValidDates && minDate < maxDate) {
+        // Add buffer to ensure we catch events on the boundary
         minDate.setHours(0,0,0,0);
         maxDate.setHours(23,59,59,999);
+        
         const existingEvents = calendar.getEvents(minDate, maxDate);
         existingEvents.forEach(e => {
-            // Check Event Tag
             let tagId = e.getTag('StaffHub_EventID');
-            // If not found, check Series Tag
             if (!tagId) {
                 try {
                     const series = e.getEventSeries();
@@ -238,6 +303,7 @@ function api_previewMstCalendarSync(targetCalendarId) {
         const courseName = (colIdx.course > -1) ? row[colIdx.course] : "";
         const faculty = (colIdx.faculty > -1) ? row[colIdx.faculty] : "";
         const zoomLink = (colIdx.zoomLink > -1) ? String(row[colIdx.zoomLink]).trim() : "";
+        
         let description = `Course: ${courseName}\nFaculty: ${faculty}`;
         if (zoomLink) description += `\n\n--- RESOURCES ---\nZoom Link: ${zoomLink}`;
 
@@ -331,7 +397,13 @@ function api_previewMstCalendarSync(targetCalendarId) {
                     diffs.push({ key: 'location', type: 'update', text: `Location: "${loc1}" -> "${loc2}"` });
                 }
                 
-                // Get Tag from Series if possible
+                const desc1 = String(existing.getDescription() || "").trim();
+                const desc2 = String(description || "").trim();
+                if (desc1 !== desc2) {
+                    status = "UPDATE";
+                    diffs.push({ key: 'description', type: 'update', text: "Description/Zoom Updated" });
+                }
+                
                 let storedSig = existing.getTag('StaffHub_TimeSignature');
                 if(!storedSig) {
                     try { storedSig = existing.getEventSeries().getTag('StaffHub_TimeSignature'); } catch(e){}
@@ -374,6 +446,7 @@ function api_previewMstCalendarSync(targetCalendarId) {
                     endTime: endDt.getTime(),
                     location: locationVal,
                     description: description,
+                    zoomLink: zoomLink, 
                     dayStr: dayStr,
                     seriesEndDate: seriesEndDate ? seriesEndDate.getTime() : null,
                     guests: targetEmail ? [targetEmail] : []
@@ -382,7 +455,7 @@ function api_previewMstCalendarSync(targetCalendarId) {
         }
     }
     return { success: true, data: proposals };
-  } catch (e) { return { success: false, message: e.message }; } finally { lock.releaseLock(); }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
 function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
@@ -412,7 +485,9 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
                 const skipTitle = p.title === "SKIP";
                 const skipLocation = p.location === "SKIP";
                 const skipGuests = p.guests === "SKIP";
-                const skipTime = p.startTime === "SKIP"; // New Skip Flag for Time
+                const skipTime = p.startTime === "SKIP"; 
+                
+                const isSeriesRow = !!p.seriesEndDate;
 
                 let recurrence = null;
                 if (p.seriesEndDate && p.dayStr) {
@@ -448,38 +523,42 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
                         else calendar.createEvent(p.title, startDt, endDt, options).setTag('StaffHub_EventID', evt.rowId).setTag('StaffHub_TimeSignature', timeSig);
                         stats.created++;
                     } else {
-                        // Get tag from series if needed
                         let currentSig = eventObj.getTag('StaffHub_TimeSignature');
                         if(!currentSig) {
                             try { currentSig = eventObj.getEventSeries().getTag('StaffHub_TimeSignature'); } catch(e){}
                         }
                         
-                        // Only recreate if Time changed AND user didn't skip time update
                         if (!skipTime && currentSig && currentSig !== timeSig) {
                             try { eventObj.getEventSeries().deleteEventSeries(); } catch(e) { eventObj.deleteEvent(); }
                             if (recurrence) calendar.createEventSeries(p.title, startDt, endDt, recurrence, options).setTag('StaffHub_EventID', evt.rowId).setTag('StaffHub_TimeSignature', timeSig);
                             else calendar.createEvent(p.title, startDt, endDt, options).setTag('StaffHub_EventID', evt.rowId).setTag('StaffHub_TimeSignature', timeSig);
                             stats.updated++;
                         } else {
-                            if (!skipTitle) eventObj.setTitle(p.title);
-                            if (!skipLocation) eventObj.setLocation(p.location);
-                            eventObj.setDescription(p.description);
+                            let target = eventObj;
+                            if (isSeriesRow) {
+                                try { target = eventObj.getEventSeries() || eventObj; } catch(e){}
+                            }
+
+                            if (!skipTitle) target.setTitle(p.title);
+                            if (!skipLocation) target.setLocation(p.location);
+                            target.setDescription(p.description);
 
                             if (!skipGuests) {
                                 const desiredGuests = (p.guests || []);
                                 const desiredGuestsLower = desiredGuests.map(e => e.toLowerCase());
-                                const currentGuestList = eventObj.getGuestList();
+                                const guestTarget = eventObj; 
+                                const currentGuestList = guestTarget.getGuestList();
                                 const currentEmailsLower = currentGuestList.map(g => g.getEmail().toLowerCase());
 
                                 desiredGuests.forEach(email => {
-                                    if (!currentEmailsLower.includes(email.toLowerCase())) eventObj.addGuest(email);
+                                    if (!currentEmailsLower.includes(email.toLowerCase())) guestTarget.addGuest(email);
                                 });
 
                                 currentGuestList.forEach(g => {
                                     const gEmail = g.getEmail().toLowerCase();
                                     if (!desiredGuestsLower.includes(gEmail)) {
                                         if (staffEmails.has(gEmail)) {
-                                            try { eventObj.removeGuest(gEmail); } catch(e) {}
+                                            try { guestTarget.removeGuest(gEmail); } catch(e) {}
                                         }
                                     }
                                 });
@@ -494,109 +573,115 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
                 stats.errors++;
             }
         });
+
         return { success: true, stats: stats };
     } catch (e) { return { success: false, message: e.message }; } finally { lock.releaseLock(); }
 }
 
 function recoverMstEventIds_(sheetName, calendarId) {
     if (!sheetName || !calendarId) return;
-    const sheet = getSheet(sheetName);
-    if (!sheet) return;
-    const data = sheet.getDataRange().getValues();
-    
-    let headerRowIdx = -1;
-    for(let r=0; r<Math.min(data.length, 10); r++) {
-        const rowStr = data[r].join(' ').toLowerCase();
-        if(rowStr.includes('start date') && (rowStr.includes('time of day') || rowStr.includes('run time'))) {
-            headerRowIdx = r; break;
+    const lock = LockService.getScriptLock(); 
+    try {
+        lock.waitLock(30000);
+        
+        const sheet = getSheet(sheetName);
+        if (!sheet) return;
+        
+        const data = sheet.getDataRange().getValues();
+        
+        let headerRowIdx = -1;
+        for(let r=0; r<Math.min(data.length, 10); r++) {
+            const rowStr = data[r].join(' ').toLowerCase();
+            if(rowStr.includes('start date') && (rowStr.includes('time of day') || rowStr.includes('run time'))) {
+                headerRowIdx = r; break;
+            }
         }
-    }
-    if (headerRowIdx === -1) return;
+        if (headerRowIdx === -1) return;
 
-    const headers = data[headerRowIdx];
-    const hMap = headers.map(h => String(h).toLowerCase().replace(/[\s_]/g, ''));
-    const idColIdx = hMap.indexOf('eventid');
-    const courseIdx = hMap.indexOf('course');
-    const startIdx = hMap.findIndex(h => h.includes('startdate'));
-    const locIdx = hMap.indexOf('bxlocation');
+        const headers = data[headerRowIdx];
+        const hMap = headers.map(h => String(h).toLowerCase().replace(/[\s_]/g, ''));
+        const idColIdx = hMap.indexOf('eventid');
+        const courseIdx = hMap.indexOf('course');
+        const startIdx = hMap.findIndex(h => h.includes('startdate'));
+        const locIdx = hMap.indexOf('bxlocation');
 
-    if (idColIdx === -1) return; 
+        if (idColIdx === -1) return; 
 
-    const calendarEvents = fetchCalendarEventsForLookup_(calendarId);
-    const assignedIds = new Set();
-    let hasUpdates = false;
-    
-    for (let i = headerRowIdx + 1; i < data.length; i++) {
-        const row = data[i];
-        if (!row[idColIdx] && row[courseIdx] && row[startIdx]) { 
-            const dateKey = formatDate(new Date(row[startIdx]), "yyyy-MM-dd");
-            const courseName = String(row[courseIdx]).toLowerCase().trim();
-            const sheetLoc = (locIdx > -1 && row[locIdx]) ? String(row[locIdx]).toLowerCase().trim() : "";
+        // --- SURGICAL RECOVERY: Only fetch calendar if IDs are missing ---
+        const rowsMissingIds = [];
+        for (let i = headerRowIdx + 1; i < data.length; i++) {
+            if (!data[i][idColIdx] && data[i][courseIdx] && data[i][startIdx]) {
+                rowsMissingIds.push({ rowIndex: i, rowData: data[i] });
+            }
+        }
+
+        if (rowsMissingIds.length === 0) return; // Exit immediately if no work needed!
+
+        // If we have missing IDs, we fetch ONLY the specific days needed
+        const calendar = CalendarApp.getCalendarById(calendarId);
+        if (!calendar) return;
+
+        const idsToWrite = [];
+        let hasUpdates = false;
+
+        // Pre-fill idsToWrite with existing data so we can update specific indices
+        for(let i=0; i<data.length - (headerRowIdx + 1); i++) {
+            idsToWrite.push([data[headerRowIdx + 1 + i][idColIdx]]);
+        }
+
+        rowsMissingIds.forEach(item => {
+            const row = item.rowData;
+            const startDate = new Date(row[startIdx]);
             
-            let foundId = null;
-
-            const candidates = calendarEvents.filter(e => {
-                const eDate = formatDate(e.getStartTime(), "yyyy-MM-dd");
-                if (eDate !== dateKey) return false;
+            if (!isNaN(startDate.getTime())) {
+                // Fetch events ONLY for this specific day
+                const dayEvents = calendar.getEventsForDay(startDate);
                 
-                // CRITICAL FIX: Check Series Tag if Event Tag is missing
-                let tag = e.getTag('StaffHub_EventID');
-                if (!tag) {
-                    try { tag = e.getEventSeries().getTag('StaffHub_EventID'); } catch(err){}
-                }
+                const courseName = String(row[courseIdx]).toLowerCase().trim();
+                const sheetLoc = (locIdx > -1 && row[locIdx]) ? String(row[locIdx]).toLowerCase().trim() : "";
                 
-                if (tag && assignedIds.has(tag)) return false;
-                const eTitle = e.getTitle().toLowerCase();
-                return eTitle.includes(courseName);
-            });
-
-            let match = null;
-            if (candidates.length === 1) {
-                match = candidates[0];
-            } else if (candidates.length > 1) {
-                if (sheetLoc) {
-                    match = candidates.find(e => {
+                let foundId = null;
+                
+                // Match logic
+                const match = dayEvents.find(e => {
+                    let tag = e.getTag('StaffHub_EventID');
+                    if (!tag) { try { tag = e.getEventSeries().getTag('StaffHub_EventID'); } catch(err){} }
+                    
+                    // If tag exists, verify title matches. If no tag, verify title matches.
+                    const eTitle = e.getTitle().toLowerCase();
+                    if (!eTitle.includes(courseName)) return false;
+                    
+                    if (sheetLoc) {
                         const calLoc = (e.getLocation() || "").toLowerCase();
                         return calLoc.includes(sheetLoc) || sheetLoc.includes(calLoc);
-                    });
+                    }
+                    return true;
+                });
+
+                if (match) {
+                    let tag = match.getTag('StaffHub_EventID');
+                    if (!tag) { try { tag = match.getEventSeries().getTag('StaffHub_EventID'); } catch(err){} }
+                    foundId = tag;
                 }
-                if (!match) match = candidates[0];
-            }
 
-            if (match) {
-                // Get Tag from Series if needed
-                let tag = match.getTag('StaffHub_EventID');
-                if (!tag) {
-                    try { tag = match.getEventSeries().getTag('StaffHub_EventID'); } catch(err){}
+                if (!foundId) {
+                    foundId = 'MST_' + Utilities.getUuid().split('-')[0].toUpperCase();
                 }
-                foundId = tag;
-                if(foundId) assignedIds.add(foundId);
-            }
 
-            if (!foundId) {
-                foundId = 'MST_' + Utilities.getUuid().split('-')[0].toUpperCase();
-                assignedIds.add(foundId);
+                // Update our write buffer
+                const writeIndex = item.rowIndex - (headerRowIdx + 1);
+                idsToWrite[writeIndex][0] = foundId;
+                hasUpdates = true;
             }
+        });
 
-            sheet.getRange(i + 1, idColIdx + 1).setValue(foundId);
-            hasUpdates = true;
-        } else if (row[idColIdx]) {
-            assignedIds.add(String(row[idColIdx]));
+        if (hasUpdates) {
+            sheet.getRange(headerRowIdx + 2, idColIdx + 1, idsToWrite.length, 1).setValues(idsToWrite);
+            SpreadsheetApp.flush();
         }
+    } finally {
+        lock.releaseLock();
     }
-    if (hasUpdates) SpreadsheetApp.flush();
-}
-
-function fetchCalendarEventsForLookup_(calendarId) {
-    if (!calendarId) return [];
-    try {
-        const cal = CalendarApp.getCalendarById(calendarId);
-        if (!cal) return [];
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth() - 3, 1); 
-        const end = new Date(now.getFullYear() + 1, 0, 1); 
-        return cal.getEvents(start, end);
-    } catch(e) { return []; }
 }
 
 function mstHelper_parseDayOfWeek(dayStr) {
@@ -643,6 +728,7 @@ function parseCourse(row, map) {
     const locIdx = map['bxlocation']; 
     const startIdx = map['startdate'];
     const endIdx = map['enddate'];
+    const zoomIdx = map['zoomlink']; 
     if (idIdx === undefined || nameIdx === undefined) return null;
     let days = [];
     if (daysIdx !== undefined && row[daysIdx]) {
@@ -655,7 +741,8 @@ function parseCourse(row, map) {
         daysOfWeek: days,
         startDate: startIdx !== undefined ? row[startIdx] : null,
         endDate: endIdx !== undefined ? row[endIdx] : null,
-        location: locIdx !== undefined ? row[locIdx] : ''
+        location: locIdx !== undefined ? row[locIdx] : '',
+        zoomLink: zoomIdx !== undefined ? row[zoomIdx] : ''
     };
 }
 

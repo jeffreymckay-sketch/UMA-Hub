@@ -164,11 +164,9 @@
     google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(showError).api_updateStaffPreferences(formData);
   }
 
-  function showError(error) {
-    // If the error is an object with a message property, use that. Otherwise, use the error itself.
-    const errorMessage = (error && error.message) ? error.message : error;
-    console.error('An error occurred:', errorMessage);
-    alert('An error occurred: ' + errorMessage);
+  function showError(message, error) {
+    console.error('Error received:', message, error);
+    alert('An error occurred: ' + message);
   }
 
 </script>

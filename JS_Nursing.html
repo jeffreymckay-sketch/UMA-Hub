@@ -38,7 +38,19 @@
   .btn-outline:hover { background: var(--color-accent-gray); }
   .btn-create { background-color: var(--color-primary-green); color: #fff; border: none; }
   .btn-create:hover { opacity: 0.9; }
+  
+  /* NEW ORANGE BUTTON STYLE */
+  .btn-orange { background-color: #ff9800; color: #fff; border: none; }
+  .btn-orange:hover { background-color: #f57c00; opacity: 1; }
+
   .btn-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; background: #eee; color: #999; border: 1px solid #ddd; }
+
+  /* Spinner Animation */
+  .spinner-sm {
+    width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.1); border-top-color: var(--color-primary-navy);
+    border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   /* --- Progress Modal Styles --- */
   #progress-overlay {
@@ -117,7 +129,7 @@
     queue: [],
     total: 0,
     processed: 0,
-    action: '', // 'create' or 'update'
+    action: '', // 'create', 'update', or 'calendar'
     isRunning: false
   };
 
@@ -156,6 +168,7 @@
       <h2 style="margin:0">Nursing Doc Management</h2>
       <div class="proctoring-actions">
         <input type="text" id="exam-search" class="form-input" placeholder="Search..." onkeyup="filterExams()" style="width:180px">
+        <button id="nursing-sync-cal-btn" class="button-tertiary" onclick="handleCalendarSync('bulk')">Sync Calendar</button>
         <button id="nursing-create-btn" class="button-primary" onclick="handleBulkAction('create')">Generate All</button>
         <button id="nursing-update-btn" class="button-secondary" onclick="handleBulkAction('update')">Update All</button>
       </div>
@@ -232,6 +245,16 @@
           viewBtn = `<button class="btn-disabled btn-sm">View</button>`;
       }
 
+      // Calendar Button Logic
+      // Check if already on calendar (visual indication)
+      let calBtnClass = 'button-tertiary'; 
+      let calBtnContent = '📅';
+
+      if (exam.isOnCalendar) {
+          calBtnClass = 'btn-orange'; // Orange background
+          calBtnContent = '📅 ✔';     // Add checkmark
+      }
+
       card.innerHTML = `
           <div class="exam-card-header">${exam.name}</div>
           <div class="exam-card-body">
@@ -243,6 +266,7 @@
           <div class="exam-card-footer">
               <button class="button-tertiary btn-sm" onclick="openAccommodationsSidebar('${safeSheet}', '${safeExam}')">Accommodations</button>
               <div class="footer-right">
+                  <button class="${calBtnClass} btn-sm" title="Sync to Calendar" onclick="handleCalendarSync('single', '${safeSheet}', '${safeExam}', this)">${calBtnContent}</button>
                   ${mainBtn}
                   ${viewBtn}
               </div>
@@ -286,6 +310,116 @@
         [func](payload);
   }
 
+  // --- Calendar Sync Logic ---
+
+  function handleCalendarSync(type, sheetName, examName, btn) {
+    if (type === 'single') {
+        const originalHtml = btn.innerHTML;
+        const originalClass = btn.className;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span>';
+        
+        const sheet = g.nursingData.data.sheets.find(s => s.sheetName === sheetName);
+        const exam = sheet.exams.find(e => e.name === examName);
+        const payload = { settings: g.nursingData.data.settings, sheets: [{ ...sheet, exams: [exam] }] };
+
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false; 
+                if (res.success) {
+                    showNotification(res.message, 'success');
+                    
+                    // Visual Indication: Change to orange and add checkmark
+                    btn.className = 'btn-orange btn-sm';
+                    btn.innerHTML = '📅 ✔';
+                    
+                    // Update Local Cache
+                    exam.isOnCalendar = true; 
+                }
+                else {
+                    btn.innerHTML = originalHtml;
+                    btn.className = originalClass;
+                    showNotification(res.message, 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                btn.disabled = false; 
+                btn.innerHTML = originalHtml;
+                btn.className = originalClass;
+                showNotification(err.message, 'error');
+            })
+            .api_syncNursingCalendar(payload);
+    } else {
+        // Bulk Sync with Progress Bar
+        if (!g.nursingData || !g.nursingData.data) return;
+
+        const allExams = [];
+        g.nursingData.data.sheets.forEach(sheet => {
+            sheet.exams.forEach(exam => {
+                allExams.push({ sheetName: sheet.sheetName, course: sheet.course, exam: exam });
+            });
+        });
+
+        if (allExams.length === 0) {
+            showNotification("No exams found to sync.", "error");
+            return;
+        }
+
+        batchState = { queue: allExams, total: allExams.length, processed: 0, action: 'calendar', isRunning: true };
+        
+        showProgressModal(true);
+        document.getElementById('progress-title').textContent = "Syncing with Google Calendar...";
+        updateProgressUI(0, batchState.total, "Starting sync...");
+        
+        processNextCalendarBatch();
+    }
+  }
+
+  function processNextCalendarBatch() {
+    const BATCH_SIZE = 5;
+    if (batchState.processed >= batchState.total) {
+        showProgressModal(false);
+        showNotification("Calendar Sync Complete!", "success");
+        
+        // Reload page to refresh statuses (make buttons orange)
+        g.nursingData = null;
+        loadNursingPage();
+        return;
+    }
+
+    const chunk = batchState.queue.slice(batchState.processed, batchState.processed + BATCH_SIZE);
+    
+    // Re-group chunk into sheet structure for server
+    const tempSheetsMap = {};
+    chunk.forEach(item => {
+        if (!tempSheetsMap[item.sheetName]) {
+            tempSheetsMap[item.sheetName] = { sheetName: item.sheetName, course: item.course, exams: [] };
+        }
+        tempSheetsMap[item.sheetName].exams.push(item.exam);
+    });
+
+    const payload = { settings: g.nursingData.data.settings, sheets: Object.values(tempSheetsMap) };
+
+    updateProgressUI(batchState.processed, batchState.total, `Syncing items ${batchState.processed + 1} - ${Math.min(batchState.processed + BATCH_SIZE, batchState.total)}...`);
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res.success) {
+                batchState.processed += chunk.length;
+                processNextCalendarBatch();
+            } else {
+                showNotification("Sync failed: " + res.message, "error");
+                showProgressModal(false);
+            }
+        })
+        .withFailureHandler(err => {
+            showNotification("Server error: " + err.message, "error");
+            showProgressModal(false);
+        })
+        .api_syncNursingCalendar(payload);
+  }
+
   // --- Bulk Actions (Chunking Strategy) ---
 
   function handleBulkAction(action) {
@@ -321,6 +455,7 @@
       document.getElementById('nursing-create-btn').disabled = true;
       document.getElementById('nursing-update-btn').disabled = true;
       showProgressModal(true);
+      document.getElementById('progress-title').textContent = "Processing Documents...";
       updateProgressUI(0, batchState.total, "Starting batch process...");
 
       // 4. Start Processing
@@ -492,6 +627,10 @@
         <div class="form-vertical">
             <div class="form-group"><label>Sheet ID</label><input id="nursing-sheet-id" class="form-input" value="${settings.nursingSheetId||''}"></div>
             <div class="form-group"><label>Folder ID</label><input id="nursing-folder-id" class="form-input" value="${settings.nursingFolderId||''}"></div>
+            <div class="form-group">
+                <label>Target Calendar ID (Email or ID)</label>
+                <input id="nursing-calendar-id" class="form-input" value="${settings.nursingCalendarId||''}" placeholder="e.g. primary or xxxx@group.calendar.google.com">
+            </div>
             <div class="form-group"><label>Custom Notes</label><textarea id="nursing-custom-notes" class="form-input">${settings.customNotes||''}</textarea></div>
             <button class="button-primary" onclick="saveNursingSettings(this)">Save Settings</button>
             <div id="nursing-settings-feedback"></div>
@@ -502,6 +641,7 @@
       const settings = {
           nursingSheetId: document.getElementById('nursing-sheet-id').value,
           nursingFolderId: document.getElementById('nursing-folder-id').value,
+          nursingCalendarId: document.getElementById('nursing-calendar-id').value,
           customNotes: document.getElementById('nursing-custom-notes').value
       };
       btn.textContent = 'Saving...';

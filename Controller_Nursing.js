@@ -45,28 +45,43 @@ function api_getNursingData() {
       })
       .filter(s => s !== null);
 
-    // 2. Find Document URLs (Subfolder Logic)
+    // 2. Find Document URLs (Subfolder Logic) & Check Calendar Status
     const mainFolder = DriveApp.getFolderById(settings.nursingFolderId);
+    
+    // Attempt to load calendar for status checks
+    let calendar = null;
+    if (settings.nursingCalendarId) {
+        try { calendar = CalendarApp.getCalendarById(settings.nursingCalendarId); } catch(e) { console.warn("Calendar check failed: " + e.message); }
+    }
     
     allSheetData.forEach(sheetData => {
         // Look for the subfolder matching the Course Code (e.g., "NUR 220")
         const courseCode = sheetData.course.code;
         const subfolders = mainFolder.getFoldersByName(courseCode);
         
+        // Resolve Folder for Docs
+        let courseFolder = null;
         if (subfolders.hasNext()) {
-            const courseFolder = subfolders.next();
-            
-            sheetData.exams.forEach(exam => {
+            courseFolder = subfolders.next();
+        }
+
+        sheetData.exams.forEach(exam => {
+            // A. Check for Document
+            if (courseFolder) {
                 // Construct filename: "NUR 220 Concepts - Exam 1"
                 const docName = `${sheetData.course.code} ${sheetData.course.name} - ${exam.name}`;
-                
-                // Look for file inside the course subfolder
                 const files = courseFolder.getFilesByName(docName);
                 if (files.hasNext()) {
                     exam.docUrl = files.next().getUrl();
                 }
-            });
-        }
+            }
+
+            // B. Check for Calendar Event (Visual Indication)
+            exam.isOnCalendar = false;
+            if (calendar) {
+                exam.isOnCalendar = checkExamOnCalendar(calendar, sheetData.course, exam);
+            }
+        });
     });
 
     return { success: true, data: { sheets: allSheetData, settings: settings } };
@@ -113,6 +128,124 @@ function api_saveNursingAccommodations(sheetName, examName, accommodationsText) 
   } catch (e) {
     return { success: false, message: e.message }; 
   }
+}
+
+/**
+ * Syncs nursing exams to a Google Calendar
+ * @param {Object} data - The payload containing settings and exam data
+ */
+function api_syncNursingCalendar(data) {
+  try {
+    const settings = data.settings || getNursingSettings();
+    if (!settings.nursingCalendarId) throw new Error("No Target Calendar ID found in settings.");
+    
+    const calendar = CalendarApp.getCalendarById(settings.nursingCalendarId);
+    if (!calendar) throw new Error("Could not access the specified Calendar. Check the ID and permissions.");
+
+    let count = 0;
+
+    data.sheets.forEach(sheet => {
+      sheet.exams.forEach(exam => {
+        const eventCreated = createOrUpdateExamEvent(calendar, sheet.course, exam);
+        if (eventCreated) count++;
+        
+        // Prevent API rate limiting errors
+        Utilities.sleep(1500);
+      });
+    });
+
+    return { success: true, message: `Successfully synced ${count} exam(s) to the calendar.`, count: count };
+  } catch (e) {
+    console.error(`Error in api_syncNursingCalendar: ${e.toString()}`);
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Helper to check if an event already exists (read-only)
+ */
+function checkExamOnCalendar(calendar, course, exam) {
+    if (!exam.date || !exam.siteTime) return false;
+
+    const startDateTime = new Date(`${exam.date} ${exam.siteTime}`);
+    if (isNaN(startDateTime.getTime())) return false;
+
+    // Calculate End Time (Default to 2 hours if duration is missing)
+    let durationMinutes = 120; 
+    if (exam.duration) {
+        const durStr = String(exam.duration); // Force string
+        const match = durStr.match(/\d+/);
+        if (match) {
+            const num = parseInt(match[0]);
+            if (!isNaN(num)) {
+                durationMinutes = durStr.toLowerCase().includes('hour') ? num * 60 : num;
+            }
+        }
+    }
+    const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
+    const eventTitle = `${course.code}: ${exam.name}`;
+
+    // Search window (+/- 1 hour)
+    const existingEvents = calendar.getEvents(
+        new Date(startDateTime.getTime() - 3600000), 
+        new Date(endDateTime.getTime() + 3600000)
+    );
+
+    return existingEvents.some(e => e.getTitle() === eventTitle);
+}
+
+/**
+ * Helper to create or update a single calendar event
+ */
+function createOrUpdateExamEvent(calendar, course, exam) {
+  if (!exam.date || !exam.siteTime) return false;
+
+  // 1. Parse Start Time
+  // Assumes exam.date is "YYYY-MM-DD" and siteTime is "HH:mm AM/PM"
+  const startDateTime = new Date(`${exam.date} ${exam.siteTime}`);
+  if (isNaN(startDateTime.getTime())) return false;
+
+  // 2. Calculate End Time (Default to 2 hours if duration is missing)
+  let durationMinutes = 120; 
+  if (exam.duration) {
+    const durStr = String(exam.duration); // Force string
+    const match = durStr.match(/\d+/);
+    if (match) {
+        const num = parseInt(match[0]);
+        if (!isNaN(num)) {
+            durationMinutes = durStr.toLowerCase().includes('hour') ? num * 60 : num;
+        }
+    }
+  }
+  const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
+
+  // 3. Construct Event Details
+  const eventTitle = `${course.code}: ${exam.name}`;
+  const description = `Course: ${course.name}\nPassword: ${exam.password || 'N/A'}\nZoom Time: ${exam.zoomTime || 'N/A'}\nAccommodations: ${exam.accommodations || 'None'}`;
+  const location = exam.room || "Nursing Dept";
+
+  // 4. Duplicate Prevention
+  // Search for existing events with the same title on that specific day (+/- 1 hour window)
+  const existingEvents = calendar.getEvents(
+    new Date(startDateTime.getTime() - 3600000), 
+    new Date(endDateTime.getTime() + 3600000)
+  );
+
+  const duplicate = existingEvents.find(e => e.getTitle() === eventTitle);
+
+  if (duplicate) {
+    // Update existing
+    duplicate.setTime(startDateTime, endDateTime);
+    duplicate.setDescription(description);
+    duplicate.setLocation(location);
+  } else {
+    // Create new
+    calendar.createEvent(eventTitle, startDateTime, endDateTime, {
+      description: description,
+      location: location
+    });
+  }
+  return true;
 }
 
 /**
