@@ -33,15 +33,40 @@
   .footer-right { display: flex; gap: 8px; }
 
   /* Buttons */
-  .btn-sm { padding: 5px 10px; font-size: 0.85em; }
+  /* Updated btn-sm to flex to ensure <a> and <button> align perfectly */
+  .btn-sm { 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center;
+    padding: 5px 10px; 
+    font-size: 0.85em; 
+    text-decoration: none; /* Removes underline from links */
+    line-height: 1.2;
+    height: 30px; /* Fixed height for uniformity */
+    box-sizing: border-box;
+  }
+
   .btn-outline { background: transparent; border: 1px solid var(--color-border-light); color: var(--color-text-dark); }
   .btn-outline:hover { background: var(--color-accent-gray); }
   .btn-create { background-color: var(--color-primary-green); color: #fff; border: none; }
   .btn-create:hover { opacity: 0.9; }
   
-  /* NEW ORANGE BUTTON STYLE */
+  /* ORANGE BUTTON STYLE */
   .btn-orange { background-color: #ff9800; color: #fff; border: none; }
   .btn-orange:hover { background-color: #f57c00; opacity: 1; }
+  
+  /* --- STANDARDIZATION CLASSES --- */
+  
+  /* Fixed width for Calendar Button (Holds checkmark without resizing) */
+  .btn-cal { 
+    width: 55px; 
+    padding: 0; 
+  }
+  
+  /* Fixed width for Actions (Create, Update, View) */
+  .btn-std {
+    width: 75px; /* Ensures View, Create, and Update are identical width */
+  }
 
   .btn-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; background: #eee; color: #999; border: 1px solid #ddd; }
 
@@ -238,11 +263,13 @@
       let mainBtn, viewBtn;
       
       if (hasDoc) {
-          mainBtn = `<button class="button-tertiary btn-sm" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
-          viewBtn = `<a href="${exam.docUrl}" target="_blank" class="button-tertiary btn-sm">View</a>`;
+          // ADDED btn-std class
+          mainBtn = `<button class="button-tertiary btn-sm btn-std" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
+          viewBtn = `<a href="${exam.docUrl}" target="_blank" class="button-tertiary btn-sm btn-std">View</a>`;
       } else {
-          mainBtn = `<button class="button-success btn-sm" onclick="handleSingleAction(this, 'create', '${safeSheet}', '${safeExam}')">Create</button>`;
-          viewBtn = `<button class="btn-disabled btn-sm">View</button>`;
+          // ADDED btn-std class
+          mainBtn = `<button class="button-success btn-sm btn-std" onclick="handleSingleAction(this, 'create', '${safeSheet}', '${safeExam}')">Create</button>`;
+          viewBtn = `<button class="btn-disabled btn-sm btn-std">View</button>`;
       }
 
       // Calendar Button Logic
@@ -255,6 +282,7 @@
           calBtnContent = '📅 ✔';     // Add checkmark
       }
 
+      // Added btn-cal class here for fixed width
       card.innerHTML = `
           <div class="exam-card-header">${exam.name}</div>
           <div class="exam-card-body">
@@ -266,7 +294,7 @@
           <div class="exam-card-footer">
               <button class="button-tertiary btn-sm" onclick="openAccommodationsSidebar('${safeSheet}', '${safeExam}')">Accommodations</button>
               <div class="footer-right">
-                  <button class="${calBtnClass} btn-sm" title="Sync to Calendar" onclick="handleCalendarSync('single', '${safeSheet}', '${safeExam}', this)">${calBtnContent}</button>
+                  <button class="${calBtnClass} btn-sm btn-cal" title="Sync to Calendar" onclick="handleCalendarSync('single', '${safeSheet}', '${safeExam}', this)">${calBtnContent}</button>
                   ${mainBtn}
                   ${viewBtn}
               </div>
@@ -331,7 +359,8 @@
                     showNotification(res.message, 'success');
                     
                     // Visual Indication: Change to orange and add checkmark
-                    btn.className = 'btn-orange btn-sm';
+                    // ADDED btn-cal class here to maintain size
+                    btn.className = 'btn-orange btn-sm btn-cal';
                     btn.innerHTML = '📅 ✔';
                     
                     // Update Local Cache

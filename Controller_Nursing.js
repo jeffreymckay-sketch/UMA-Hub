@@ -21,6 +21,9 @@ function api_getNursingData() {
     if (!settings.nursingSheetId) throw new Error("Invalid Sheet ID. Please check your settings.");
     if (!settings.nursingFolderId) throw new Error("Invalid Folder ID. Please check your settings.");
     
+    // 1. Fetch Saved Accommodations from App Master DB (New Step)
+    const dbMap = getAccommodationsDBMap();
+
     const spreadsheet = SpreadsheetApp.openById(settings.nursingSheetId);
     
     const allSheetData = spreadsheet.getSheets()
@@ -29,13 +32,28 @@ function api_getNursingData() {
         // Skip templates/masters
         if (sheetName.toLowerCase().match(/(template|master)/)) return null;
 
-        // 1. Parse the Sheet
+        // 2. Parse the Sheet (Standard Logic)
         const parsed = parseNursingSheet(sheet);
         
         if (!parsed || parsed.exams.length === 0) {
             console.log(`Skipping sheet "${sheetName}" - No valid data found.`);
             return null;
         }
+        
+        // 3. Merge DB Data into Exams (New Step)
+        parsed.exams.forEach(exam => {
+            const uniqueId = `${parsed.course.code}|${exam.name}`;
+            
+            // If we have data in the Sidecar DB, use it
+            if (dbMap[uniqueId]) {
+                exam.generalNotes = dbMap[uniqueId].generalNotes;
+                exam.studentTags = dbMap[uniqueId].studentTags; // Object { "Name": "Note" }
+            } else {
+                // Fallback: use the column from the sheet if no DB entry exists yet
+                exam.generalNotes = exam.accommodations || ""; 
+                exam.studentTags = {};
+            }
+        });
         
         return {
           sheetName: sheetName,
@@ -45,30 +63,32 @@ function api_getNursingData() {
       })
       .filter(s => s !== null);
 
-    // 2. Find Document URLs (Subfolder Logic) & Check Calendar Status
+    // 4. Find Document URLs & Check Calendar Status
     const mainFolder = DriveApp.getFolderById(settings.nursingFolderId);
     
-    // Attempt to load calendar for status checks
+    // Attempt to access Calendar for status checking
     let calendar = null;
     if (settings.nursingCalendarId) {
-        try { calendar = CalendarApp.getCalendarById(settings.nursingCalendarId); } catch(e) { console.warn("Calendar check failed: " + e.message); }
+        try {
+            calendar = CalendarApp.getCalendarById(settings.nursingCalendarId);
+        } catch (e) {
+            console.warn("Could not load calendar for status checks: " + e.message);
+        }
     }
-    
+
     allSheetData.forEach(sheetData => {
         // Look for the subfolder matching the Course Code (e.g., "NUR 220")
         const courseCode = sheetData.course.code;
         const subfolders = mainFolder.getFoldersByName(courseCode);
         
-        // Resolve Folder for Docs
         let courseFolder = null;
         if (subfolders.hasNext()) {
             courseFolder = subfolders.next();
         }
-
+            
         sheetData.exams.forEach(exam => {
-            // A. Check for Document
+            // A. Find Document URL
             if (courseFolder) {
-                // Construct filename: "NUR 220 Concepts - Exam 1"
                 const docName = `${sheetData.course.code} ${sheetData.course.name} - ${exam.name}`;
                 const files = courseFolder.getFilesByName(docName);
                 if (files.hasNext()) {
@@ -76,8 +96,8 @@ function api_getNursingData() {
                 }
             }
 
-            // B. Check for Calendar Event (Visual Indication)
-            exam.isOnCalendar = false;
+            // B. Check Calendar Status (Visual Indication)
+            exam.isOnCalendar = false; // Default to false
             if (calendar) {
                 exam.isOnCalendar = checkExamOnCalendar(calendar, sheetData.course, exam);
             }
@@ -92,42 +112,87 @@ function api_getNursingData() {
   }
 }
 
-function api_saveNursingAccommodations(sheetName, examName, accommodationsText) {
+/**
+ * Saves accommodations to the Sidecar Tab (_DB_ACCOMMODATIONS)
+ * Replaces the old function that tried to write to the source sheet.
+ */
+function api_saveNursingAccommodations(payload) {
+  // payload structure expected: { courseCode, examName, generalNotes, studentTags }
+  
+  // Handle older calls (if any) that might send (sheetName, examName, text)
+  // This ensures backward compatibility if the frontend wasn't fully refreshed
+  if (arguments.length === 3) {
+      return { success: false, message: "Please refresh the page. The saving mechanism has been upgraded." };
+  }
+
   try {
-    const settings = getNursingSettings();
-    const spreadsheet = SpreadsheetApp.openById(settings.nursingSheetId);
-    const sheet = spreadsheet.getSheetByName(sheetName);
-    if (!sheet) throw new Error(`Sheet '${sheetName}' not found.`);
+    const ss = SpreadsheetApp.getActiveSpreadsheet(); // The App Master script container
+    let sheet = ss.getSheetByName("_DB_ACCOMMODATIONS");
+    if (!sheet) throw new Error("Database tab '_DB_ACCOMMODATIONS' not found in App Master. Please create it.");
+
+    const uniqueId = `${payload.courseCode}|${payload.examName}`;
+    const studentJson = JSON.stringify(payload.studentTags || {});
     
     const data = sheet.getDataRange().getValues();
-    
-    let headerRowIndex = -1;
-    for (let i = 0; i < 15; i++) {
-        const rowStr = data[i].join(' ').toLowerCase();
-        if (rowStr.includes('exam') && rowStr.includes('date')) {
-            headerRowIndex = i;
+    let rowIndex = -1;
+
+    // Search for existing entry (skip header row 0)
+    for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === uniqueId) {
+            rowIndex = i + 1; // 1-based index
             break;
         }
     }
-    if (headerRowIndex === -1) throw new Error("Could not locate data table in sheet.");
 
-    const headers = data[headerRowIndex].map(h => String(h).trim().toLowerCase());
-    const nameCol = headers.findIndex(h => h.includes('exam'));
-    const accommCol = headers.findIndex(h => h.includes('accommodations'));
-
-    if (nameCol === -1) throw new Error("Exam Name column not found.");
-    if (accommCol === -1) throw new Error("Accommodations column not found.");
-
-    for (let i = headerRowIndex + 1; i < data.length; i++) {
-      if (String(data[i][nameCol]).trim() === examName) {
-        sheet.getRange(i + 1, accommCol + 1).setValue(accommodationsText);
-        return { success: true, message: 'Accommodations saved!' }; 
-      }
+    if (rowIndex > -1) {
+        // Update Existing Row
+        // Cols: A=ID, B=Course, C=Exam, D=Notes, E=StudentData
+        // We update D (4) and E (5)
+        sheet.getRange(rowIndex, 4, 1, 2).setValues([[payload.generalNotes, studentJson]]);
+    } else {
+        // Insert New Row
+        sheet.appendRow([uniqueId, payload.courseCode, payload.examName, payload.generalNotes, studentJson]);
     }
-    throw new Error(`Exam '${examName}' not found in sheet '${sheetName}'.`);
+
+    return { success: true, message: 'Saved to Database!' };
   } catch (e) {
-    return { success: false, message: e.message }; 
+    return { success: false, message: e.message };
   }
+}
+
+/**
+ * NEW HELPER: Reads the _DB_ACCOMMODATIONS tab into a fast lookup Map
+ */
+function getAccommodationsDBMap() {
+    const map = {};
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName("_DB_ACCOMMODATIONS");
+        if (!sheet) return map; // Tab doesn't exist yet, return empty
+
+        const data = sheet.getDataRange().getValues();
+        // Skip header (Row 1)
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            const id = String(row[0]); // Unique_ID
+            if (!id) continue;
+
+            let tags = {};
+            try { 
+                tags = JSON.parse(row[4]); // Col E is Student_Data
+            } catch (e) { 
+                // ignore parsing error
+            } 
+
+            map[id] = {
+                generalNotes: row[3], // Col D is General_Notes
+                studentTags: tags
+            };
+        }
+    } catch (e) {
+        console.warn("Error reading DB Map: " + e.message);
+    }
+    return map;
 }
 
 /**
@@ -162,18 +227,20 @@ function api_syncNursingCalendar(data) {
 }
 
 /**
- * Helper to check if an event already exists (read-only)
+ * Helper to check if an event exists (Read-Only)
+ * Returns true if the exam is already on the calendar
  */
 function checkExamOnCalendar(calendar, course, exam) {
     if (!exam.date || !exam.siteTime) return false;
 
+    // 1. Parse Start Time
     const startDateTime = new Date(`${exam.date} ${exam.siteTime}`);
     if (isNaN(startDateTime.getTime())) return false;
 
-    // Calculate End Time (Default to 2 hours if duration is missing)
+    // 2. Calculate End Time (Safe Duration Parsing)
     let durationMinutes = 120; 
     if (exam.duration) {
-        const durStr = String(exam.duration); // Force string
+        const durStr = String(exam.duration);
         const match = durStr.match(/\d+/);
         if (match) {
             const num = parseInt(match[0]);
@@ -183,14 +250,17 @@ function checkExamOnCalendar(calendar, course, exam) {
         }
     }
     const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
-    const eventTitle = `${course.code}: ${exam.name}`;
 
+    // 3. Search for Duplicates
+    const eventTitle = `${course.code}: ${exam.name}`;
+    
     // Search window (+/- 1 hour)
     const existingEvents = calendar.getEvents(
         new Date(startDateTime.getTime() - 3600000), 
         new Date(endDateTime.getTime() + 3600000)
     );
 
+    // Return true if found
     return existingEvents.some(e => e.getTitle() === eventTitle);
 }
 
@@ -201,14 +271,13 @@ function createOrUpdateExamEvent(calendar, course, exam) {
   if (!exam.date || !exam.siteTime) return false;
 
   // 1. Parse Start Time
-  // Assumes exam.date is "YYYY-MM-DD" and siteTime is "HH:mm AM/PM"
   const startDateTime = new Date(`${exam.date} ${exam.siteTime}`);
   if (isNaN(startDateTime.getTime())) return false;
 
-  // 2. Calculate End Time (Default to 2 hours if duration is missing)
+  // 2. Calculate End Time
   let durationMinutes = 120; 
   if (exam.duration) {
-    const durStr = String(exam.duration); // Force string
+    const durStr = String(exam.duration);
     const match = durStr.match(/\d+/);
     if (match) {
         const num = parseInt(match[0]);
@@ -221,11 +290,17 @@ function createOrUpdateExamEvent(calendar, course, exam) {
 
   // 3. Construct Event Details
   const eventTitle = `${course.code}: ${exam.name}`;
-  const description = `Course: ${course.name}\nPassword: ${exam.password || 'N/A'}\nZoom Time: ${exam.zoomTime || 'N/A'}\nAccommodations: ${exam.accommodations || 'None'}`;
+  
+  // UPDATED: Include General Notes in Calendar Description
+  let descText = `Course: ${course.name}\nPassword: ${exam.password || 'N/A'}\nZoom Time: ${exam.zoomTime || 'N/A'}`;
+  if (exam.generalNotes) {
+      descText += `\n\nAccommodations/Notes:\n${exam.generalNotes}`;
+  }
+  // Note: We don't put specific student tags in calendar for privacy/clutter reasons usually, but could be added if needed.
+  
   const location = exam.room || "Nursing Dept";
 
   // 4. Duplicate Prevention
-  // Search for existing events with the same title on that specific day (+/- 1 hour window)
   const existingEvents = calendar.getEvents(
     new Date(startDateTime.getTime() - 3600000), 
     new Date(endDateTime.getTime() + 3600000)
@@ -236,12 +311,12 @@ function createOrUpdateExamEvent(calendar, course, exam) {
   if (duplicate) {
     // Update existing
     duplicate.setTime(startDateTime, endDateTime);
-    duplicate.setDescription(description);
+    duplicate.setDescription(descText);
     duplicate.setLocation(location);
   } else {
     // Create new
     calendar.createEvent(eventTitle, startDateTime, endDateTime, {
-      description: description,
+      description: descText,
       location: location
     });
   }
@@ -385,15 +460,18 @@ function updateDocContent(doc, exam, course, settings) {
     body.appendParagraph(`3. Start Time (On Site): ${exam.siteTime || 'N/A'}`);
     body.appendParagraph(`4. Start Time (Zoom): ${exam.zoomTime || 'N/A'}`);
     body.appendParagraph(`5. Duration: ${exam.duration || 'N/A'}`);
-    // Room removed as requested
     body.appendParagraph(`6. Password: ${exam.password || 'N/A'}`);
 
     body.appendParagraph(''); 
 
     // --- Important Links ---
     body.appendParagraph('Important Links').setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    body.appendParagraph('Red Flag Reporting Form');
-    body.appendParagraph('Nursing Protocol');
+    
+    const redFlagUrl = "https://docs.google.com/forms/d/e/1FAIpQLSfORKCKol8SsRldNKfvsDy3ILNs9HcFv3gKb8TuxrNrlqxijw/viewform";
+    const protocolUrl = "https://docs.google.com/document/d/1TgKtmoDFqXLK0lBFPNirOAz_TW4S3E_BFhS934VcjOo/edit";
+
+    body.appendParagraph('Red Flag Reporting Form').setLinkUrl(redFlagUrl);
+    body.appendParagraph('Nursing Protocol').setLinkUrl(protocolUrl);
     
     body.appendParagraph(''); 
 
@@ -416,7 +494,13 @@ function updateDocContent(doc, exam, course, settings) {
         
         if (students.length > 0) {
             students.forEach(student => {
-                body.appendListItem(student).setGlyphType(DocumentApp.GlyphType.BULLET);
+                // START OF CHANGE: Append Student Tags
+                let studentText = student;
+                if (exam.studentTags && exam.studentTags[student]) {
+                    studentText += ` -- ${exam.studentTags[student]}`;
+                }
+                body.appendListItem(studentText).setGlyphType(DocumentApp.GlyphType.BULLET);
+                // END OF CHANGE
             });
         } else {
             // Placeholder for empty locations
@@ -428,10 +512,13 @@ function updateDocContent(doc, exam, course, settings) {
     });
 
     // --- Accommodations ---
-    if (exam.accommodations) {
+    // Prefer General Notes from DB, fallback to sheet column
+    const finalNotes = exam.generalNotes || exam.accommodations;
+    
+    if (finalNotes) {
         body.appendParagraph('');
-        body.appendParagraph('Accommodations').setHeading(DocumentApp.ParagraphHeading.HEADING2);
-        body.appendParagraph(exam.accommodations);
+        body.appendParagraph('Accommodations / Notes').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+        body.appendParagraph(finalNotes);
     }
 
     doc.saveAndClose();

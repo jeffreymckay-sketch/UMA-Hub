@@ -1,116 +1,222 @@
 <style>
+/* Sidebar Container */
 #accommodations-sidebar {
   position: fixed;
   top: 0;
-  right: -450px; /* Start off-screen */
+  right: -450px;
   width: 450px;
   max-width: 90%;
   height: 100%;
-  background-color: #fff;
+  background-color: #f9f9f9;
   box-shadow: -4px 0 15px rgba(0,0,0,0.15);
   z-index: 10000;
   transition: right 0.3s ease-in-out;
   display: flex;
   flex-direction: column;
 }
-
-#accommodations-sidebar.open {
-  right: 0;
-}
+#accommodations-sidebar.open { right: 0; }
 
 #accommodations-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.4);
-  z-index: 9999;
-  display: none;
-  opacity: 0;
-  transition: opacity 0.3s ease-in-out;
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.4); z-index: 9999;
+  display: none; opacity: 0; transition: opacity 0.3s;
 }
+#accommodations-overlay.open { display: block; opacity: 1; }
 
-#accommodations-overlay.open {
-  display: block;
-  opacity: 1;
-}
-
+/* Header */
 .accommodations-header {
-  padding: 20px;
-  border-bottom: 1px solid #eee;
-  flex-shrink: 0;
+  padding: 15px 20px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
 }
+.accommodations-header h3 { margin: 0; color: #2c3e50; font-size: 1.1em; }
 
-.accommodations-header h3 {
-  margin: 0;
-  font-size: 1.3em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* Content Scroll Area */
 .accommodations-content {
-  padding: 20px;
   flex-grow: 1;
-  display: flex;
-  flex-direction: column;
   overflow-y: auto;
+  padding: 15px;
 }
 
-.accommodations-content textarea {
-  width: 100%;
-  flex-grow: 1;
+/* Roster / Accordion Styles */
+.roster-container { margin-bottom: 20px; }
+.roster-instruction { font-size: 0.85em; color: #666; margin-bottom: 10px; }
+
+details.location-group {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+details.location-group summary {
+  padding: 10px 15px;
+  cursor: pointer;
+  background: #f0f4f8;
+  font-weight: 600;
+  font-size: 0.9em;
+  color: #34495e;
+  outline: none;
+}
+details.location-group summary:hover { background: #e8ecf1; }
+
+.student-list { padding: 5px 0; }
+
+.student-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 15px;
+  border-bottom: 1px solid #eee;
+}
+.student-row:last-child { border-bottom: none; }
+
+.student-name {
+  flex: 1;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+.student-input {
+  flex: 1;
+  margin-left: 10px;
+  padding: 4px 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  padding: 10px;
-  font-family: inherit;
-  font-size: 1em;
-  resize: vertical;
+  font-size: 0.85em;
 }
 
+/* General Notes Area */
+.general-notes-area {
+  margin-top: 10px;
+  background: #fff;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+.general-notes-area label { display: block; font-weight: bold; font-size: 0.9em; margin-bottom: 5px; }
+.general-notes-area textarea {
+  width: 100%; height: 80px;
+  border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+  font-family: inherit; font-size: 0.9em; resize: vertical; box-sizing: border-box;
+}
+
+/* Footer */
 .accommodations-footer {
-  padding: 20px;
-  border-top: 1px solid #eee;
+  padding: 15px 20px;
+  background: #fff;
+  border-top: 1px solid #ddd;
   text-align: right;
-  flex-shrink: 0;
 }
 </style>
 
 <div id="accommodations-overlay" onclick="closeAccommodationsSidebar()"></div>
 <div id="accommodations-sidebar">
   <div class="accommodations-header">
-    <h3 id="accommodations-title">Edit Accommodations</h3>
+    <h3 id="accommodations-title">Manage Accommodations</h3>
+    <div style="font-size:0.8em; color:#666;" id="accommodations-subtitle">Course Name</div>
   </div>
+  
   <div class="accommodations-content">
-    <textarea id="accommodations-text" placeholder="Enter individual accommodations for this exam..."></textarea>
+    <div class="roster-container">
+        <div class="roster-instruction">Assign accommodations to specific students below:</div>
+        <div id="roster-dynamic-list">
+            <!-- Dynamic Accordions Go Here -->
+        </div>
+    </div>
+    
+    <div class="general-notes-area">
+        <label>General Notes (All Students)</label>
+        <textarea id="accommodations-general" placeholder="e.g. Open Book, Calculator Allowed..."></textarea>
+    </div>
   </div>
+
   <div class="accommodations-footer">
     <button class="button-secondary" onclick="closeAccommodationsSidebar()">Cancel</button>
-    <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save</button>
+    <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save Changes</button>
   </div>
 </div>
 
 <script>
+  // Open Sidebar & Render UI
   function openAccommodationsSidebar(sheetName, examName) {
     const sidebar = document.getElementById('accommodations-sidebar');
     const overlay = document.getElementById('accommodations-overlay');
-    const title = document.getElementById('accommodations-title');
-    const textarea = document.getElementById('accommodations-text');
     
-    // Store identifiers on the sidebar element itself
+    // Store context
     sidebar.dataset.sheetName = sheetName;
     sidebar.dataset.examName = examName;
     
-    // Find the exam data to get the current accommodations text
-    const examData = g.nursingData.sheets.find(s => s.sheetName === sheetName)?.exams.find(e => e.name === examName);
+    // Find Data
+    const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
+    const sheetData = rootData.sheets.find(s => s.sheetName === sheetName);
+    const examData = sheetData ? sheetData.exams.find(e => e.name === examName) : null;
     
-    title.textContent = `Accommodations: ${examName}`;
-    textarea.value = examData?.accommodations || '';
+    if (!examData) { showNotification("Error finding exam data", "error"); return; }
 
+    // UI: Headers
+    document.getElementById('accommodations-title').textContent = examName;
+    document.getElementById('accommodations-subtitle').textContent = sheetData.course.code + ' - ' + sheetData.course.name;
+    document.getElementById('accommodations-general').value = examData.generalNotes || '';
+
+    // UI: Roster Builder
+    const container = document.getElementById('roster-dynamic-list');
+    container.innerHTML = ''; // Clear previous
+
+    const roster = examData.rosters || {};
+    const tags = examData.studentTags || {};
+    let hasStudents = false;
+
+    // Define preferred order or just iterate keys
+    const locs = ['Augusta', 'UMAAL', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco'];
+
+    locs.forEach(loc => {
+        const students = roster[loc] || [];
+        if (students.length === 0) return;
+        hasStudents = true;
+
+        // Create Details/Summary
+        const details = document.createElement('details');
+        details.className = 'location-group';
+        
+        const summary = document.createElement('summary');
+        summary.textContent = `${loc} (${students.length})`;
+        details.appendChild(summary);
+
+        const listDiv = document.createElement('div');
+        listDiv.className = 'student-list';
+
+        students.forEach(student => {
+            const row = document.createElement('div');
+            row.className = 'student-row';
+            
+            // Name
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'student-name';
+            nameSpan.textContent = student;
+
+            // Input
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'student-input';
+            input.placeholder = 'Add accommodation...';
+            input.dataset.student = student; // Store name for scraping later
+            input.value = tags[student] || ''; // Pre-fill saved tag
+
+            row.appendChild(nameSpan);
+            row.appendChild(input);
+            listDiv.appendChild(row);
+        });
+
+        details.appendChild(listDiv);
+        container.appendChild(details);
+    });
+
+    if (!hasStudents) {
+        container.innerHTML = '<div style="padding:10px; color:#888; font-style:italic;">No students assigned to locations yet.</div>';
+    }
+
+    // Show
     overlay.classList.add('open');
     sidebar.classList.add('open');
-    textarea.focus();
   }
 
   function closeAccommodationsSidebar() {
@@ -120,45 +226,68 @@
 
   function saveAccommodations() {
     const sidebar = document.getElementById('accommodations-sidebar');
-    const saveBtn = document.getElementById('accommodations-save-btn');
+    const btn = document.getElementById('accommodations-save-btn');
     const sheetName = sidebar.dataset.sheetName;
     const examName = sidebar.dataset.examName;
-    const accommodationsText = document.getElementById('accommodations-text').value;
-
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
     
+    btn.disabled = true; 
+    btn.textContent = 'Saving...';
+
+    // 1. Scrape General Notes
+    const generalNotes = document.getElementById('accommodations-general').value;
+
+    // 2. Scrape Student Tags
+    const studentTags = {};
+    const inputs = document.querySelectorAll('.student-input');
+    inputs.forEach(input => {
+        const val = input.value.trim();
+        if (val) {
+            studentTags[input.dataset.student] = val;
+        }
+    });
+
+    // 3. Prepare Payload
+    const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
+    const sheetObj = rootData.sheets.find(s => s.sheetName === sheetName);
+    
+    const payload = {
+        courseCode: sheetObj.course.code,
+        examName: examName,
+        generalNotes: generalNotes,
+        studentTags: studentTags
+    };
+
+    // 4. Send to Server
     google.script.run
-      .withSuccessHandler(response => handleSaveAccommodationsSuccess(response, sheetName, examName, accommodationsText))
-      .withFailureHandler(handleSaveAccommodationsFailure)
-      .api_saveNursingAccommodations(sheetName, examName, accommodationsText);
+        .withSuccessHandler(res => {
+            if (res.success) {
+                // Update Local Data Cache
+                const examObj = sheetObj.exams.find(e => e.name === examName);
+                if (examObj) {
+                    examObj.generalNotes = generalNotes;
+                    examObj.studentTags = studentTags;
+                }
+                
+                // If doc exists, update it
+                if (examObj.docUrl) {
+                    btn.textContent = 'Updating Doc...';
+                    const docPayload = { settings: rootData.settings, sheets: [{ ...sheetObj, exams: [examObj] }] };
+                    
+                    google.script.run.withSuccessHandler(dRes => {
+                        btn.disabled = false; btn.textContent = 'Save Changes';
+                        closeAccommodationsSidebar();
+                        showNotification("Saved DB & Updated Doc!", "success");
+                    }).updateAllNursingDocuments(docPayload);
+                } else {
+                    btn.disabled = false; btn.textContent = 'Save Changes';
+                    closeAccommodationsSidebar();
+                    showNotification("Saved to DB!", "success");
+                }
+            } else {
+                btn.disabled = false; btn.textContent = 'Save Changes';
+                showNotification("Save Failed: " + res.message, "error");
+            }
+        })
+        .api_saveNursingAccommodations(payload);
   }
-  
-  function handleSaveAccommodationsSuccess(response, sheetName, examName, newText) {
-      const saveBtn = document.getElementById('accommodations-save-btn');
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save';
-
-      if (response.success) {
-          showNotification('Accommodations saved successfully!', 'success');
-          
-          // Update the local data object to keep the UI in sync without a full reload
-          const examData = g.nursingData.sheets.find(s => s.sheetName === sheetName)?.exams.find(e => e.name === examName);
-          if (examData) {
-              examData.accommodations = newText;
-          }
-          
-          closeAccommodationsSidebar();
-      } else {
-          showNotification(response.message, 'error');
-      }
-  }
-
-  function handleSaveAccommodationsFailure(error) {
-      const saveBtn = document.getElementById('accommodations-save-btn');
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save';
-      showNotification('Error saving accommodations: ' + error.message, 'error');
-  }
-
 </script>
