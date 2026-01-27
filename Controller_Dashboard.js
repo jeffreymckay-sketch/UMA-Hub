@@ -14,22 +14,25 @@ function api_getDashboardData() {
         const email = Session.getActiveUser().getEmail();
 
         // --- 1. Fetch Availability ---
+        // Using getDisplayValues() to ensure time strings are formatted correctly.
         const availabilitySheet = getSheet('Staff_Availability');
-        const availabilityData = availabilitySheet.getDataRange().getValues();
+        const availabilityData = availabilitySheet.getDataRange().getDisplayValues();
         const userAvailability = [];
         for (let i = 1; i < availabilityData.length; i++) {
             if (availabilityData[i][1] === email) { // Email is index 1
-                let start = availabilityData[i][3];
-                let end = availabilityData[i][4];
-                if (start instanceof Date) start = Utilities.formatDate(start, Session.getScriptTimeZone(), "HH:mm");
-                if (end instanceof Date) end = Utilities.formatDate(end, Session.getScriptTimeZone(), "HH:mm");
-                userAvailability.push({ id: availabilityData[i][0], day: availabilityData[i][2], start: start, end: end });
+                userAvailability.push({ 
+                    id: availabilityData[i][0], 
+                    day: availabilityData[i][2], 
+                    start: availabilityData[i][3] || 'N/A', 
+                    end: availabilityData[i][4] || 'N/A' 
+                });
             }
         }
 
         // --- 2. Fetch Time Block Preferences ---
+        // Using getDisplayValues() for consistency.
         const preferencesSheet = getSheet('Staff_Preferences');
-        const preferencesData = preferencesSheet.getDataRange().getValues();
+        const preferencesData = preferencesSheet.getDataRange().getDisplayValues();
         const userPreferences = {};
         for (let i = 1; i < preferencesData.length; i++) {
             if (preferencesData[i][0] === email) { // StaffID (email) is index 0
@@ -88,7 +91,8 @@ function api_deleteAvailability(recordId) {
     try {
         const email = Session.getActiveUser().getEmail();
         const sheet = getSheet('Staff_Availability');
-        const data = sheet.getDataRange().getValues();
+        // Using getDisplayValues() to ensure IDs are compared as strings.
+        const data = sheet.getDataRange().getDisplayValues();
 
         for (let i = data.length - 1; i >= 1; i--) {
             // Check that the record belongs to the current user
@@ -97,6 +101,7 @@ function api_deleteAvailability(recordId) {
                 return { success: true, message: "Availability slot has been deleted." };
             }
         }
+        // Throw an error if the record was not found for this user
         throw new Error("Record not found or permission denied.");
     } catch (e) {
         console.error("api_deleteAvailability Error: " + e.stack);
@@ -117,7 +122,7 @@ function api_updateStaffPreferences(preferences) {
     try {
         const email = Session.getActiveUser().getEmail();
         const sheet = getSheet('Staff_Preferences');
-        const data = sheet.getDataRange().getValues();
+        const data = sheet.getDataRange().getValues(); // getValues is ok here as we delete and rewrite
 
         // To keep the logic simple and robust, we remove all old preferences and add the new ones.
         for (let i = data.length - 1; i >= 1; i--) {

@@ -1,0 +1,93 @@
+<script>
+  function loadTechHubView() {
+    const rosterContent = `
+      <h3>Roster</h3>
+      <p>This is where you will be able to view and assign staff to shifts.</p>
+      <div class="date-range-picker">
+        <label for="roster-start-date">Week Start:</label>
+        <input type="date" id="roster-start-date">
+      </div>
+      <div id="roster-table-container"></div>
+    `;
+
+    const manageShiftsContent = `
+      <h3>Manage Shifts</h3>
+      <p>This tool will allow you to create, edit, and delete shifts.</p>
+      <div class="button-bar">
+        <button onclick="openAddShiftModal()">Add New Shift</button>
+        <button onclick="clearAllShifts()">Clear All Shifts</button>
+      </div>
+      <div id="manage-shifts-table-container"></div>
+    `;
+
+    document.getElementById('TechHub-Roster').innerHTML = rosterContent;
+    document.getElementById('TechHub-ManageShifts').innerHTML = manageShiftsContent;
+
+    if (!document.getElementById('add-shift-modal')) {
+        const modalHtml = `
+          <div id="add-shift-modal" class="modal" style="display:none;">
+            <div class="modal-content">...</div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    requestAnimationFrame(() => {
+        const upcomingSunday = getNextSunday();
+        document.getElementById('roster-start-date').valueAsDate = upcomingSunday;
+        getAndRenderRoster();
+    });
+  }
+
+  function getNextSunday() {
+    const d = new Date();
+    d.setDate(d.getDate() + (7 - d.getDay()) % 7);
+    return d;
+  }
+
+  function openTechHubTab(evt, tabName) {
+      openTab(evt, tabName);
+      switch (tabName) {
+          case 'TechHub-Roster':
+              getAndRenderRoster();
+              break;
+          case 'TechHub-ManageShifts':
+              getAndRenderShifts();
+              break;
+      }
+  }
+
+  function getAndRenderShifts() {
+    google.script.run.withSuccessHandler(renderManageShiftsTable).api_getTechHubViewData();
+  }
+  
+  function getAndRenderRoster() {
+      google.script.run.withSuccessHandler(renderRosterTable).api_getTechHubViewData();
+  }
+
+  function renderRosterTable(viewData) {
+      // ... (existing roster table rendering logic)
+  }
+  
+  function saveAllAssignments() {
+      // ... (existing save assignments logic)
+  }
+
+  function renderManageShiftsTable(viewData) {
+    // ... (existing manage shifts table rendering logic)
+  }
+  
+  function createShift(form) {
+      // ... (existing create shift logic)
+  }
+
+  function clearAllShifts() {
+      // ... (existing clear all shifts logic)
+  }
+
+  function deleteShift(shiftId) {
+      // ... (existing delete shift logic)
+  }
+  
+  loadTechHubView();
+</script>

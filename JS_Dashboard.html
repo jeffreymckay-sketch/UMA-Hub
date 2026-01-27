@@ -134,12 +134,12 @@
 
   function handleUpdateResponse(response) {
     if (response.success) {
-      alert(response.message);
+      showNotification(response.message, 'success');
       // Invalidate the cache so the next load gets fresh data
       g.dashboardData = null; 
       loadDashboardPage(); // Reload the dashboard view to show the change
     } else {
-      showError(response.message);
+      showNotification(response.message, 'error');
     }
   }
 
@@ -147,26 +147,21 @@
     const form = document.getElementById('add-availability-form');
     const formData = Object.fromEntries(new FormData(form).entries());
     if (!formData.day || !formData.start || !formData.end) {
-      alert('Please fill out all availability fields.');
+      showNotification('Please fill out all availability fields.', 'error');
       return;
     }
-    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(showError).api_addAvailability(formData);
+    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_addAvailability(formData);
   }
 
   function deleteAvailability(recordId) {
     if (!confirm('Are you sure you want to delete this slot?')) return;
-    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(showError).api_deleteAvailability(recordId);
+    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_deleteAvailability(recordId);
   }
 
   function savePreferences() {
     const form = document.getElementById('preferences-form');
     const formData = Object.fromEntries(new FormData(form).entries());
-    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(showError).api_updateStaffPreferences(formData);
-  }
-
-  function showError(message, error) {
-    console.error('Error received:', message, error);
-    alert('An error occurred: ' + message);
+    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_updateStaffPreferences(formData);
   }
 
 </script>

@@ -5,21 +5,32 @@
  * -------------------------------------------------------------------
  */
 
-// --- CONFIGURATION ---
-const MASTER_SPREADSHEET_ID = '1J0bMQamssoKD9OFO5HLVampKYWhWUfaljlUY3O--7us'; 
-
 /**
  * Fetches all necessary data for the initial application load.
  */
 function api_getInitialAppData() {
     var userInfo = { success: false, message: "Not loaded" };
     var mstViewData = { success: false, error: "Not loaded" };
+    var assignmentsData = { success: false, message: "Not loaded" };
     var allSettings = { success: false, message: "Not loaded" };
     var writableCalendars = { success: false, message: "Not loaded" };
     var allCalendars = { success: false, message: "Not loaded" }; 
     var nursingData = { success: false, message: "Not loaded" };
+    var sheetTabs = {};
 
     try {
+        // 0. Get Sheet Names
+        try {
+            const settings = getSettings();
+            if (settings && settings.sheetTabs) {
+                sheetTabs = JSON.parse(settings.sheetTabs);
+            } else {
+                throw new Error("'sheetTabs' not found in settings. Please run admin_mapSheetTabs.");
+            }
+        } catch(e) {
+             return { success: false, message: "Failed to load critical settings: " + e.message };
+        }
+
         // 1. User Info
         try {
             var userRes = getUserInfo();
@@ -40,19 +51,35 @@ function api_getInitialAppData() {
             var allCalRes = getAllCalendarsInternal();
             allCalendars = allCalRes.success ? allCalRes.data : { error: allCalRes.message };
         } catch (e) { writableCalendars = { error: "Calendar Error" }; }
+        
+        // 4. Assignments Data
+        try {
+            const assignSheet = getSheet(sheetTabs.Staff_Assignments);
+            if (!assignSheet) {
+                throw new Error("Sheet 'Staff_Assignments' not found.");
+            }
+            const assignmentValues = assignSheet.getDataRange().getValues();
+            const assignmentHeaders = getColumnMap(assignmentValues[0]);
+            const allAssignments = assignmentValues.slice(1).map(row => parseAssignment(row, assignmentHeaders)).filter(Boolean);
+            assignmentsData = { success: true, data: allAssignments };
 
-        // 4. MST Data
+        } catch (e) {
+            assignmentsData = { success: false, message: "Assignments Load Error: " + e.message };
+        }
+
+        // 5. MST Data
         try {
             if (typeof getMstViewData === 'function') {
-                var mstRes = getMstViewData();
+                const assignmentsForMst = assignmentsData.success ? assignmentsData.data : [];
+                var mstRes = getMstViewData(sheetTabs, assignmentsForMst);
                 mstViewData = mstRes.success ? mstRes.data : { error: mstRes.error };
             }
         } catch (e) { mstViewData = { error: "MST Data Error: " + e.message }; }
 
-        // 5. Nursing Data
+        // 6. Nursing Data
         try {
             if (typeof api_getNursingData === 'function') {
-                nursingData = api_getNursingData();
+                nursingData = api_getNursingData(sheetTabs);
             }
         } catch (e) { nursingData = { success: false, message: "Nursing Load Error: " + e.message }; }
 
@@ -61,10 +88,12 @@ function api_getInitialAppData() {
             data: {
                 userInfo: userInfo,
                 mstData: mstViewData,
+                assignments: assignmentsData.success ? assignmentsData.data : [],
                 settings: allSettings,
                 writableCalendars: writableCalendars,
                 allCalendars: allCalendars, 
-                nursingData: nursingData
+                nursingData: nursingData,
+                sheetTabs: sheetTabs
             }
         };
 
@@ -82,7 +111,7 @@ function api_getInitialAppData() {
 function api_saveSettings(key, settingsObject) {
     try {
         if (!key || !settingsObject) throw new Error("Key and settings object required.");
-        PropertiesService.getUserProperties().setProperty(key, JSON.stringify(settingsObject));
+        PropertiesService.getScriptProperties().setProperty(key, JSON.stringify(settingsObject));
         return { success: true, message: 'Settings saved!', data: getAllSettings_().data };
     } catch (e) {
         return { success: false, message: 'Failed to save settings: ' + e.message };
@@ -92,7 +121,9 @@ function api_saveSettings(key, settingsObject) {
 function api_getDashboardData() {
     try {
         const email = Session.getActiveUser().getEmail();
-        const availabilitySheet = getSheet('Staff_Availability');
+        const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
+
+        const availabilitySheet = getSheet(sheetTabs.Staff_Availability);
         if (!availabilitySheet) throw new Error("Sheet 'Staff_Availability' not found.");
 
         const availabilityData = availabilitySheet.getDataRange().getValues();
@@ -107,7 +138,7 @@ function api_getDashboardData() {
             }
         }
 
-        const preferencesSheet = getSheet('Staff_Preferences');
+        const preferencesSheet = getSheet(sheetTabs.Staff_Preferences);
         const userPreferences = {};
         if (preferencesSheet) {
             const preferencesData = preferencesSheet.getDataRange().getValues();
@@ -126,22 +157,19 @@ function api_getDashboardData() {
 
 // --- MST DATA LOGIC ---
 
-function getMstViewData() {
+function getMstViewData(sheetTabs, allAssignments) {
     try {
-        const staffSheet = getSheet('Staff_List');
-        const assignSheet = getSheet('Staff_Assignments');
-        const courseSheet = getSheet('Course_Schedule');
+        const staffSheet = getSheet(sheetTabs.Staff_List);
+        const courseSheet = getSheet(sheetTabs.Course_Schedule);
 
-        if (!staffSheet || !assignSheet || !courseSheet) {
+        if (!staffSheet || !courseSheet) {
             return { success: false, error: "Missing required MST sheets." };
         }
 
         const staffData = staffSheet.getDataRange().getValues();
-        const assignmentData = assignSheet.getDataRange().getValues();
         const courseData = courseSheet.getDataRange().getValues();
 
         const staffHeaders = getColumnMap(staffData[0]);
-        const assignmentHeaders = getColumnMap(assignmentData[0]);
         
         // Find header row for courses (Row 2 usually, based on "eventID")
         const courseHeaderRow = courseData.find(row => row.join('').toLowerCase().includes('eventid'));
@@ -150,7 +178,6 @@ function getMstViewData() {
         const courseHeaderIndex = courseData.indexOf(courseHeaderRow);
 
         const allStaff = staffData.slice(1).map(row => parseStaff(row, staffHeaders)).filter(s => s && s.isActive);
-        const allAssignments = assignmentData.slice(1).map(row => parseAssignment(row, assignmentHeaders)).filter(Boolean);
         const allCourses = courseData.slice(courseHeaderIndex + 1).map(row => parseCourse(row, courseHeaders)).filter(Boolean);
 
         const staffMap = new Map(allStaff.map(s => [String(s.id).toLowerCase(), s]));
@@ -191,14 +218,6 @@ function getMstViewData() {
 }
 
 // --- PARSING HELPERS (Customized for your Headers) ---
-
-function getColumnMap(headerRow) {
-    const map = {};
-    headerRow.forEach((col, index) => {
-        if (col) map[String(col).trim().toLowerCase().replace(/\s+/g, '')] = index;
-    });
-    return map;
-}
 
 function parseStaff(row, map) {
     // Headers: FullName, StaffID, Roles, IsActive
@@ -268,7 +287,7 @@ function parseCourse(row, map) {
 
 function getAllSettings_() {
     try {
-        const props = PropertiesService.getUserProperties().getProperties();
+        const props = PropertiesService.getScriptProperties().getProperties();
         const parsed = {};
         for (const key in props) {
             try { parsed[key] = JSON.parse(props[key]); } 
@@ -318,58 +337,13 @@ function getAllCalendarsInternal() {
   }
 }
 
-function normalizeTime(input) {
-  if (input === null || input === undefined || input === '') return '';
-  if (input instanceof Date) {
-    if (isNaN(input.getTime())) return 'Invalid Time';
-    return Utilities.formatDate(input, Session.getScriptTimeZone(), "h:mm a");
-  }
-  if (typeof input === 'number') {
-    let num = input;
-    if (num < 1 && num > 0) {
-      const totalMinutes = Math.round(num * 24 * 60);
-      const h = Math.floor(totalMinutes / 60);
-      const m = totalMinutes % 60;
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const h12 = h % 12 || 12;
-      return `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
-    }
-    let str = num.toString();
-    if (num < 24) str = num + "00";
-    if (str.length === 3) str = "0" + str;
-    if (str.length === 4) {
-      const h = parseInt(str.substring(0, 2));
-      const m = str.substring(2);
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const h12 = h % 12 || 12;
-      return `${h12}:${m} ${ampm}`;
-    }
-  }
-  const text = String(input).trim().toLowerCase();
-  const match = text.match(/(\d{1,2})[:.]?(\d{2})?\s*(a|p|am|pm)?/);
-  if (match) {
-    let h = parseInt(match[1]);
-    let m = match[2] || "00";
-    let period = match[3]; 
-    if (!period) {
-      if (h >= 7 && h <= 11) period = 'am';
-      else if (h === 12) period = 'pm';
-      else if (h >= 1 && h <= 6) period = 'pm'; 
-      else if (h > 12) period = 'pm'; 
-    }
-    if (h > 12) { h = h - 12; period = 'pm'; }
-    const cleanPeriod = (period && period.startsWith('p')) ? 'PM' : 'AM';
-    return `${h}:${m} ${cleanPeriod}`;
-  }
-  return String(input); 
-}
-
 function getSheet(sheetName) {
     try {
         let ss;
-        if (MASTER_SPREADSHEET_ID && MASTER_SPREADSHEET_ID !== 'PASTE_YOUR_ID_HERE') {
+        const spreadsheetId = getSpreadsheetId();
+        if (spreadsheetId && spreadsheetId !== 'PASTE_YOUR_ID_HERE') {
             try {
-                ss = SpreadsheetApp.openById(MASTER_SPREADSHEET_ID);
+                ss = SpreadsheetApp.openById(spreadsheetId);
             } catch (e) {
                 console.warn("Could not open spreadsheet by ID. Falling back to Active.");
             }

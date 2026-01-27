@@ -5,16 +5,39 @@
  * -------------------------------------------------------------------
  */
 
+// --- CLIENT-CALLABLE API FUNCTIONS ---
+
+/**
+ * API endpoint for the client to fetch all data required for the Tech Hub view.
+ * This function acts as a bridge, calling the main data model and then the specific view generator.
+ * @returns {object} A success/fail object with the generated view data.
+ */
+function api_getTechHubViewData() {
+    try {
+        // 1. Get the master data model & settings
+        const masterData = getMasterDataModel();
+        const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
+
+        // 2. Pass the data to the view generator
+        return getTechHubViewData(masterData, sheetTabs);
+
+    } catch (e) {
+        // Log the error for debugging and return a user-friendly message
+        console.error("api_getTechHubViewData failed: " + e.stack);
+        return { success: false, message: "An error occurred while loading the Tech Hub data. Details: " + e.message };
+    }
+}
+
+
 // --- VIEW MODEL GENERATOR ---
 
-function getTechHubViewData(master) {
-    const roster = [];
-    const manageShifts = [];
-    
+function getTechHubViewData(master, sheetTabs) {
     try {
-        const assignmentsMap = createLookupMap(master.assignmentsData, 'ReferenceID', 'StaffID'); 
+        const roster = [];
+        const manageShifts = [];
+        const assignmentsMap = createLookupMap(master.assignmentsData, 'ReferenceID', 'StaffID');
         const allStaffObjects = Object.values(master.staffMap);
-        
+
         const techHubStaffList = allStaffObjects
             .filter(s => (s.Roles || '').toLowerCase().includes('tech hub') && s.IsActive !== 'FALSE')
             .map(s => ({ id: s.StaffID, name: s.FullName }))
@@ -27,7 +50,7 @@ function getTechHubViewData(master) {
             if (idx.id > -1) {
                 for (let i = 1; i < master.shiftsData.length; i++) {
                     const row = master.shiftsData[i];
-                    const tbKey = `${row[idx.day]}_${getTimeBlock(row[idx.start])}`; 
+                    const tbKey = `${row[idx.day]}_${getTimeBlock(row[idx.start])}`;
                     const smartList = [];
                     for (const staff of techHubStaffList) {
                         const sid = (staff.id || '').toLowerCase();
@@ -47,19 +70,19 @@ function getTechHubViewData(master) {
                 }
             }
         }
-        
+
         // 2. Manage Shifts List
         if (master.shiftsData.length > 1 && master.shiftsData[0]) {
-             const h = master.shiftsData[0].map(normalizeHeader);
-             const idx = { 
-                 id: h.indexOf('shiftid'), 
-                 desc: h.indexOf('description'), 
-                 day: h.indexOf('dayofweek'), 
-                 start: h.indexOf('starttime'), 
-                 end: h.indexOf('endtime'),
-                 zoom: h.indexOf('zoom')
-             };
-             if (idx.id > -1) {
+            const h = master.shiftsData[0].map(normalizeHeader);
+            const idx = { 
+                id: h.indexOf('shiftid'), 
+                desc: h.indexOf('description'), 
+                day: h.indexOf('dayofweek'), 
+                start: h.indexOf('starttime'), 
+                end: h.indexOf('endtime'),
+                zoom: h.indexOf('zoom')
+            };
+            if (idx.id > -1) {
                 for(let i=1; i<master.shiftsData.length; i++) {
                     const r = master.shiftsData[i];
                     const hasZoom = (idx.zoom > -1 && r[idx.zoom].toString().toLowerCase() === 'true');
@@ -74,19 +97,21 @@ function getTechHubViewData(master) {
                 }
             }
         }
-    } catch (e) {
-        // Log error but return empty arrays to prevent crash
-        console.error("Tech Hub View Error: " + e.message);
-    }
+        
+        return { success: true, data: { roster, manageShifts } };
 
-    return { roster, manageShifts };
+    } catch (e) {
+        console.error("Tech Hub View Error: " + e.message);
+        return { success: false, message: "Tech Hub View Error: " + e.message };
+    }
 }
 
 // --- ACTIONS ---
 
 function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
     try {
-        const sheet = getSheet('Staff_Assignments');
+        const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
+        const sheet = getSheet(sheetTabs.Staff_Assignments);
         const data = sheet.getDataRange().getValues(); 
         const headers = data[0].map(normalizeHeader);
         
@@ -102,39 +127,53 @@ function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
         if (startDateIndex === -1) throw new Error("Header 'StartDate' not found in Staff_Assignments.");
         if (endDateIndex === -1) throw new Error("Header 'EndDate' not found in Staff_Assignments.");
         
-        const shiftsToUpdate = new Set(assignmentList.map(a => a.shiftId));
-        const newAssignmentsMap = assignmentList.reduce((map, item) => { map[item.shiftId] = item.staffId; return map; }, {});
-        const rowsToDelete = [];
-        
+        const updatedData = [data[0]];
+        const assignmentMap = new Map(assignmentList.map(a => [a.shiftId, a.staffId]));
+
         for (let i = 1; i < data.length; i++) {
-            if (data[i][typeIndex] === 'Tech Hub' && shiftsToUpdate.has(data[i][refIdIndex])) {
-                const newStaffId = newAssignmentsMap[data[i][refIdIndex]];
-                if (newStaffId) {
-                    if (data[i][staffIdIndex] !== newStaffId || data[i][startDateIndex] !== startDate) {
-                        sheet.getRange(i + 1, staffIdIndex + 1).setValue(newStaffId);
-                        sheet.getRange(i + 1, startDateIndex + 1).setValue(startDate);
-                        sheet.getRange(i + 1, endDateIndex + 1).setValue(endDate);
-                    }
-                    shiftsToUpdate.delete(data[i][refIdIndex]); 
-                } else {
-                    rowsToDelete.push(i + 1);
-                    shiftsToUpdate.delete(data[i][refIdIndex]);
-                }
+            const row = data[i];
+            const assignmentType = row[typeIndex];
+            const refId = row[refIdIndex];
+
+            if (assignmentType !== 'Tech Hub' || !assignmentMap.has(refId)) {
+                updatedData.push(row);
+                continue;
             }
+
+            const newStaffId = assignmentMap.get(refId);
+            if (newStaffId) {
+                row[staffIdIndex] = newStaffId;
+                row[startDateIndex] = startDate;
+                row[endDateIndex] = endDate;
+                updatedData.push(row);
+            }
+            assignmentMap.delete(refId);
         }
-        rowsToDelete.sort((a, b) => b - a).forEach(row => sheet.deleteRow(row));
-        const rowsToAdd = [];
-        assignmentList.forEach(a => {
-            if (shiftsToUpdate.has(a.shiftId) && a.staffId) rowsToAdd.push(['A-' + Utilities.getUuid(), a.staffId, 'Tech Hub', a.shiftId, startDate, endDate]);
+
+        assignmentMap.forEach((staffId, shiftId) => {
+            if(staffId) {
+                const newRow = Array(headers.length).fill('');
+                newRow[0] = 'A-' + Utilities.getUuid();
+                newRow[staffIdIndex] = staffId;
+                newRow[typeIndex] = 'Tech Hub';
+                newRow[refIdIndex] = shiftId;
+                newRow[startDateIndex] = startDate;
+                newRow[endDateIndex] = endDate;
+                updatedData.push(newRow);
+            }
         });
-        if (rowsToAdd.length > 0) sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+
+        sheet.clearContents();
+        sheet.getRange(1, 1, updatedData.length, updatedData[0].length).setValues(updatedData);
+
         return { success: true, message: `Assignments updated.` };
     } catch (e) { return { success: false, message: e.message }; }
 }
 
 function addTechHubShift(shiftData) {
     try {
-        const sheet = getSheet('TechHub_Shifts');
+        const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
+        const sheet = getSheet(sheetTabs.TechHub_Shifts);
         
         const days = Array.isArray(shiftData.days) ? shiftData.days : [shiftData.day];
         
@@ -143,173 +182,74 @@ function addTechHubShift(shiftData) {
             sheet.appendRow(['SH-' + Utilities.getUuid(), shiftData.description, day, shiftData.startTime, shiftData.endTime, zoomVal]);
         });
 
-        return getSchedulingRosterData_refactored();
-    } catch (e) { return { error: e.message }; }
-}
-
-function deleteBulkTechHubShifts(shiftIds) {
-    try {
-        const sheet = getSheet('TechHub_Shifts');
-        const data = sheet.getDataRange().getDisplayValues();
-        const idIndex = data[0].map(normalizeHeader).indexOf('shiftid');
-        
-        if (idIndex === -1) throw new Error("ShiftID column not found.");
-        
-        const idsToDelete = new Set(shiftIds);
-        const rowsToDelete = [];
-        
-        for (let i = data.length - 1; i >= 1; i--) { 
-            if (idsToDelete.has(data[i][idIndex])) {
-                rowsToDelete.push(i + 1);
-                deleteAssignmentsByReferenceId(data[i][idIndex]);
-            }
-        }
-        
-        rowsToDelete.forEach(r => sheet.deleteRow(r));
-        
-        return getSchedulingRosterData_refactored();
-    } catch (e) { return { error: e.message }; }
-}
-
-function deleteTechHubShift(shiftId) {
-    return deleteBulkTechHubShifts([shiftId]);
-}
-
-function deleteAssignmentsByReferenceId(refId) {
-    try {
-        const sheet = getSheet('Staff_Assignments');
-        if (!sheet) return;
-        const data = sheet.getDataRange().getDisplayValues();
-        const refIdIndex = data[0].map(normalizeHeader).indexOf('referenceid');
-        for (let i = data.length - 1; i >= 1; i--) { 
-            if (data[i][refIdIndex] === refId) sheet.deleteRow(i + 1);
-        }
-    } catch (e) {}
-}
-
-function deleteAssignment(assignmentId) {
-    try {
-        const sheet = getSheet('Staff_Assignments');
-        const data = sheet.getDataRange().getDisplayValues();
-        const idIndex = data[0].map(normalizeHeader).indexOf('assignmentid');
-        for (let i = data.length - 1; i >= 1; i--) { 
-            if (data[i][idIndex] === assignmentId) {
-                sheet.deleteRow(i + 1);
-                return getSchedulingRosterData_refactored();
-            }
-        }
-        throw new Error('ID not found.');
-    } catch (e) { return { error: e.message }; }
-}
-
-function resetAllAssignments() {
-    try {
-        const sheet = getSheet('Staff_Assignments');
-        if (!sheet) return { success: true };
-        const data = sheet.getDataRange().getValues();
-        const typeIndex = data[0].map(normalizeHeader).indexOf('assignmenttype');
-        const rowsToDelete = [];
-        for (let i = data.length - 1; i >= 1; i--) {
-            if (data[i][typeIndex] === 'Tech Hub') rowsToDelete.push(i + 1);
-        }
-        rowsToDelete.sort((a, b) => b - a).forEach(row => sheet.deleteRow(row));
-        return { success: true, message: 'Reset complete.' };
+        return { success: true }; // Let the client re-fetch data
     } catch (e) { return { success: false, message: e.message }; }
 }
 
 function handleClearAllShifts() {
     try {
-        const sheet = getSheet('TechHub_Shifts');
-        if (sheet) {
-            const lastRow = sheet.getLastRow();
-            if (lastRow > 1) {
-                sheet.deleteRows(2, lastRow - 1);
+        const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
+        const shiftsSheet = getSheet(sheetTabs.TechHub_Shifts);
+        const assignmentsSheet = getSheet(sheetTabs.Staff_Assignments);
+
+        // Clear shifts but keep headers
+        if (shiftsSheet) {
+             const headers = shiftsSheet.getRange(1, 1, 1, shiftsSheet.getLastColumn()).getValues();
+            shiftsSheet.clearContents();
+            shiftsSheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
+        }
+
+        // Remove only 'Tech Hub' assignments
+        if (assignmentsSheet) {
+            const data = assignmentsSheet.getDataRange().getValues();
+            const typeIndex = data[0].map(normalizeHeader).indexOf('assignmenttype');
+            const remainingData = data.filter((row, index) => {
+                if (index === 0) return true; // Keep header
+                return row[typeIndex] !== 'Tech Hub';
+            });
+            assignmentsSheet.clearContents();
+            if(remainingData.length > 0) {
+                assignmentsSheet.getRange(1, 1, remainingData.length, remainingData[0].length).setValues(remainingData);
             }
         }
-        resetAllAssignments();
-        return getSchedulingRosterData_refactored();
-    } catch (e) { return { error: e.message }; }
-}
 
-function validateUserEditPermission(targetEmail) {
-    const currentUser = Session.getActiveUser().getEmail().toLowerCase();
-    const target = (targetEmail || currentUser).toLowerCase();
-    if (target === currentUser) return target; 
-    const access = api_getAccessControlData(); 
-    if (access.userRole === 'Admin' || access.userRole === 'Lead') return target;
-    throw new Error("Permission denied: You can only edit your own data.");
-}
-
-function api_getMyAvailability(targetEmail) {
-    try {
-        const email = validateUserEditPermission(targetEmail);
-        const sheet = getSheet('Staff_Availability');
-        const data = sheet.getDataRange().getDisplayValues();
-        const list = [];
-        if (data.length > 1) {
-            const h = data[0].map(normalizeHeader);
-            const idIdx = h.indexOf('availabilityid'), staffIdx = h.indexOf('staffid'), dayIdx = h.indexOf('dayofweek'), startIdx = h.indexOf('starttime'), endIdx = h.indexOf('endtime');
-            for (let i = 1; i < data.length; i++) {
-                if (normalizeHeader(data[i][staffIdx]) === email) list.push({ id: data[i][idIdx], day: data[i][dayIdx], start: data[i][startIdx], end: data[i][endIdx] });
-            }
-        }
-        return { success: true, data: list };
+        return { success: true };
     } catch (e) { return { success: false, message: e.message }; }
 }
 
-function api_addNotAvailable(day, start, end, targetEmail) {
+function deleteTechHubShift(shiftId) {
     try {
-        const email = validateUserEditPermission(targetEmail);
-        const sheet = getSheet('Staff_Availability');
-        sheet.appendRow(['AV-' + Utilities.getUuid(), email, day, start, end]);
-        return api_getMyAvailability(email);
-    } catch (e) { return { success: false, message: e.message }; }
-}
+        const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
+        const shiftsSheet = getSheet(sheetTabs.TechHub_Shifts);
+        const assignmentsSheet = getSheet(sheetTabs.Staff_Assignments);
 
-function api_deleteAvailability(id, targetEmail) {
-    try {
-        const email = validateUserEditPermission(targetEmail);
-        const sheet = getSheet('Staff_Availability');
-        const data = sheet.getDataRange().getDisplayValues();
-        const idIdx = data[0].map(normalizeHeader).indexOf('availabilityid');
-        for (let i = data.length - 1; i >= 1; i--) {
-            if (data[i][idIdx] === id) { sheet.deleteRow(i + 1); return api_getMyAvailability(email); }
-        }
-        return { success: false, message: 'Item not found.' };
-    } catch (e) { return { success: false, message: e.message }; }
-}
+        const shiftsData = shiftsSheet.getDataRange().getDisplayValues();
+        const assignmentsData = assignmentsSheet.getDataRange().getDisplayValues();
 
-function api_getMyPreferences(targetEmail) {
-    try {
-        const email = validateUserEditPermission(targetEmail);
-        const sheet = getSheet('Staff_Preferences');
-        const data = sheet.getDataRange().getDisplayValues();
-        const prefs = {};
-        if (data.length > 1) {
-            const h = data[0].map(normalizeHeader);
-            const staffIdx = h.indexOf('staffid'), blockIdx = h.indexOf('timeblock'), prefIdx = h.indexOf('preference');
-            for (let i = 1; i < data.length; i++) {
-                if (normalizeHeader(data[i][staffIdx]) === email) prefs[data[i][blockIdx]] = data[i][prefIdx];
-            }
-        }
-        return { success: true, data: prefs };
-    } catch (e) { return { success: false, message: e.message }; }
-}
+        const shiftsIdIndex = shiftsData[0].map(normalizeHeader).indexOf('shiftid');
+        if (shiftsIdIndex === -1) throw new Error("ShiftID column not found in TechHub_Shifts.");
 
-function api_savePreference(timeBlock, value, targetEmail) {
-    try {
-        const email = validateUserEditPermission(targetEmail);
-        const sheet = getSheet('Staff_Preferences');
-        const data = sheet.getDataRange().getValues();
-        const h = data[0].map(normalizeHeader);
-        const staffIdx = h.indexOf('staffid'), blockIdx = h.indexOf('timeblock'), prefIdx = h.indexOf('preference');
-        let found = false;
-        for (let i = 1; i < data.length; i++) {
-            if (normalizeHeader(data[i][staffIdx]) === email && data[i][blockIdx] === timeBlock) {
-                sheet.getRange(i + 1, prefIdx + 1).setValue(value); found = true; break;
-            }
-        }
-        if (!found) sheet.appendRow([email, timeBlock, value]);
-        return { success: true, message: 'Saved' };
+        const assignmentsRefIdIndex = assignmentsData[0].map(normalizeHeader).indexOf('referenceid');
+        if (assignmentsRefIdIndex === -1) throw new Error("ReferenceID column not found in Staff_Assignments.");
+
+        const idsToDelete = new Set([shiftId]);
+        
+        const remainingShifts = shiftsData.filter((row, index) => {
+            if (index === 0) return true;
+            return !idsToDelete.has(row[shiftsIdIndex]);
+        });
+
+        const remainingAssignments = assignmentsData.filter((row, index) => {
+            if (index === 0) return true;
+            return !idsToDelete.has(row[assignmentsRefIdIndex]);
+        });
+
+        shiftsSheet.clearContents();
+        shiftsSheet.getRange(1, 1, remainingShifts.length, remainingShifts[0].length).setValues(remainingShifts);
+
+        assignmentsSheet.clearContents();
+        assignmentsSheet.getRange(1, 1, remainingAssignments.length, remainingAssignments[0].length).setValues(remainingAssignments);
+
+        return { success: true };
     } catch (e) { return { success: false, message: e.message }; }
 }

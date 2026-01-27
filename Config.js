@@ -4,6 +4,17 @@
  * using PropertiesService. It is the single source of truth for all configuration.
  */
 
+// This is the only place the spreadsheet ID should be defined.
+const MASTER_SPREADSHEET_ID = '1J0bMQamssoKD9OFO5HLVampKYWhWUfaljlUY3O--7us'; 
+
+/**
+ * Retrieves the master spreadsheet ID.
+ * @returns {string} The spreadsheet ID.
+ */
+function getSpreadsheetId() {
+    return MASTER_SPREADSHEET_ID;
+}
+
 /**
  * Retrieves all application settings from PropertiesService.
  *

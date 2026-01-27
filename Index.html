@@ -35,7 +35,14 @@
           <div id="Nursing-Settings" class="tab-content"></div>
       </div>
       <div id="page-Reporting" class="page-view" style="display:none;"></div>
-      <div id="page-TechHub" class="page-view" style="display:none;"></div>
+      <div id="page-TechHub" class="page-view" style="display:none;">
+          <div class="tab-bar">
+              <button class="tab-link active" onclick="openTechHubTab(event, 'TechHub-Roster')">Roster</button>
+              <button class="tab-link" onclick="openTechHubTab(event, 'TechHub-ManageShifts')">Manage Shifts</button>
+          </div>
+          <div id="TechHub-Roster" class="tab-content" style="display:block;"></div>
+          <div id="TechHub-ManageShifts" class="tab-content"></div>
+      </div>
       <div id="page-Zoom" class="page-view" style="display:none;"></div>
       <div id="page-Settings" class="page-view" style="display:none;"></div>
     </div>
@@ -55,6 +62,7 @@
     <?!= include('JS_MST'); ?>
     <?!= include('JS_Nursing'); ?>
     <?!= include('JS_Reporting'); ?>
+    <?!= include('JS_TechHub'); ?>
     
   </body>
 </html>
