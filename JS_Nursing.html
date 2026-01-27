@@ -1,153 +1,3 @@
-<style>
-  /* --- Nursing Tool Specific Styles --- */
-  .proctoring-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--color-border-light);
-  }
-  .proctoring-actions { display: flex; gap: 10px; }
-
-  /* Course Accordion */
-  .course-section { margin-bottom: 15px; border: 1px solid var(--color-border-light); border-radius: 6px; background: #fff; overflow: hidden; }
-  .course-header {
-    padding: 12px 15px; background: var(--color-accent-gray); cursor: pointer;
-    display: flex; justify-content: space-between; align-items: center;
-    font-weight: 600; color: var(--color-primary-navy);
-  }
-  .course-header:hover { background: #e9e9e9; }
-  .course-header::after { content: '\25B6'; font-size: 0.8em; transition: transform 0.2s; }
-  .course-section.open .course-header::after { transform: rotate(90deg); }
-  .course-content { display: none; padding: 15px; }
-  .course-section.open .course-content { display: block; }
-
-  /* Exam Cards */
-  .exam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; }
-  .exam-card { border: 1px solid var(--color-border-light); border-radius: 6px; display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-  .exam-card-header { padding: 10px 15px; background: #fafafa; border-bottom: 1px solid var(--color-border-light); font-weight: bold; color: var(--color-primary-navy); }
-  .exam-card-body { padding: 15px; flex-grow: 1; font-size: 0.9em; }
-  .exam-info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
-  .exam-label { color: #666; }
-  .exam-value { font-weight: 500; text-align: right; }
-  .password-badge { font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px; border: 1px solid #ddd; }
-  
-  .exam-card-footer { padding: 10px 15px; background: #fff; border-top: 1px solid var(--color-border-light); display: flex; justify-content: space-between; align-items: center; }
-  .footer-right { display: flex; gap: 8px; }
-
-  /* Buttons */
-  /* Updated btn-sm to flex to ensure <a> and <button> align perfectly */
-  .btn-sm { 
-    display: inline-flex; 
-    align-items: center; 
-    justify-content: center;
-    padding: 5px 10px; 
-    font-size: 0.85em; 
-    text-decoration: none; /* Removes underline from links */
-    line-height: 1.2;
-    height: 30px; /* Fixed height for uniformity */
-    box-sizing: border-box;
-  }
-
-  .btn-outline { background: transparent; border: 1px solid var(--color-border-light); color: var(--color-text-dark); }
-  .btn-outline:hover { background: var(--color-accent-gray); }
-  .btn-create { background-color: var(--color-primary-green); color: #fff; border: none; }
-  .btn-create:hover { opacity: 0.9; }
-  
-  /* ORANGE BUTTON STYLE */
-  .btn-orange { background-color: #ff9800; color: #fff; border: none; }
-  .btn-orange:hover { background-color: #f57c00; opacity: 1; }
-  
-  /* --- STANDARDIZATION CLASSES --- */
-  
-  /* Fixed width for Calendar Button (Holds checkmark without resizing) */
-  .btn-cal { 
-    width: 55px; 
-    padding: 0; 
-  }
-  
-  /* Fixed width for Actions (Create, Update, View) */
-  .btn-std {
-    width: 75px; /* Ensures View, Create, and Update are identical width */
-  }
-
-  .btn-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; background: #eee; color: #999; border: 1px solid #ddd; }
-
-  /* Spinner Animation */
-  .spinner-sm {
-    width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.1); border-top-color: var(--color-primary-navy);
-    border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* --- Progress Modal Styles --- */
-  #progress-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5); z-index: 20000;
-    display: flex; justify-content: center; align-items: center;
-    opacity: 0; pointer-events: none; transition: opacity 0.3s;
-  }
-  #progress-overlay.active { opacity: 1; pointer-events: all; }
-  
-  .progress-box {
-    background: #fff; width: 400px; padding: 25px; border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2); text-align: center;
-  }
-  .progress-box h3 { margin-top: 0; color: var(--color-primary-navy); }
-  
-  .progress-bar-bg {
-    background: #eee; height: 20px; border-radius: 10px; overflow: hidden;
-    margin: 15px 0; border: 1px solid #ddd;
-  }
-  .progress-bar-fill {
-    background: var(--color-primary-green); height: 100%; width: 0%;
-    transition: width 0.5s ease;
-  }
-  .progress-stats { font-weight: bold; color: #555; margin-bottom: 5px; }
-  .progress-subtext { font-size: 0.9em; color: #888; }
-
-  /* --- Accommodations Sidebar Styles (Embedded) --- */
-  #accommodations-sidebar {
-    position: fixed; top: 0; right: -450px; width: 450px; max-width: 90%; height: 100%;
-    background-color: #fff; box-shadow: -4px 0 15px rgba(0,0,0,0.15); z-index: 10000;
-    transition: right 0.3s ease-in-out; display: flex; flex-direction: column;
-  }
-  #accommodations-sidebar.open { right: 0; }
-  #accommodations-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.4); z-index: 9999; display: none; opacity: 0; transition: opacity 0.3s;
-  }
-  #accommodations-overlay.open { display: block; opacity: 1; }
-  .accommodations-header { padding: 20px; border-bottom: 1px solid #eee; background: var(--color-primary-navy); color: #fff; }
-  .accommodations-content { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; }
-  .accommodations-content textarea { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; resize: none; font-family: inherit; }
-  .accommodations-footer { padding: 20px; border-top: 1px solid #eee; text-align: right; }
-</style>
-
-<!-- Progress Modal HTML -->
-<div id="progress-overlay">
-  <div class="progress-box">
-    <h3 id="progress-title">Processing...</h3>
-    <div class="progress-stats" id="progress-stats">0 / 0</div>
-    <div class="progress-bar-bg">
-      <div class="progress-bar-fill" id="progress-fill"></div>
-    </div>
-    <div class="progress-subtext" id="progress-subtext">Initializing...</div>
-  </div>
-</div>
-
-<!-- Accommodations Sidebar HTML -->
-<div id="accommodations-overlay" onclick="closeAccommodationsSidebar()"></div>
-<div id="accommodations-sidebar">
-  <div class="accommodations-header">
-    <h3 id="accommodations-title" style="margin:0; font-size:1.1em;">Edit Accommodations</h3>
-  </div>
-  <div class="accommodations-content">
-    <textarea id="accommodations-text" placeholder="Enter individual accommodations for this exam..."></textarea>
-  </div>
-  <div class="accommodations-footer">
-    <button class="button-secondary" onclick="closeAccommodationsSidebar()">Cancel</button>
-    <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save</button>
-  </div>
-</div>
-
 <script>
   // --- Global State for Batching ---
   let batchState = {
@@ -263,26 +113,22 @@
       let mainBtn, viewBtn;
       
       if (hasDoc) {
-          // ADDED btn-std class
           mainBtn = `<button class="button-tertiary btn-sm btn-std" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
           viewBtn = `<a href="${exam.docUrl}" target="_blank" class="button-tertiary btn-sm btn-std">View</a>`;
       } else {
-          // ADDED btn-std class
           mainBtn = `<button class="button-success btn-sm btn-std" onclick="handleSingleAction(this, 'create', '${safeSheet}', '${safeExam}')">Create</button>`;
           viewBtn = `<button class="btn-disabled btn-sm btn-std">View</button>`;
       }
 
       // Calendar Button Logic
-      // Check if already on calendar (visual indication)
       let calBtnClass = 'button-tertiary'; 
       let calBtnContent = '📅';
 
       if (exam.isOnCalendar) {
-          calBtnClass = 'btn-orange'; // Orange background
-          calBtnContent = '📅 ✔';     // Add checkmark
+          calBtnClass = 'btn-orange'; 
+          calBtnContent = '📅 ✔';     
       }
 
-      // Added btn-cal class here for fixed width
       card.innerHTML = `
           <div class="exam-card-header">${exam.name}</div>
           <div class="exam-card-body">
@@ -311,7 +157,6 @@
       
       const func = action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
       
-      // Reconstruct payload
       const sheet = g.nursingData.data.sheets.find(s => s.sheetName === sheetName);
       const exam = sheet.exams.find(e => e.name === examName);
       const payload = { settings: g.nursingData.data.settings, sheets: [{ ...sheet, exams: [exam] }] };
@@ -320,9 +165,7 @@
         .withSuccessHandler(res => {
             if(res.success) {
                 showNotification(res.message, 'success');
-                // Update local data
                 exam.docUrl = res.docUrl || exam.docUrl; 
-                // Re-render card
                 const newCard = buildExamCard({ ...exam, _sheetName: sheetName });
                 btn.closest('.exam-card').replaceWith(newCard);
             } else {
@@ -357,13 +200,8 @@
                 btn.disabled = false; 
                 if (res.success) {
                     showNotification(res.message, 'success');
-                    
-                    // Visual Indication: Change to orange and add checkmark
-                    // ADDED btn-cal class here to maintain size
                     btn.className = 'btn-orange btn-sm btn-cal';
                     btn.innerHTML = '📅 ✔';
-                    
-                    // Update Local Cache
                     exam.isOnCalendar = true; 
                 }
                 else {
@@ -380,7 +218,7 @@
             })
             .api_syncNursingCalendar(payload);
     } else {
-        // Bulk Sync with Progress Bar
+        // Bulk Sync
         if (!g.nursingData || !g.nursingData.data) return;
 
         const allExams = [];
@@ -410,8 +248,6 @@
     if (batchState.processed >= batchState.total) {
         showProgressModal(false);
         showNotification("Calendar Sync Complete!", "success");
-        
-        // Reload page to refresh statuses (make buttons orange)
         g.nursingData = null;
         loadNursingPage();
         return;
@@ -419,7 +255,6 @@
 
     const chunk = batchState.queue.slice(batchState.processed, batchState.processed + BATCH_SIZE);
     
-    // Re-group chunk into sheet structure for server
     const tempSheetsMap = {};
     chunk.forEach(item => {
         if (!tempSheetsMap[item.sheetName]) {
@@ -449,20 +284,15 @@
         .api_syncNursingCalendar(payload);
   }
 
-  // --- Bulk Actions (Chunking Strategy) ---
+  // --- Bulk Actions ---
 
   function handleBulkAction(action) {
       if (!g.nursingData || !g.nursingData.data) return;
 
-      // 1. Flatten all exams into a single list
       const allExams = [];
       g.nursingData.data.sheets.forEach(sheet => {
           sheet.exams.forEach(exam => {
-              allExams.push({
-                  sheetName: sheet.sheetName,
-                  course: sheet.course,
-                  exam: exam
-              });
+              allExams.push({ sheetName: sheet.sheetName, course: sheet.course, exam: exam });
           });
       });
 
@@ -471,58 +301,35 @@
           return;
       }
 
-      // 2. Initialize Batch State
-      batchState = {
-          queue: allExams,
-          total: allExams.length,
-          processed: 0,
-          action: action,
-          isRunning: true
-      };
+      batchState = { queue: allExams, total: allExams.length, processed: 0, action: action, isRunning: true };
 
-      // 3. Disable Buttons & Show Modal
       document.getElementById('nursing-create-btn').disabled = true;
       document.getElementById('nursing-update-btn').disabled = true;
       showProgressModal(true);
       document.getElementById('progress-title').textContent = "Processing Documents...";
       updateProgressUI(0, batchState.total, "Starting batch process...");
 
-      // 4. Start Processing
       processNextBatch();
   }
 
   function processNextBatch() {
       const BATCH_SIZE = 5;
-      
-      // Check if done
       if (batchState.processed >= batchState.total) {
           finishBatchProcess();
           return;
       }
 
-      // Get next chunk
       const chunk = batchState.queue.slice(batchState.processed, batchState.processed + BATCH_SIZE);
-      
-      // Reconstruct Payload for this chunk
-      // We need to group exams back into sheets for the server function
       const tempSheetsMap = {};
       
       chunk.forEach(item => {
           if (!tempSheetsMap[item.sheetName]) {
-              tempSheetsMap[item.sheetName] = {
-                  sheetName: item.sheetName,
-                  course: item.course,
-                  exams: []
-              };
+              tempSheetsMap[item.sheetName] = { sheetName: item.sheetName, course: item.course, exams: [] };
           }
           tempSheetsMap[item.sheetName].exams.push(item.exam);
       });
 
-      const payload = {
-          settings: g.nursingData.data.settings,
-          sheets: Object.values(tempSheetsMap)
-      };
-
+      const payload = { settings: g.nursingData.data.settings, sheets: Object.values(tempSheetsMap) };
       const func = batchState.action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
 
       updateProgressUI(batchState.processed, batchState.total, `Processing items ${batchState.processed + 1} - ${Math.min(batchState.processed + BATCH_SIZE, batchState.total)}...`);
@@ -532,9 +339,8 @@
               if (res.success) {
                   batchState.processed += chunk.length;
                   updateProgressUI(batchState.processed, batchState.total, "Batch complete.");
-                  processNextBatch(); // Recursive call
+                  processNextBatch(); 
               } else {
-                  // If a batch fails, we stop and alert
                   showNotification("Batch failed: " + res.message, "error");
                   finishBatchProcess(false);
               }
@@ -550,21 +356,34 @@
       showProgressModal(false);
       document.getElementById('nursing-create-btn').disabled = false;
       document.getElementById('nursing-update-btn').disabled = false;
-      
       if (success) {
           showNotification("All documents processed successfully!", "success");
-          // Reload data to get new URLs
           g.nursingData = null;
           loadNursingPage();
       }
   }
 
-  // --- Progress UI Helpers ---
+  // --- UI Helpers ---
 
   function showProgressModal(show) {
-      const el = document.getElementById('progress-overlay');
-      if (show) el.classList.add('active');
-      else el.classList.remove('active');
+      // Check if modal exists, if not, create it
+      let el = document.getElementById('progress-overlay');
+      if (!el) {
+          document.body.insertAdjacentHTML('beforeend', `
+            <div id="progress-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:20000; display:flex; justify-content:center; align-items:center;">
+                <div class="progress-box" style="background:#fff; padding:25px; border-radius:8px; text-align:center;">
+                    <h3 id="progress-title">Processing...</h3>
+                    <div id="progress-stats">0 / 0</div>
+                    <div style="background:#eee; height:20px; width:300px; margin:15px 0; border-radius:10px; overflow:hidden;">
+                        <div id="progress-fill" style="background:green; height:100%; width:0%;"></div>
+                    </div>
+                    <div id="progress-subtext">Initializing...</div>
+                </div>
+            </div>
+          `);
+          el = document.getElementById('progress-overlay');
+      }
+      el.style.display = show ? 'flex' : 'none';
   }
 
   function updateProgressUI(current, total, message) {
@@ -574,9 +393,12 @@
       document.getElementById('progress-subtext').textContent = message;
   }
 
-  // --- Accommodations Sidebar Logic ---
   function openAccommodationsSidebar(sheetName, examName) {
     const sidebar = document.getElementById('accommodations-sidebar');
+    if (!sidebar) {
+        showNotification("Sidebar component missing.", "error");
+        return;
+    }
     const overlay = document.getElementById('accommodations-overlay');
     const title = document.getElementById('accommodations-title');
     const textarea = document.getElementById('accommodations-text');
@@ -584,7 +406,6 @@
     sidebar.dataset.sheetName = sheetName;
     sidebar.dataset.examName = examName;
     
-    // Find data
     let examData;
     g.nursingData.data.sheets.forEach(s => {
         if(s.sheetName === sheetName) {
@@ -594,7 +415,7 @@
     });
     
     title.textContent = `Accommodations: ${examName}`;
-    textarea.value = examData ? (examData.accommodations || '') : '';
+    textarea.value = examData ? (examData.generalNotes || examData.accommodations || '') : '';
 
     overlay.classList.add('open');
     sidebar.classList.add('open');
@@ -615,6 +436,15 @@
 
     btn.disabled = true; btn.textContent = 'Saving...';
     
+    // Construct payload for new DB save function
+    const sheet = g.nursingData.data.sheets.find(s => s.sheetName === sheetName);
+    const payload = {
+        courseCode: sheet.course.code,
+        examName: examName,
+        generalNotes: text,
+        studentTags: {} // Future feature
+    };
+
     google.script.run
       .withSuccessHandler(res => {
           btn.disabled = false; btn.textContent = 'Save';
@@ -622,13 +452,13 @@
               showNotification('Saved!', 'success');
               // Update local cache
                g.nursingData.data.sheets.find(s => s.sheetName === sheetName)
-                   .exams.find(e => e.name === examName).accommodations = text;
+                   .exams.find(e => e.name === examName).generalNotes = text;
               closeAccommodationsSidebar();
           } else {
               showNotification(res.message, 'error');
           }
       })
-      .api_saveNursingAccommodations(sheetName, examName, text);
+      .api_saveNursingAccommodations(payload);
   }
 
   function filterExams() {
@@ -647,7 +477,6 @@
       });
   }
   
-  // Settings (Preserved)
   function renderNursingSettings() {
       const settings = g.allSettings.nursing_settings || {};
       const view = document.getElementById('Nursing-Settings');

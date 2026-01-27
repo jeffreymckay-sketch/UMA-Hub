@@ -1,93 +1,517 @@
+<style>
+/* Add Card Styles for Tech Hub Sync (Reusing MST styles conceptually) */
+.th-sync-card {
+    background: #fff; border: 1px solid #ddd; border-radius: 6px;
+    padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.th-sync-card.status-new { border-left: 5px solid #28a745; }
+.th-sync-card.status-update { border-left: 5px solid #f39c12; }
+.th-sync-card.status-synced { border-left: 5px solid #bdc3c7; opacity: 0.7; }
+
+.th-card-header { font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 5px; }
+.th-card-body { font-size: 0.9em; color: #555; }
+.th-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75em; color: #fff; }
+.th-badge.new { background: #28a745; }
+.th-badge.update { background: #f39c12; }
+.th-badge.synced { background: #999; }
+</style>
+
 <script>
-  function loadTechHubView() {
-    const rosterContent = `
-      <h3>Roster</h3>
-      <p>This is where you will be able to view and assign staff to shifts.</p>
-      <div class="date-range-picker">
-        <label for="roster-start-date">Week Start:</label>
-        <input type="date" id="roster-start-date">
-      </div>
-      <div id="roster-table-container"></div>
-    `;
+  /**
+   * ------------------------------------------------------------------
+   * TECH HUB CONTROLLER (Frontend)
+   * ------------------------------------------------------------------
+   */
 
-    const manageShiftsContent = `
-      <h3>Manage Shifts</h3>
-      <p>This tool will allow you to create, edit, and delete shifts.</p>
-      <div class="button-bar">
-        <button onclick="openAddShiftModal()">Add New Shift</button>
-        <button onclick="clearAllShifts()">Clear All Shifts</button>
-      </div>
-      <div id="manage-shifts-table-container"></div>
-    `;
+  let techHubState = {
+    data: null,
+    isLoading: false,
+    syncData: [] // Store preview data
+  };
 
-    document.getElementById('TechHub-Roster').innerHTML = rosterContent;
-    document.getElementById('TechHub-ManageShifts').innerHTML = manageShiftsContent;
-
-    if (!document.getElementById('add-shift-modal')) {
-        const modalHtml = `
-          <div id="add-shift-modal" class="modal" style="display:none;">
-            <div class="modal-content">...</div>
-          </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
+  function loadTechHubPage() {
+    const container = document.getElementById('page-TechHub');
     
-    requestAnimationFrame(() => {
-        const upcomingSunday = getNextSunday();
-        document.getElementById('roster-start-date').valueAsDate = upcomingSunday;
-        getAndRenderRoster();
-    });
+    container.innerHTML = `
+      <div class="widget">
+        <div class="tab-bar" style="margin-bottom: 20px; border-bottom: 1px solid #ddd;">
+            <button class="tab-link active" onclick="switchTechHubTab('roster')">Semester Roster</button>
+            <button class="tab-link" onclick="switchTechHubTab('sync')">Calendar Sync</button>
+            <button class="tab-link" onclick="switchTechHubTab('manage')">Manage Shifts</button>
+        </div>
+
+        <!-- ROSTER TAB -->
+        <div id="th-tab-roster" class="tab-content" style="display:block;">
+            <div class="loader-ring"></div> 
+        </div>
+
+        <!-- SYNC TAB -->
+        <div id="th-tab-sync" class="tab-content" style="display:none;">
+             <div class="loader-ring"></div>
+        </div>
+
+        <!-- MANAGE TAB -->
+        <div id="th-tab-manage" class="tab-content" style="display:none;">
+            <div class="loader-ring"></div>
+        </div>
+      </div>
+    `;
+
+    fetchTechHubData();
   }
 
-  function getNextSunday() {
-    const d = new Date();
-    d.setDate(d.getDate() + (7 - d.getDay()) % 7);
-    return d;
+  function fetchTechHubData() {
+    techHubState.isLoading = true;
+    google.script.run
+      .withSuccessHandler(response => {
+        techHubState.isLoading = false;
+        if (response.success) {
+          techHubState.data = response.data;
+          renderTechHubRoster();
+          renderTechHubSync();
+          renderTechHubManager();
+        } else {
+          showNotification("Error: " + response.message, 'error');
+          document.getElementById('th-tab-roster').innerHTML = `<div class="error-message">${response.message}</div>`;
+        }
+      })
+      .withFailureHandler(error => {
+        techHubState.isLoading = false;
+        showNotification("Server Error: " + error.message, 'error');
+      })
+      .api_getTechHubViewData();
   }
 
-  function openTechHubTab(evt, tabName) {
-      openTab(evt, tabName);
-      switch (tabName) {
-          case 'TechHub-Roster':
-              getAndRenderRoster();
-              break;
-          case 'TechHub-ManageShifts':
-              getAndRenderShifts();
-              break;
+  function switchTechHubTab(tabName) {
+    document.querySelectorAll('#page-TechHub .tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#page-TechHub .tab-link').forEach(el => el.classList.remove('active'));
+    
+    document.getElementById(`th-tab-${tabName}`).style.display = 'block';
+    
+    // Find button by text content or index is risky, let's use the onclick attribute matching
+    const btns = document.querySelectorAll('#page-TechHub .tab-link');
+    if(tabName === 'roster') btns[0].classList.add('active');
+    if(tabName === 'sync') btns[1].classList.add('active');
+    if(tabName === 'manage') btns[2].classList.add('active');
+  }
+
+  /* ==========================================================================
+     ROSTER VIEW
+     ========================================================================== */
+
+  function renderTechHubRoster() {
+    const container = document.getElementById('th-tab-roster');
+    const rosterData = techHubState.data.roster || [];
+
+    // Default Dates: Today -> +4 Months
+    const startD = new Date();
+    const endD = new Date();
+    endD.setMonth(endD.getMonth() + 4);
+    
+    const startStr = startD.toISOString().split('T')[0];
+    const endStr = endD.toISOString().split('T')[0];
+
+    let html = `
+      <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin-bottom:15px;">
+        <h4 style="margin-top:0;">Semester Settings</h4>
+        <div style="display:flex; gap:15px; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Semester Start</label>
+                <input type="date" id="th-sem-start" class="form-input" value="${startStr}">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Semester End</label>
+                <input type="date" id="th-sem-end" class="form-input" value="${endStr}">
+            </div>
+            <div style="flex-grow:1; text-align:right;">
+                <button class="button-primary" onclick="handleSaveRoster(this)">Save Full Roster</button>
+            </div>
+        </div>
+        <small style="color:#666;">Assignments will be created for this entire date range.</small>
+      </div>
+
+      <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width:15%">Day</th>
+                <th style="width:20%">Time</th>
+                <th style="width:25%">Shift</th>
+                <th style="width:40%">Assigned Staff</th>
+            </tr>
+        </thead>
+        <tbody>
+    `;
+
+    if (rosterData.length === 0) {
+        html += `<tr><td colspan="4" style="text-align:center; padding:20px;">No shifts configured.</td></tr>`;
+    } else {
+        rosterData.forEach(shift => {
+            // Build Smart Options
+            let optionsHtml = `<option value="">-- Unassigned --</option>`;
+            
+            shift.smartList.forEach(staff => {
+                const isSelected = String(staff.id) === String(shift.assignedStaffId);
+                
+                // Visual cues
+                let style = "";
+                let label = staff.name;
+                
+                if (staff.isBlocked) {
+                    label = label + " (Unavailable)";
+                    style = "color: #d9534f; font-style: italic;"; // Red
+                } else if (staff.preference === "Yes Please") {
+                    label = "★ " + label;
+                    style = "color: green; font-weight: bold;";
+                } else if (staff.preference === "No Thanks") {
+                    label = "⚠ " + label;
+                    style = "color: #e67e22;"; // Orange
+                }
+                
+                optionsHtml += `<option value="${staff.id}" style="${style}" ${isSelected ? 'selected' : ''}>${label}</option>`;
+            });
+
+            html += `
+                <tr>
+                    <td><strong>${shift.day}</strong></td>
+                    <td>${shift.start} - ${shift.end}</td>
+                    <td>${shift.description}</td>
+                    <td>
+                        <div style="display:flex; gap:5px;">
+                            <select class="form-input th-assignment-select" data-shift-id="${shift.shiftId}" style="flex-grow:1;">
+                                ${optionsHtml}
+                            </select>
+                            <button class="button-secondary" style="padding: 5px 10px;" onclick="handleSaveSingleAssignment(this, '${shift.shiftId}')">Save</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  }
+
+  // NEW: Save Single Assignment
+  function handleSaveSingleAssignment(btn, shiftId) {
+      const row = btn.closest('tr');
+      const select = row.querySelector('select');
+      const staffId = select.value;
+      
+      const startVal = document.getElementById('th-sem-start').value;
+      const endVal = document.getElementById('th-sem-end').value;
+
+      if (!startVal || !endVal) {
+          showNotification("Please check Semester Dates.", "error");
+          return;
       }
+
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "...";
+
+      google.script.run
+        .withSuccessHandler(res => {
+            if (res.success) {
+                btn.textContent = "Saved!";
+                btn.style.backgroundColor = "#28a745";
+                btn.style.color = "white";
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = "";
+                    btn.style.color = "";
+                }, 2000);
+            } else {
+                showNotification(res.message, "error");
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        })
+        .withFailureHandler(err => {
+            showNotification(err.message, "error");
+            btn.disabled = false;
+            btn.textContent = originalText;
+        })
+        .api_saveSingleTechHubAssignment(shiftId, staffId, startVal, endVal);
   }
 
-  function getAndRenderShifts() {
-    google.script.run.withSuccessHandler(renderManageShiftsTable).api_getTechHubViewData();
-  }
-  
-  function getAndRenderRoster() {
-      google.script.run.withSuccessHandler(renderRosterTable).api_getTechHubViewData();
+  function handleSaveRoster(btn) {
+    const startVal = document.getElementById('th-sem-start').value;
+    const endVal = document.getElementById('th-sem-end').value;
+    
+    if (!startVal || !endVal) {
+        showNotification("Please select Semester Start and End dates.", "error");
+        return;
+    }
+
+    const selects = document.querySelectorAll('.th-assignment-select');
+    const assignments = [];
+    selects.forEach(sel => {
+        assignments.push({ shiftId: sel.dataset.shiftId, staffId: sel.value });
+    });
+
+    btn.disabled = true;
+    btn.textContent = "Saving...";
+
+    google.script.run
+        .withSuccessHandler(res => {
+            btn.disabled = false;
+            btn.textContent = "Save Full Roster";
+            if (res.success) showNotification("Roster saved!", "success");
+            else showNotification(res.message, "error");
+        })
+        .withFailureHandler(err => {
+            btn.disabled = false;
+            showNotification(err.message, "error");
+        })
+        .saveAllTechHubAssignments(assignments, new Date(startVal), new Date(endVal));
   }
 
-  function renderRosterTable(viewData) {
-      // ... (existing roster table rendering logic)
-  }
-  
-  function saveAllAssignments() {
-      // ... (existing save assignments logic)
+  /* ==========================================================================
+     CALENDAR SYNC VIEW
+     ========================================================================== */
+
+  function renderTechHubSync() {
+      const container = document.getElementById('th-tab-sync');
+      
+      // FIX: Use Global Cache (like MST) instead of waiting for backend
+      let calendars = [];
+      if (typeof g !== 'undefined' && g.writableCalendars && !g.writableCalendars.error) {
+          calendars = g.writableCalendars;
+      }
+      
+      const calOptions = calendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+      container.innerHTML = `
+        <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
+            <h4 style="margin-top:0;">Sync to Google Calendar</h4>
+            <div style="display:flex; gap:15px; align-items:flex-end;">
+                <div class="form-group" style="flex-grow:1; margin-bottom:0;">
+                    <label>Target Calendar</label>
+                    <select id="th-sync-cal-select" class="form-input">
+                        ${calOptions || '<option value="">Loading calendars...</option>'}
+                    </select>
+                </div>
+                <button class="button-primary" onclick="handlePreviewSync(this)">Preview Changes</button>
+            </div>
+        </div>
+        <div id="th-sync-results"></div>
+      `;
   }
 
-  function renderManageShiftsTable(viewData) {
-    // ... (existing manage shifts table rendering logic)
-  }
-  
-  function createShift(form) {
-      // ... (existing create shift logic)
+  function handlePreviewSync(btn) {
+      const calId = document.getElementById('th-sync-cal-select').value;
+      // Grab dates from Roster tab (assuming they are set there)
+      const startVal = document.getElementById('th-sem-start')?.value;
+      const endVal = document.getElementById('th-sem-end')?.value;
+
+      if(!startVal || !endVal) {
+          showNotification("Please set Semester Dates in the Roster tab first.", "error");
+          switchTechHubTab('roster');
+          return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Scanning...";
+      document.getElementById('th-sync-results').innerHTML = '<div class="loader-ring"></div>';
+
+      google.script.run
+        .withSuccessHandler(res => {
+            btn.disabled = false;
+            btn.textContent = "Preview Changes";
+            if(res.success) {
+                techHubState.syncData = res.data;
+                renderSyncCards(res.data);
+            } else {
+                document.getElementById('th-sync-results').innerHTML = `<div class="error-message">${res.message}</div>`;
+            }
+        })
+        .withFailureHandler(err => {
+            btn.disabled = false;
+            btn.textContent = "Preview Changes";
+            document.getElementById('th-sync-results').innerHTML = `<div class="error-message">Server Error: ${err.message}</div>`;
+        })
+        .api_previewTechHubSync(calId, startVal, endVal);
   }
 
-  function clearAllShifts() {
-      // ... (existing clear all shifts logic)
+  function renderSyncCards(events) {
+      const container = document.getElementById('th-sync-results');
+      if(events.length === 0) {
+          container.innerHTML = '<p>No shifts found to sync.</p>';
+          return;
+      }
+
+      let html = `
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <strong>Found ${events.length} shifts</strong>
+            <button class="button-success" onclick="handleCommitSync(this)">Sync All</button>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:10px;">
+      `;
+
+      events.forEach((evt, index) => {
+          try {
+              const statusClass = evt.status.toLowerCase();
+              const badgeClass = statusClass;
+              
+              let diffHtml = '';
+              if(evt.diffs && evt.diffs.length > 0) {
+                  diffHtml = `<div style="background:#fff3cd; padding:5px; font-size:0.85em; margin-top:5px;">${evt.diffs.join('<br>')}</div>`;
+              }
+
+              // Safe date formatting
+              let timeStr = "Invalid Time";
+              if (evt.payload && evt.payload.start) {
+                  const dStart = new Date(evt.payload.start);
+                  const dEnd = new Date(evt.payload.end);
+                  if (!isNaN(dStart.getTime())) {
+                      timeStr = `${dStart.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${dEnd.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+                  }
+              }
+
+              html += `
+                <div class="th-sync-card status-${statusClass}">
+                    <div class="th-card-header">
+                        <span>${evt.title}</span>
+                        <span class="th-badge ${badgeClass}">${evt.status}</span>
+                    </div>
+                    <div class="th-card-body">
+                        <div>${timeStr}</div>
+                        ${diffHtml}
+                        <div style="margin-top:10px; text-align:right;">
+                            <button class="button-secondary" style="padding:4px 8px; font-size:0.8em;" onclick="handleSingleSync(this, ${index})">Sync This</button>
+                        </div>
+                    </div>
+                </div>
+              `;
+          } catch(e) { console.error("Error rendering card", e); }
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
   }
 
-  function deleteShift(shiftId) {
-      // ... (existing delete shift logic)
+  // FIX: Added Single Sync Handler
+  function handleSingleSync(btn, index) {
+      const calId = document.getElementById('th-sync-cal-select').value;
+      const event = techHubState.syncData[index];
+      
+      if(!event) return;
+
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "...";
+
+      google.script.run
+        .withSuccessHandler(res => {
+            if(res.success) {
+                btn.textContent = "Synced";
+                btn.style.backgroundColor = "#28a745";
+                btn.style.color = "white";
+                // Optionally update UI state locally
+                event.status = "SYNCED"; 
+            } else {
+                alert("Error: " + res.message);
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        })
+        .withFailureHandler(err => {
+            alert("Error: " + err.message);
+            btn.disabled = false;
+            btn.textContent = originalText;
+        })
+        .api_commitTechHubSync(calId, [event]);
   }
-  
-  loadTechHubView();
+
+  function handleCommitSync(btn) {
+      const calId = document.getElementById('th-sync-cal-select').value;
+      const events = techHubState.syncData;
+      
+      if(!confirm(`Sync ${events.length} recurring series to calendar?`)) return;
+
+      btn.disabled = true;
+      btn.textContent = "Syncing...";
+
+      google.script.run
+        .withSuccessHandler(res => {
+            btn.disabled = false;
+            btn.textContent = "Sync All";
+            if(res.success) {
+                alert(`Sync Complete!\nCreated: ${res.stats.created}\nUpdated: ${res.stats.updated}`);
+                handlePreviewSync(document.querySelector('button[onclick="handlePreviewSync(this)"]')); // Refresh
+            } else {
+                alert("Error: " + res.message);
+            }
+        })
+        .api_commitTechHubSync(calId, events);
+  }
+
+  /* ==========================================================================
+     MANAGER VIEW
+     ========================================================================== */
+
+  function renderTechHubManager() {
+    const container = document.getElementById('th-tab-manage');
+    const shifts = techHubState.data.manageShifts || [];
+
+    let html = `
+      <div style="display:flex; gap: 20px;">
+        <div style="flex: 2;">
+            <h3>Existing Shifts</h3>
+            <table class="data-table">
+                <thead><tr><th>Day</th><th>Time</th><th>Description</th><th>Zoom</th><th>Action</th></tr></thead>
+                <tbody>
+    `;
+
+    if (shifts.length === 0) {
+        html += `<tr><td colspan="5" style="text-align:center;">No shifts found.</td></tr>`;
+    } else {
+        shifts.forEach(shift => {
+            html += `
+                <tr>
+                    <td>${shift.day}</td>
+                    <td>${shift.start} - ${shift.end}</td>
+                    <td>${shift.desc}</td>
+                    <td>${shift.zoom ? '✅' : ''}</td>
+                    <td><button class="button-danger" style="padding:2px 8px;" onclick="handleDeleteShift('${shift.id}')">Delete</button></td>
+                </tr>`;
+        });
+    }
+
+    html += `</tbody></table></div>
+        <div style="flex: 1; background: #f4f4f4; padding: 20px; border-radius: 8px; height: fit-content;">
+            <h3 style="margin-top:0;">Add New Shift</h3>
+            <form id="th-add-shift-form">
+                <div class="form-group"><label>Description</label><input type="text" name="description" class="form-input" required></div>
+                <div class="form-group"><label>Day</label>
+                    <select name="day" class="form-input">
+                        <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Start</label><input type="time" name="startTime" class="form-input" required></div>
+                <div class="form-group"><label>End</label><input type="time" name="endTime" class="form-input" required></div>
+                <div class="form-group"><label><input type="checkbox" name="zoom"> Is Zoom?</label></div>
+                <button type="button" class="button-primary" style="width:100%" onclick="handleAddShift(this)">Add Shift</button>
+            </form>
+        </div>
+      </div>
+    `;
+    container.innerHTML = html;
+  }
+
+  function handleAddShift(btn) {
+    const form = document.getElementById('th-add-shift-form');
+    if (!form.checkValidity()) { showNotification("Fill all fields", "error"); return; }
+    const formData = { description: form.description.value, day: form.day.value, startTime: form.startTime.value, endTime: form.endTime.value, zoom: form.zoom.checked };
+    
+    btn.disabled = true;
+    google.script.run.withSuccessHandler(() => { fetchTechHubData(); }).addTechHubShift(formData);
+  }
+
+  function handleDeleteShift(id) {
+    if(confirm("Delete shift?")) google.script.run.withSuccessHandler(() => { fetchTechHubData(); }).deleteTechHubShift(id);
+  }
 </script>
