@@ -31,11 +31,25 @@ function api_getInitialAppData() {
              return { success: false, message: "Failed to load critical settings: " + e.message };
         }
 
-        // 1. User Info
+        // 1. User Info & Permissions Lookup
         try {
-            var userRes = getUserInfo();
-            userInfo = userRes.success ? userRes.data : { error: userRes.message };
-        } catch (e) { userInfo = { error: "Failed to load user info." }; }
+            const userEmail = Session.getActiveUser().getEmail().toLowerCase();
+            let userRole = "Staff"; // Default fallback
+            
+            const staffSheet = getSheet('Staff_List');
+            if (staffSheet) {
+                const staffData = staffSheet.getDataRange().getValues();
+                const headers = getColumnMap(staffData[0]);
+                const userRow = staffData.find(row => String(row[headers.staffid]).toLowerCase() === userEmail);
+                
+                if (userRow) {
+                    userRole = userRow[headers.roles] || "Staff";
+                }
+            }
+            userInfo = { success: true, data: { email: userEmail, role: userRole, photoUrl: "" } };
+        } catch (e) { 
+            userInfo = { success: true, data: { email: Session.getActiveUser().getEmail(), role: "Guest", error: "User lookup failed" } }; 
+        }
 
         // 2. Settings
         try {
@@ -54,18 +68,14 @@ function api_getInitialAppData() {
         
         // 4. Assignments Data
         try {
-            const assignSheet = getSheet(sheetTabs.Staff_Assignments);
-            if (!assignSheet) {
-                throw new Error("Sheet 'Staff_Assignments' not found.");
+            const assignSheet = getSheet('Staff_Assignments');
+            if (assignSheet) {
+                const assignmentValues = assignSheet.getDataRange().getValues();
+                const assignmentHeaders = getColumnMap(assignmentValues[0]);
+                const allAssignments = assignmentValues.slice(1).map(row => parseAssignment(row, assignmentHeaders)).filter(Boolean);
+                assignmentsData = { success: true, data: allAssignments };
             }
-            const assignmentValues = assignSheet.getDataRange().getValues();
-            const assignmentHeaders = getColumnMap(assignmentValues[0]);
-            const allAssignments = assignmentValues.slice(1).map(row => parseAssignment(row, assignmentHeaders)).filter(Boolean);
-            assignmentsData = { success: true, data: allAssignments };
-
-        } catch (e) {
-            assignmentsData = { success: false, message: "Assignments Load Error: " + e.message };
-        }
+        } catch (e) { assignmentsData = { success: false, message: "Assignments Load Error" }; }
 
         // 5. MST Data
         try {
@@ -74,19 +84,19 @@ function api_getInitialAppData() {
                 var mstRes = getMstViewData(sheetTabs, assignmentsForMst);
                 mstViewData = mstRes.success ? mstRes.data : { error: mstRes.error };
             }
-        } catch (e) { mstViewData = { error: "MST Data Error: " + e.message }; }
+        } catch (e) { mstViewData = { error: "MST Data Error" }; }
 
         // 6. Nursing Data
         try {
             if (typeof api_getNursingData === 'function') {
                 nursingData = api_getNursingData(sheetTabs);
             }
-        } catch (e) { nursingData = { success: false, message: "Nursing Load Error: " + e.message }; }
+        } catch (e) { nursingData = { success: false, message: "Nursing Load Error" }; }
 
-        var payload = {
+        return {
             success: true,
             data: {
-                userInfo: userInfo,
+                userInfo: userInfo.data,
                 mstData: mstViewData,
                 assignments: assignmentsData.success ? assignmentsData.data : [],
                 settings: allSettings,
@@ -96,11 +106,6 @@ function api_getInitialAppData() {
                 sheetTabs: sheetTabs
             }
         };
-
-        try { JSON.stringify(payload); } 
-        catch (jsonError) { throw new Error("Data Serialization Failed: " + jsonError.message); }
-
-        return payload;
 
     } catch (e) {
         console.error("Critical api_getInitialAppData Error: " + e.stack);
@@ -171,7 +176,6 @@ function getMstViewData(sheetTabs, allAssignments) {
 
         const staffHeaders = getColumnMap(staffData[0]);
         
-        // Find header row for courses (Row 2 usually, based on "eventID")
         const courseHeaderRow = courseData.find(row => row.join('').toLowerCase().includes('eventid'));
         if (!courseHeaderRow) throw new Error("Missing 'eventID' header in Course Schedule.");
         const courseHeaders = getColumnMap(courseHeaderRow);
@@ -187,7 +191,6 @@ function getMstViewData(sheetTabs, allAssignments) {
             const assignment = assignmentMap.get(String(course.id));
             const staff = assignment && assignment.staffId ? staffMap.get(String(assignment.staffId).toLowerCase()) : null;
             
-            // Use the "Run Time" string if available, otherwise fallback to dates
             let timeDisplay = course.timeString || "TBD";
             if (!course.timeString && course.startDate && course.endDate) {
                  const fmt = (d) => (d instanceof Date) ? Utilities.formatDate(d, Session.getScriptTimeZone(), 'h:mm a') : String(d);
@@ -207,7 +210,6 @@ function getMstViewData(sheetTabs, allAssignments) {
             };
         });
         
-        // Filter staff for dropdown (Role contains MST)
         const mstStaffList = allStaff.filter(s => s.role && s.role.toLowerCase().includes('mst')).map(s => ({ id: s.id, name: s.name }));
 
         return { success: true, data: { courseAssignments: courseAssignmentsView, mstStaffList: mstStaffList } };
@@ -217,10 +219,9 @@ function getMstViewData(sheetTabs, allAssignments) {
     }
 }
 
-// --- PARSING HELPERS (Customized for your Headers) ---
+// --- PARSING HELPERS ---
 
 function parseStaff(row, map) {
-    // Headers: FullName, StaffID, Roles, IsActive
     const nameIdx = map['fullname'] !== undefined ? map['fullname'] : map['name'];
     const idIdx = map['staffid'] !== undefined ? map['staffid'] : map['id'];
     const roleIdx = map['roles'] !== undefined ? map['roles'] : map['role'];
@@ -237,7 +238,6 @@ function parseStaff(row, map) {
 }
 
 function parseAssignment(row, map) {
-    // Headers: AssignmentID, StaffID, AssignmentType, ReferenceID
     const idIdx = map['assignmentid'];
     const eventIdx = map['referenceid'];
     const staffIdx = map['staffid'];
@@ -252,15 +252,13 @@ function parseAssignment(row, map) {
 }
 
 function parseCourse(row, map) {
-    // Headers: Session, Start Date, End Date, Day, Course, Faculty, Run Time, Time of Day, BX Location, eventID
     const idIdx = map['eventid'];
-    const nameIdx = map['course']; // Header is "Course"
+    const nameIdx = map['course']; 
     const facultyIdx = map['faculty'];
-    const daysIdx = map['day']; // Header is "Day"
-    const runTimeIdx = map['runtime']; // Header is "Run Time"
-    const locIdx = map['bxlocation']; // Header is "BX Location"
+    const daysIdx = map['day']; 
+    const runTimeIdx = map['runtime']; 
+    const locIdx = map['bxlocation']; 
     
-    // Fallbacks for dates if needed
     const startIdx = map['startdate'];
     const endIdx = map['enddate'];
 
@@ -276,7 +274,7 @@ function parseCourse(row, map) {
         name: row[nameIdx],
         faculty: facultyIdx !== undefined ? row[facultyIdx] : '',
         daysOfWeek: days,
-        timeString: runTimeIdx !== undefined ? row[runTimeIdx] : '', // Capture "9:00 - 11:00" string
+        timeString: runTimeIdx !== undefined ? row[runTimeIdx] : '', 
         startDate: startIdx !== undefined ? row[startIdx] : null,
         endDate: endIdx !== undefined ? row[endIdx] : null,
         location: locIdx !== undefined ? row[locIdx] : ''
@@ -294,12 +292,6 @@ function getAllSettings_() {
             catch (e) { parsed[key] = props[key]; }
         }
         return { success: true, data: parsed };
-    } catch (e) { return { success: false, message: e.message }; }
-}
-
-function getUserInfo() {
-    try {
-        return { success: true, data: { email: Session.getActiveUser().getEmail(), photoUrl: "" } };
     } catch (e) { return { success: false, message: e.message }; }
 }
 
@@ -337,28 +329,32 @@ function getAllCalendarsInternal() {
   }
 }
 
-function getSheet(sheetName) {
+function getSheet(sheetKey) {
     try {
-        let ss;
-        const spreadsheetId = getSpreadsheetId();
-        if (spreadsheetId && spreadsheetId !== 'PASTE_YOUR_ID_HERE') {
-            try {
-                ss = SpreadsheetApp.openById(spreadsheetId);
-            } catch (e) {
-                console.warn("Could not open spreadsheet by ID. Falling back to Active.");
-            }
-        }
-        if (!ss) {
-            ss = SpreadsheetApp.getActiveSpreadsheet();
-        }
-        if (!ss) throw new Error("Script is not bound to a spreadsheet and no ID provided.");
-        
+        const settings = getSettings();
+        const sheetTabsJSON = settings.sheetTabs;
+        if (!sheetTabsJSON) return null;
+
+        const sheetTabs = JSON.parse(sheetTabsJSON);
+        const sheetName = sheetTabs[sheetKey];
+        if (!sheetName) return null;
+
+        const ss = getMasterDataHub();
         const sheet = ss.getSheetByName(sheetName);
         return sheet; 
     } catch (e) {
-        console.error(`Error getting sheet '${sheetName}': ${e.message}`);
         return null;
     }
+}
+
+function getColumnMap(headers) {
+    var map = {};
+    if (!headers) return map;
+    headers.forEach(function(header, index) {
+        var normalizedHeader = String(header).toLowerCase().replace(/[\s_]/g, '');
+        if (normalizedHeader) map[normalizedHeader] = index;
+    });
+    return map;
 }
 
 function createDataMap(data, keyIndex) {

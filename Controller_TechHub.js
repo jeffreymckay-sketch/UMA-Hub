@@ -32,10 +32,9 @@ function api_getTechHubViewData() {
         const staffData = staffSheet.getDataRange().getValues();
         const shiftsData = shiftsSheet.getDataRange().getValues();
         const assignData = assignSheet.getDataRange().getValues();
+        
         const availData = availSheet ? availSheet.getDataRange().getValues() : [];
         const prefsData = prefsSheet ? prefsSheet.getDataRange().getValues() : [];
-
-        // Note: Calendars are now handled by the Frontend Global Cache (g.writableCalendars)
 
         return processTechHubData(staffData, shiftsData, assignData, availData, prefsData, tz);
 
@@ -57,7 +56,6 @@ function processTechHubData(staffData, shiftsData, assignData, availData, prefsD
             return map;
         };
 
-        // 1. Parse Staff
         const staffHeader = getColMap(staffData[0]);
         const techHubStaff = [];
         for(let i=1; i<staffData.length; i++) {
@@ -74,7 +72,6 @@ function processTechHubData(staffData, shiftsData, assignData, availData, prefsD
         }
         techHubStaff.sort((a,b) => a.name.localeCompare(b.name));
 
-        // 2. Parse Assignments Map
         const assignHeader = getColMap(assignData[0]);
         const assignmentsMap = {};
         for(let i=1; i<assignData.length; i++) {
@@ -84,7 +81,6 @@ function processTechHubData(staffData, shiftsData, assignData, availData, prefsD
             }
         }
 
-        // 3. Parse Availability (Blackout Times)
         const availMap = {}; 
         if (availData.length > 1) {
              const h = getColMap(availData[0]);
@@ -103,7 +99,6 @@ function processTechHubData(staffData, shiftsData, assignData, availData, prefsD
              }
         }
 
-        // 4. Parse Preferences
         const prefsMap = {}; 
         if (prefsData.length > 1) {
             const h = getColMap(prefsData[0]);
@@ -118,7 +113,6 @@ function processTechHubData(staffData, shiftsData, assignData, availData, prefsD
             }
         }
 
-        // 5. Build Roster
         const roster = [];
         const manageShifts = [];
         
@@ -130,38 +124,31 @@ function processTechHubData(staffData, shiftsData, assignData, availData, prefsD
                 const shiftId = String(row[h.shiftid]);
                 const day = String(row[h.dayofweek] || row[h.day]);
                 
-                // Parse Shift Times
                 const shiftStartMins = parseTimeContext(row[h.starttime], timezone);
                 const shiftEndMins = parseTimeContext(row[h.endtime], timezone);
 
-                // Determine Time Block for Preferences
                 let timeBlock = "Morning";
                 if (shiftStartMins >= 720) timeBlock = "Afternoon";
                 if (shiftStartMins >= 1020) timeBlock = "Evening";
                 const prefKey = `${day}_${timeBlock}`;
 
-                // Format for Display
                 let startDisplay = row[h.starttime];
                 let endDisplay = row[h.endtime];
                 if (startDisplay instanceof Date) startDisplay = Utilities.formatDate(startDisplay, timezone, "h:mm a");
                 if (endDisplay instanceof Date) endDisplay = Utilities.formatDate(endDisplay, timezone, "h:mm a");
 
-                // Build Smart List
                 const smartList = techHubStaff.map(staff => {
                     const sid = staff.id.toLowerCase();
                     let isBlocked = false; 
                     let preference = "Neutral"; 
                     
-                    // Check Availability (Blackouts)
                     if (availMap[sid]) {
                         isBlocked = availMap[sid].some(slot => {
                             if (slot.day !== day) return false;
-                            // Overlap Logic
                             return (slot.startMins < shiftEndMins && slot.endMins > shiftStartMins);
                         });
                     }
 
-                    // Check Preferences
                     if (prefsMap[sid] && prefsMap[sid][prefKey]) {
                         preference = prefsMap[sid][prefKey];
                     }
@@ -174,7 +161,6 @@ function processTechHubData(staffData, shiftsData, assignData, availData, prefsD
                     };
                 });
 
-                // Sort Smart List
                 const prefScore = { "Yes Please": 3, "Eh, Sure": 2, "Neutral": 2, "No Thanks": 1 };
                 smartList.sort((a, b) => {
                     if (a.isBlocked && !b.isBlocked) return 1;
@@ -236,14 +222,17 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
         const assignData = assignSheet.getDataRange().getValues();
         const staffData = staffSheet.getDataRange().getValues();
 
-        // 1. Map Assignments
         const assignHeader = createHeaderMap(assignData[0]);
         const assignmentsMap = {}; 
         
         const staffHeader = createHeaderMap(staffData[0]);
-        const staffEmailMap = {};
+        const staffInfoMap = {}; // ID -> { email, name }
         for(let i=1; i<staffData.length; i++) {
-            staffEmailMap[String(staffData[i][staffHeader.staffid])] = staffData[i][staffHeader.email] || staffData[i][staffHeader.staffid];
+            const id = String(staffData[i][staffHeader.staffid]);
+            staffInfoMap[id] = {
+                email: staffData[i][staffHeader.email] || id,
+                name: staffData[i][staffHeader.fullname] || staffData[i][staffHeader.name] || id
+            };
         }
 
         for(let i=1; i<assignData.length; i++) {
@@ -251,13 +240,12 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
             if (row[assignHeader.assignmenttype] === 'Tech Hub') {
                 const shiftId = String(row[assignHeader.referenceid]);
                 const staffId = String(row[assignHeader.staffid]);
-                if(staffEmailMap[staffId]) {
-                    assignmentsMap[shiftId] = staffEmailMap[staffId];
+                if(staffInfoMap[staffId]) {
+                    assignmentsMap[shiftId] = staffInfoMap[staffId];
                 }
             }
         }
 
-        // 2. Process Shifts into Proposed Events
         const proposals = [];
         const shiftsHeader = createHeaderMap(shiftsData[0]);
         
@@ -291,11 +279,13 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
             const endDt = new Date(firstDate);
             endDt.setHours(Math.floor(endTimeMins/60), endTimeMins%60, 0, 0);
 
-            const assignedEmail = assignmentsMap[shiftId];
-            const title = `Tech Hub: ${desc}` + (assignedEmail ? ` (${assignedEmail.split('@')[0]})` : " (Unassigned)");
-            const description = `Shift: ${desc}\nStaff: ${assignedEmail || 'Unassigned'}\nZoom: ${isZoom ? 'Yes' : 'No'}`;
+            const assignedInfo = assignmentsMap[shiftId];
             
-            // FIX: Hardcoded Zoom Link Logic
+            // UPDATED: Use Staff Name in the Title
+            const staffDisplayName = assignedInfo ? assignedInfo.name : "Unassigned";
+            const title = `Tech Hub: ${desc} (${staffDisplayName})`;
+            
+            const description = `Shift: ${desc}\nStaff: ${staffDisplayName}\nEmail: ${assignedInfo ? assignedInfo.email : 'Unassigned'}\nZoom: ${isZoom ? 'Yes' : 'No'}`;
             const location = isZoom ? "https://maine.zoom.us/j/2076213123" : "Tech Hub";
 
             proposals.push({
@@ -304,17 +294,15 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
                 start: startDt.getTime(),
                 end: endDt.getTime(),
                 recurrenceEnd: semesterEnd.getTime(),
-                assignedEmail: assignedEmail,
+                assignedEmail: assignedInfo ? assignedInfo.email : null,
                 description: description,
                 location: location
             });
         }
 
-        // 3. Compare with Calendar (OPTIMIZED)
         const cal = CalendarApp.getCalendarById(targetCalendarId);
         if(!cal) throw new Error("Calendar not found or permission denied.");
 
-        // OPTIMIZATION: Only fetch the first 14 days of the semester.
         const scanEnd = new Date(semesterStart);
         scanEnd.setDate(scanEnd.getDate() + 14);
 
@@ -348,7 +336,6 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
                     status = "UPDATE";
                     diffs.push(`Invite: ${prop.assignedEmail}`);
                 }
-                // Check location change
                 if ((match.getLocation() || "") !== prop.location) {
                     status = "UPDATE";
                     diffs.push(`Location: ${match.getLocation()} -> ${prop.location}`);
@@ -383,7 +370,6 @@ function api_commitTechHubSync(targetCalendarId, eventsToSync) {
 
                 const recurrence = CalendarApp.newRecurrence().addWeeklyRule().until(recurEnd);
                 
-                // Find existing to update/delete
                 const scanEnd = new Date(startDt);
                 scanEnd.setDate(scanEnd.getDate() + 14);
                 

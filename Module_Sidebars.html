@@ -1,0 +1,300 @@
+<!-- 
+  ================================================================
+  SIDEBARS MODULE
+  Contains styling and logic for all slide-out panels.
+  ================================================================
+-->
+
+<style>
+    /* --- Shared Sidebar Styling --- */
+    .app-sidebar-panel {
+      position: fixed;
+      top: 0;
+      right: -500px; /* Hidden by default */
+      width: 500px;
+      max-width: 95%;
+      height: 100%;
+      background-color: #ffffff;
+      box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+      z-index: 10000;
+      transition: right 0.3s ease-in-out;
+      display: flex;
+      flex-direction: column;
+    }
+    .app-sidebar-panel.open { right: 0; }
+    
+    .sidebar-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.4); z-index: 9999;
+      display: none; opacity: 0; transition: opacity 0.3s;
+    }
+    .sidebar-overlay.open { display: block; opacity: 1; }
+    
+    .sidebar-header {
+      padding: 20px;
+      background: var(--color-primary-navy);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sidebar-header h3 { margin: 0; font-size: 1.2em; }
+    .sidebar-close-x { cursor: pointer; font-size: 1.5em; line-height: 1; }
+    
+    .sidebar-content {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .sidebar-footer {
+      padding: 15px 20px;
+      background: #f9f9f9;
+      border-top: 1px solid #eee;
+      text-align: right;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    /* Shared Form Elements within Sidebars */
+    .sidebar-field { margin-bottom: 20px; }
+    .sidebar-field label { display: block; font-weight: bold; margin-bottom: 8px; color: #444; }
+    .sidebar-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    </style>
+    
+    <!-- Single Overlay for all sidebars -->
+    <div id="global-sidebar-overlay" class="sidebar-overlay" onclick="closeAllSidebars()"></div>
+    
+    <!-- 1. ADD STAFF SIDEBAR -->
+    <div id="sidebar-add-staff" class="app-sidebar-panel">
+      <div class="sidebar-header">
+        <h3>Add New Staff Member</h3>
+        <span class="sidebar-close-x" onclick="closeAllSidebars()">&times;</span>
+      </div>
+      <div class="sidebar-content">
+        <form id="form-add-staff">
+            <div class="sidebar-field">
+                <label>Full Name</label>
+                <input type="text" id="new-staff-name" class="sidebar-input" placeholder="e.g. John Doe" required>
+            </div>
+            <div class="sidebar-field">
+                <label>Email Address (StaffID)</label>
+                <input type="email" id="new-staff-email" class="sidebar-input" placeholder="e.g. john.doe@maine.edu" required>
+            </div>
+            <div class="sidebar-field">
+                <label>Assign Roles</label>
+                <div class="role-selector-container" id="sidebar-role-list">
+                    <!-- Roles injected via JS -->
+                </div>
+            </div>
+            <div class="sidebar-field">
+                <label>Notes</label>
+                <textarea id="new-staff-notes" class="sidebar-input" style="height:80px;"></textarea>
+            </div>
+        </form>
+      </div>
+      <div class="sidebar-footer">
+        <button class="button-secondary" onclick="closeAllSidebars()">Cancel</button>
+        <button id="btn-submit-new-staff" class="button-success" onclick="submitNewStaff()">Create Staff Member</button>
+      </div>
+    </div>
+    
+    <!-- 2. NURSING ACCOMMODATIONS SIDEBAR -->
+    <div id="sidebar-accommodations" class="app-sidebar-panel">
+      <div class="sidebar-header">
+        <h3 id="acc-title">Accommodations</h3>
+        <span class="sidebar-close-x" onclick="closeAllSidebars()">&times;</span>
+      </div>
+      <div class="sidebar-content">
+        <div id="acc-subtitle" style="margin-bottom:15px; color:#666; font-style:italic;"></div>
+        <div class="sidebar-field">
+            <label>General Notes (All Students)</label>
+            <textarea id="accommodations-general" class="sidebar-input" style="height:100px;" placeholder="e.g. Open book, calculator allowed..."></textarea>
+        </div>
+        <div class="sidebar-field">
+            <label>Student Specific Needs</label>
+            <div id="roster-dynamic-list">
+                <!-- Roster items injected via JS -->
+            </div>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="button-secondary" onclick="closeAllSidebars()">Cancel</button>
+        <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save Changes</button>
+      </div>
+    </div>
+    
+    <script>
+      /**
+       * GLOBAL SIDEBAR CONTROLS
+       */
+      function openSidebar(id) {
+        document.getElementById('global-sidebar-overlay').classList.add('open');
+        document.getElementById(id).classList.add('open');
+      }
+    
+      function closeAllSidebars() {
+        document.getElementById('global-sidebar-overlay').classList.remove('open');
+        document.querySelectorAll('.app-sidebar-panel').forEach(el => el.classList.remove('open'));
+      }
+    
+      /**
+       * STAFF SIDEBAR LOGIC
+       */
+      function openAddStaffSidebar() {
+        document.getElementById('form-add-staff').reset();
+        const container = document.getElementById('sidebar-role-list');
+        container.innerHTML = SYSTEM_ROLES.map(role => `
+          <label class="role-pill" id="pill-new-${role}">
+            <input type="checkbox" value="${role}" class="new-staff-role-check" onchange="togglePillClass(this, 'pill-new-${role}')"> 
+            ${role}
+          </label>
+        `).join('');
+        openSidebar('sidebar-add-staff');
+      }
+    
+      function submitNewStaff() {
+        const btn = document.getElementById('btn-submit-new-staff');
+        const name = document.getElementById('new-staff-name').value;
+        const email = document.getElementById('new-staff-email').value;
+        const notes = document.getElementById('new-staff-notes').value;
+    
+        if (!name || !email) {
+            showNotification("Name and Email are required.", "error");
+            return;
+        }
+    
+        const roleChecks = document.querySelectorAll('.new-staff-role-check');
+        const roles = Array.from(roleChecks).filter(c => c.checked).map(c => c.value).join(', ');
+    
+        btn.disabled = true;
+        btn.textContent = "Creating...";
+    
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.textContent = "Create Staff Member";
+                if (res.success) {
+                    showNotification(res.message, "success");
+                    closeAllSidebars();
+                    fetchFullStaffList(); 
+                } else {
+                    showNotification(res.message, "error");
+                }
+            })
+            .api_addStaffMember({ fullName: name, email: email, roles: roles, notes: notes });
+      }
+    
+      /**
+       * NURSING SIDEBAR LOGIC
+       */
+      function openAccommodationsSidebar(sheetName, examName) {
+        const sidebar = document.getElementById('sidebar-accommodations');
+        sidebar.dataset.sheetName = sheetName;
+        sidebar.dataset.examName = examName;
+        
+        const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
+        const sheetData = rootData.sheets.find(s => s.sheetName === sheetName);
+        const examData = sheetData ? sheetData.exams.find(e => e.name === examName) : null;
+        
+        if (!examData) { showNotification("Error finding exam data", "error"); return; }
+    
+        document.getElementById('acc-title').textContent = examName;
+        document.getElementById('acc-subtitle').textContent = sheetData.course.code + ' - ' + sheetData.course.name;
+        document.getElementById('accommodations-general').value = examData.generalNotes || '';
+    
+        const container = document.getElementById('roster-dynamic-list');
+        container.innerHTML = ''; 
+    
+        const roster = examData.rosters || {};
+        const tags = examData.studentTags || {};
+        let hasStudents = false;
+    
+        const locs = ['Augusta', 'UMAAL', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco'];
+    
+        locs.forEach(loc => {
+            const students = roster[loc] || [];
+            if (students.length === 0) return;
+            hasStudents = true;
+    
+            const details = document.createElement('details');
+            details.className = 'location-group';
+            details.innerHTML = `<summary>${loc} (${students.length})</summary>`;
+            
+            const listDiv = document.createElement('div');
+            listDiv.className = 'student-list';
+    
+            students.forEach(student => {
+                listDiv.innerHTML += `
+                  <div class="student-row">
+                    <span class="student-name">${student}</span>
+                    <input type="text" class="student-input" placeholder="Add accommodation..." 
+                      data-student="${student}" value="${tags[student] || ''}">
+                  </div>`;
+            });
+            details.appendChild(listDiv);
+            container.appendChild(details);
+        });
+    
+        if (!hasStudents) container.innerHTML = '<div style="padding:10px; color:#888; font-style:italic;">No students assigned to locations yet.</div>';
+    
+        openSidebar('sidebar-accommodations');
+      }
+    
+      function saveAccommodations() {
+        const sidebar = document.getElementById('sidebar-accommodations');
+        const btn = document.getElementById('accommodations-save-btn');
+        const sheetName = sidebar.dataset.sheetName;
+        const examName = sidebar.dataset.examName;
+        
+        btn.disabled = true; 
+        btn.textContent = 'Saving...';
+    
+        const generalNotes = document.getElementById('accommodations-general').value;
+        const studentTags = {};
+        document.querySelectorAll('.student-input').forEach(input => {
+            const val = input.value.trim();
+            if (val) studentTags[input.dataset.student] = val;
+        });
+    
+        const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
+        const sheetObj = rootData.sheets.find(s => s.sheetName === sheetName);
+        
+        const payload = {
+            courseCode: sheetObj.course.code,
+            examName: examName,
+            generalNotes: generalNotes,
+            studentTags: studentTags
+        };
+    
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res.success) {
+                    const examObj = sheetObj.exams.find(e => e.name === examName);
+                    if (examObj) {
+                        examObj.generalNotes = generalNotes;
+                        examObj.studentTags = studentTags;
+                    }
+                    
+                    if (examObj.docUrl) {
+                        btn.textContent = 'Updating Doc...';
+                        const docPayload = { settings: rootData.settings, sheets: [{ ...sheetObj, exams: [examObj] }] };
+                        google.script.run.withSuccessHandler(dRes => {
+                            btn.disabled = false; btn.textContent = 'Save Changes';
+                            closeAllSidebars();
+                            showNotification("Saved DB & Updated Doc!", "success");
+                        }).updateAllNursingDocuments(docPayload);
+                    } else {
+                        btn.disabled = false; btn.textContent = 'Save Changes';
+                        closeAllSidebars();
+                        showNotification("Saved to DB!", "success");
+                    }
+                } else {
+                    btn.disabled = false; btn.textContent = 'Save Changes';
+                    showNotification("Save Failed: " + res.message, "error");
+                }
+            })
+            .api_saveNursingAccommodations(payload);
+      }
+    </script>
