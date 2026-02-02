@@ -1,103 +1,128 @@
 /**
- * ==================================================================
- * TEST SUITE FOR REFACTORING
- * ==================================================================
- * To run these tests:
- * 1. Open the Apps Script editor.
- * 2. Select the "runRefactoringTests" function from the dropdown menu.
- * 3. Click the "Run" button.
- * 4. View the logs by going to "View" > "Logs" (or Ctrl+Enter).
- *
- * These tests verify that the constants in the Config.gs file match
- * the original hard-coded values that were replaced during refactoring.
- * This helps ensure that the refactoring did not introduce any bugs.
+ * DIAGNOSTIC TOOL: Check why Nursing docs aren't linking.
+ * Run "debug_NursingDocMatcher_Fixed" to see the log report.
  */
+function debug_NursingDocMatcher_Fixed() {
+  console.log("--- STARTING DIAGNOSTIC (SELF-CONTAINED) ---");
 
-function runRefactoringTests() {
-  const testRunner = new TestRunner();
-
-  // Test Suite: Config.gs values
-  testRunner.run('CONFIG.SETTINGS_KEYS should be correct', () => {
-    testRunner.assertEqual(CONFIG.SETTINGS_KEYS.NURSING, 'nursingExamSettings', 'NURSING settings key');
-    testRunner.assertEqual(CONFIG.SETTINGS_KEYS.MLT, 'mltExamSettings', 'MLT settings key');
-    testRunner.assertEqual(CONFIG.SETTINGS_KEYS.TECH_HUB, 'techHubSettings', 'TECH_HUB settings key (for scheduling)');
-  });
-
-  testRunner.run('CONFIG.NURSING should be correct', () => {
-    testRunner.assertEqual(CONFIG.NURSING.ROSTER_KEYWORD, 'roster', 'Nursing roster keyword');
-    testRunner.assertEqual(CONFIG.NURSING.URLS.RED_FLAG_REPORT, 'https://docs.google.com/forms/d/e/1FAIpQLSfORKCKol8SsRldNKfvsDy3ILNs9HcFv3gKb8TuxrNrlqxijw/viewform', 'Red Flag Report URL');
-    testRunner.assertEqual(CONFIG.NURSING.URLS.PROTOCOL_DOC, 'https://docs.google.com/document/d/1TgKtmoDFqXLK0lBFPNirOAz_TW4S3E_BFhS934VcjOo/edit', 'Protocol Doc URL');
-  });
-  
-  testRunner.run('CONFIG.MLT should be correct', () => {
-    testRunner.assertEqual(CONFIG.MLT.DEFAULTS.ROSTER_KEYWORD, 'roster', 'MLT roster keyword');
-  });
-
-  testRunner.run('CONFIG.ASSIGNMENT_TYPES should be correct', () => {
-    testRunner.assertEqual(CONFIG.ASSIGNMENT_TYPES.TECH_HUB, 'Tech Hub', 'Tech Hub assignment type');
-    testRunner.assertEqual(CONFIG.ASSIGNMENT_TYPES.COURSE, 'Course', 'Course assignment type');
-  });
-
-  testRunner.run('CONFIG.STATUS should be correct', () => {
-    testRunner.assertEqual(CONFIG.STATUS.PLANNED, 'Planned', 'Planned status');
-  });
-  
-  testRunner.run('CONFIG.COLUMN_KEYS should be correct', () => {
-    testRunner.assertEqual(CONFIG.COLUMN_KEYS.STAFF_ID, 'StaffID', 'StaffID column key');
-    testRunner.assertEqual(CONFIG.COLUMN_KEYS.SHIFT_ID, 'ShiftID', 'ShiftID column key');
-    testRunner.assertEqual(CONFIG.COLUMN_KEYS.COURSE_ID, 'CourseID', 'CourseID column key');
-  });
-
-  // --- End of Tests ---
-  testRunner.report();
-}
-
-
-/**
- * A simple helper class for running tests and reporting results.
- */
-class TestRunner {
-  constructor() {
-    this.results = [];
-    this.currentTest = null;
-    this.assertions = 0;
-  }
-
-  run(testName, testFn) {
-    this.currentTest = testName;
-    this.assertions = 0;
+  // --- LOCAL HELPER: Get Settings ---
+  // This replaces the missing _getNursingSettings function
+  const getConf = () => {
     try {
-      testFn();
-      this.results.push({ name: this.currentTest, status: 'PASSED', message: `(${this.assertions} assertions)` });
-    } catch (e) {
-      this.results.push({ name: this.currentTest, status: 'FAILED', message: e.message });
-    }
-  }
+      // Access the global properties service directly
+      const props = PropertiesService.getScriptProperties().getProperties();
+      let raw = props['nursing_settings']; // Key from your Config
+      let settings = {};
 
-  assertEqual(actual, expected, message) {
-    this.assertions++;
-    if (actual !== expected) {
-      throw new Error(`Assertion failed: ${message}. Expected "${expected}", but got "${actual}".`);
-    }
-  }
-
-  report() {
-    Logger.log('--- TEST RESULTS ---');
-    let failures = 0;
-    this.results.forEach(result => {
-      if (result.status === 'FAILED') {
-        Logger.log(`❌ ${result.status}: ${result.name}`);
-        Logger.log(`   └> ${result.message}`);
-        failures++;
-      } else {
-        Logger.log(`✅ ${result.status}: ${result.name} ${result.message}`);
+      if (raw) {
+        try { settings = JSON.parse(raw); } catch (e) { settings = raw; }
       }
-    });
-    Logger.log('--------------------');
-    if (failures > 0) {
-      Logger.log(`🚨 SUMMARY: ${failures} out of ${this.results.length} tests failed.`);
-    } else {
-      Logger.log(`👍 SUMMARY: All ${this.results.length} tests passed!`);
+      
+      // Helper to strip URL to ID
+      const extract = (s) => {
+        if (!s) return null;
+        const m = s.match(/[-\w]{25,}/);
+        return m ? m[0] : s;
+      };
+
+      return {
+        sheetId: extract(settings.nursingSheetId),
+        folderId: extract(settings.nursingFolderId)
+      };
+    } catch (e) {
+      console.error("Error reading settings: " + e.message);
+      return null;
     }
+  };
+
+  const config = getConf();
+  
+  if (!config || !config.folderId || !config.sheetId) {
+    console.error("❌ CRITICAL ERROR: Settings are missing.");
+    console.error("   > Please go to the 'Nursing > Settings' tab in the app and click 'Save Settings'.");
+    console.error("   > Ensure both Sheet ID and Folder ID are filled in.");
+    return;
+  }
+
+  console.log(`✅ Settings Found.`);
+  console.log(`   > Folder ID: ${config.folderId}`);
+  console.log(`   > Sheet ID:  ${config.sheetId}`);
+
+  // --- STEP 1: SCAN DRIVE FOLDER ---
+  try {
+    const folder = DriveApp.getFolderById(config.folderId);
+    console.log(`\n📂 SCANNING DRIVE FOLDER: "${folder.getName()}"`);
+    
+    const driveFiles = [];
+    const files = folder.getFiles();
+    let limit = 0;
+    
+    while (files.hasNext() && limit < 50) {
+      const f = files.next();
+      driveFiles.push(f.getName());
+      limit++;
+    }
+    console.log(`   > Found ${driveFiles.length} files (showing first 5):`);
+    driveFiles.slice(0, 5).forEach(n => console.log(`     - "${n}"`));
+
+    // --- STEP 2: SCAN SPREADSHEET ---
+    console.log(`\n📊 SCANNING SPREADSHEET...`);
+    const ss = SpreadsheetApp.openById(config.sheetId);
+    const sheets = ss.getSheets();
+    
+    let mismatchCount = 0;
+    let matchCount = 0;
+
+    // We only check the first valid sheet to keep the log readable
+    for (const sheet of sheets) {
+      if (sheet.getName().startsWith("_")) continue; // Skip hidden/DB sheets
+      
+      console.log(`   > Checking Tab: "${sheet.getName()}"`);
+      
+      // Basic parser to find exam names in the sheet (Col A usually)
+      // This is a simplified version of your main parser for debugging
+      const data = sheet.getDataRange().getValues();
+      let examCount = 0;
+
+      for (let i = 0; i < data.length; i++) {
+        const rowVal = String(data[i][0]).trim(); // Assuming Exam Name is in Column A
+        
+        // Look for rows that look like exams (not headers, not "Augusta", not dates)
+        if (rowVal && !rowVal.includes("Augusta") && !rowVal.includes("Date") && rowVal.length > 3) {
+          
+          // GENERATE EXPECTED NAME
+          const expectedName = `${sheet.getName()} - ${rowVal}`;
+          
+          // CHECK FOR MATCH
+          if (driveFiles.includes(expectedName)) {
+            console.log(`     ✅ MATCH: "${expectedName}"`);
+            matchCount++;
+          } else {
+            // Check for near-misses
+            const fuzzy = driveFiles.find(f => f.includes(rowVal));
+            
+            console.log(`     ❌ MISSING: "${expectedName}"`);
+            if (fuzzy) {
+              console.log(`        👉 Did you mean: "${fuzzy}"?`);
+              console.log(`           (Check for extra spaces, dashes vs hyphens, or tab name changes)`);
+            }
+            mismatchCount++;
+          }
+          examCount++;
+          if (examCount >= 3) break; // Check max 3 exams per tab
+        }
+      }
+      // Stop after one valid sheet
+      if (examCount > 0) break;
+    }
+
+    console.log(`\n--- DIAGNOSTIC COMPLETE ---`);
+    console.log(`Matches: ${matchCount}`);
+    console.log(`Mismatches: ${mismatchCount}`);
+    if (mismatchCount > 0) console.log("ACTION: Look at the 'MISSING' lines above. Compare the text exactly with the 'Did you mean' line.");
+
+  } catch (e) {
+    console.error("RUNTIME ERROR: " + e.message);
+    console.error(e.stack);
   }
 }

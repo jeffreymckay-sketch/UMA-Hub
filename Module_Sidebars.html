@@ -6,392 +6,512 @@
 -->
 
 <style>
-  /* --- Shared Sidebar Styling --- */
-  .app-sidebar-panel {
-    position: fixed;
-    top: 0;
-    right: -550px; /* Hidden by default */
-    width: 550px;
-    max-width: 95%;
-    height: 100%;
-    background-color: #ffffff;
-    box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-    z-index: 10000;
-    transition: right 0.3s ease-in-out;
-    display: flex;
-    flex-direction: column;
-  }
-  .app-sidebar-panel.open { right: 0; }
-  
-  .sidebar-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.4); z-index: 9999;
-    display: none; opacity: 0; transition: opacity 0.3s;
-  }
-  .sidebar-overlay.open { display: block; opacity: 1; }
-  
-  .sidebar-header {
-    padding: 20px;
-    background: var(--color-primary-navy);
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .sidebar-header h3 { margin: 0; font-size: 1.2em; }
-  .sidebar-close-x { cursor: pointer; font-size: 1.5em; line-height: 1; }
-  
-  .sidebar-content {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding: 20px;
-  }
-  
-  .sidebar-footer {
-    padding: 15px 20px;
-    background: #f9f9f9;
-    border-top: 1px solid #eee;
-    text-align: right;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
-  
-  /* --- Roster Row Styling --- */
-  .roster-row {
+    /* --- Shared Sidebar Styling --- */
+    .app-sidebar-panel {
+      position: fixed;
+      top: 0;
+      right: -500px; /* Hidden by default */
+      width: 500px;
+      max-width: 95%;
+      height: 100%;
+      background-color: #ffffff;
+      box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+      z-index: 10000;
+      transition: right 0.3s ease-in-out;
+      display: flex;
+      flex-direction: column;
+    }
+    .app-sidebar-panel.open { right: 0; }
+    
+    .sidebar-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.4); z-index: 9999;
+      display: none; opacity: 0; transition: opacity 0.3s;
+    }
+    .sidebar-overlay.open { display: block; opacity: 1; }
+    
+    .sidebar-header {
+      padding: 20px;
+      background: var(--color-primary-navy);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sidebar-header h3 { margin: 0; font-size: 1.2em; }
+    .sidebar-close-x { cursor: pointer; font-size: 1.5em; line-height: 1; }
+    
+    .sidebar-content {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .sidebar-footer {
+      padding: 15px 20px;
+      background: #f9f9f9;
+      border-top: 1px solid #eee;
+      text-align: right;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    /* Shared Form Elements within Sidebars */
+    .sidebar-field { margin-bottom: 20px; }
+    .sidebar-field label { display: block; font-weight: bold; margin-bottom: 8px; color: #444; }
+    .sidebar-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    
+    /* Student List Styling */
+    .location-group {
+      margin-bottom: 15px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .location-group summary {
+      padding: 12px 15px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--color-primary-navy);
+      user-select: none;
+    }
+    .location-group summary:hover {
+      background: #ebebeb;
+    }
+    .student-list {
+      padding: 10px;
+    }
+    .student-row {
       display: flex;
       align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid #eee;
-      gap: 10px;
-      transition: opacity 0.2s;
-  }
-  .roster-row.excluded {
+      gap: 8px;
+      margin-bottom: 8px;
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
+      transition: opacity 0.2s, background 0.2s;
+    }
+    .student-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+    .student-row.excluded {
       opacity: 0.5;
       background: #f9f9f9;
-  }
-  
-  .roster-name {
-      flex: 1;
-      font-size: 0.9em;
+    }
+    .student-row.excluded .student-name {
+      text-decoration: line-through;
+      color: #999 !important;
+    }
+    .student-row.excluded .student-input {
+      background: #f5f5f5;
+      color: #999;
+    }
+    
+    /* Student Controls */
+    .student-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .student-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .student-lock {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      flex-shrink: 0;
+      opacity: 0.3;
+      transition: opacity 0.2s;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .student-lock:hover {
+      opacity: 0.7;
+    }
+    .student-lock.locked {
+      opacity: 1;
+      color: var(--color-primary-orange);
+    }
+    .student-name {
+      flex: 0 0 140px;
       font-weight: 500;
-  }
-  
-  .roster-input {
-      width: 160px;
-      padding: 4px 8px;
+      color: #333;
+      transition: color 0.2s, text-decoration 0.2s;
+    }
+    .student-input {
+      flex: 1;
+      padding: 6px 10px;
       border: 1px solid #ccc;
       border-radius: 4px;
-      font-size: 0.85em;
-  }
-  
-  /* Icon Buttons */
-  .icon-btn {
-      cursor: pointer;
-      font-size: 1.1em;
-      padding: 2px 5px;
-      border-radius: 4px;
-      border: 1px solid transparent;
-      user-select: none;
-  }
-  .icon-btn:hover { background: #eee; }
-  
-  /* Highlight State */
-  .icon-btn.highlight-active {
-      background-color: #ffff00;
-      border-color: #e0e000;
-      color: #000;
-  }
-  
-  /* Lock State */
-  .icon-btn.lock-active {
-      color: #d9534f;
-      background-color: #fce8e6;
-  }
-  
-  /* Location Group Details */
-  details.location-group {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    margin-bottom: 8px;
-  }
-  details.location-group summary {
-    padding: 10px 15px;
-    cursor: pointer;
-    background: #f0f4f8;
-    font-weight: 600;
-    font-size: 0.9em;
-    color: #34495e;
-    outline: none;
-  }
-  </style>
-  
-  <!-- Overlay -->
-  <div id="global-sidebar-overlay" class="sidebar-overlay" onclick="closeAllSidebars()"></div>
-  
-  <!-- 1. ADD STAFF SIDEBAR -->
-  <div id="sidebar-add-staff" class="app-sidebar-panel">
-    <div class="sidebar-header">
-      <h3>Add New Staff Member</h3>
-      <span class="sidebar-close-x" onclick="closeAllSidebars()">&times;</span>
-    </div>
-    <div class="sidebar-content">
-      <form id="form-add-staff">
-          <div class="sidebar-field">
-              <label>Full Name</label>
-              <input type="text" id="new-staff-name" class="sidebar-input" placeholder="e.g. John Doe" required>
-          </div>
-          <div class="sidebar-field">
-              <label>Email Address (StaffID)</label>
-              <input type="email" id="new-staff-email" class="sidebar-input" placeholder="e.g. john.doe@maine.edu" required>
-          </div>
-          <div class="sidebar-field">
-              <label>Assign Roles</label>
-              <div class="role-selector-container" id="sidebar-role-list"></div>
-          </div>
-          <div class="sidebar-field">
-              <label>Notes</label>
-              <textarea id="new-staff-notes" class="sidebar-input" style="height:80px;"></textarea>
-          </div>
-      </form>
-    </div>
-    <div class="sidebar-footer">
-      <button class="button-secondary" onclick="closeAllSidebars()">Cancel</button>
-      <button id="btn-submit-new-staff" class="button-success" onclick="submitNewStaff()">Create Staff Member</button>
-    </div>
-  </div>
-  
-  <!-- 2. ROSTER MANAGEMENT SIDEBAR -->
-  <div id="sidebar-accommodations" class="app-sidebar-panel">
-    <div class="sidebar-header">
-      <h3 id="acc-title">Roster Management</h3>
-      <span class="sidebar-close-x" onclick="closeAllSidebars()">&times;</span>
-    </div>
-    <div class="sidebar-content">
-      <div id="acc-subtitle" style="margin-bottom:15px; color:#ddd; font-style:italic;"></div>
-      
-      <div style="margin-bottom: 20px;">
-          <label style="font-weight:bold; display:block; margin-bottom:5px;">General Accommodations (All Students)</label>
-          <textarea id="accommodations-general" style="width:100%; height:80px; padding:8px; border:1px solid #ccc; border-radius:4px;"></textarea>
+      font-size: 0.9em;
+      transition: background 0.2s;
+    }
+    .student-input:focus {
+      outline: none;
+      border-color: var(--color-primary-navy);
+    }
+</style>
+    
+    <!-- Single Overlay for all sidebars -->
+    <div id="global-sidebar-overlay" class="sidebar-overlay" onclick="closeAllSidebars()"></div>
+    
+    <!-- 1. ADD STAFF SIDEBAR -->
+    <div id="sidebar-add-staff" class="app-sidebar-panel">
+      <div class="sidebar-header">
+        <h3>Add New Staff Member</h3>
+        <span class="sidebar-close-x" onclick="closeAllSidebars()">&times;</span>
       </div>
-  
-      <div style="margin-bottom: 10px; font-size:0.85em; color:#666;">
-          Uncheck to exclude student from this exam. Click 🔒 to lock data. Click 🖊️ to highlight note.
+      <div class="sidebar-content">
+        <form id="form-add-staff">
+            <div class="sidebar-field">
+                <label>Full Name</label>
+                <input type="text" id="new-staff-name" class="sidebar-input" placeholder="e.g. John Doe" required>
+            </div>
+            <div class="sidebar-field">
+                <label>Email Address (StaffID)</label>
+                <input type="email" id="new-staff-email" class="sidebar-input" placeholder="e.g. john.doe@maine.edu" required>
+            </div>
+            <div class="sidebar-field">
+                <label>Assign Roles</label>
+                <div class="role-selector-container" id="sidebar-role-list">
+                    <!-- Roles injected via JS -->
+                </div>
+            </div>
+            <div class="sidebar-field">
+                <label>Notes</label>
+                <textarea id="new-staff-notes" class="sidebar-input" style="height:80px;"></textarea>
+            </div>
+        </form>
       </div>
-  
-      <div id="roster-dynamic-list">
-          <!-- Roster items injected via JS -->
+      <div class="sidebar-footer">
+        <button class="button-secondary" onclick="closeAllSidebars()">Cancel</button>
+        <button id="btn-submit-new-staff" class="button-success" onclick="submitNewStaff()">Create Staff Member</button>
       </div>
     </div>
-    <div class="sidebar-footer">
-      <button class="button-secondary" onclick="closeAllSidebars()">Cancel</button>
-      <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save Changes</button>
+    
+    <!-- 2. NURSING STUDENTS SIDEBAR -->
+    <div id="sidebar-accommodations" class="app-sidebar-panel">
+      <div class="sidebar-header">
+        <h3 id="acc-title">Students & Accommodations</h3>
+        <span class="sidebar-close-x" onclick="closeAllSidebars()">&times;</span>
+      </div>
+      <div class="sidebar-content">
+        <div id="acc-subtitle" style="margin-bottom:15px; color:#666; font-style:italic;"></div>
+        <div class="sidebar-field">
+            <label>General Notes (All Students)</label>
+            <textarea id="accommodations-general" class="sidebar-input" style="height:100px;" placeholder="e.g. Open book, calculator allowed..."></textarea>
+        </div>
+        <div class="sidebar-field">
+            <label>Student Management & Specific Needs</label>
+            <div style="font-size:0.85em; color:#666; margin-bottom:10px; padding:8px; background:#f9f9f9; border-radius:4px;">
+                <strong>Controls:</strong><br>
+                ☑️ Checked = Active in exam (default)<br>
+                ☐ Uncheck to exclude student from this exam<br>
+                🔒 Lock to preserve notes when refreshing document
+            </div>
+            <div id="roster-dynamic-list">
+                <!-- Roster items injected via JS -->
+            </div>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="button-secondary" onclick="closeAllSidebars()">Cancel</button>
+        <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save Changes</button>
+      </div>
     </div>
-  </div>
-  
-  <script>
-    function openSidebar(id) {
-      document.getElementById('global-sidebar-overlay').classList.add('open');
-      document.getElementById(id).classList.add('open');
-    }
-  
-    function closeAllSidebars() {
-      document.getElementById('global-sidebar-overlay').classList.remove('open');
-      document.querySelectorAll('.app-sidebar-panel').forEach(el => el.classList.remove('open'));
-    }
-  
-    // --- STAFF LOGIC ---
-    function openAddStaffSidebar() {
-      document.getElementById('form-add-staff').reset();
-      const container = document.getElementById('sidebar-role-list');
-      container.innerHTML = SYSTEM_ROLES.map(role => `
-        <label class="role-pill" id="pill-new-${role}">
-          <input type="checkbox" value="${role}" class="new-staff-role-check" onchange="togglePillClass(this, 'pill-new-${role}')"> 
-          ${role}
-        </label>
-      `).join('');
-      openSidebar('sidebar-add-staff');
-    }
-  
-    function submitNewStaff() {
-      const btn = document.getElementById('btn-submit-new-staff');
-      const name = document.getElementById('new-staff-name').value;
-      const email = document.getElementById('new-staff-email').value;
-      const notes = document.getElementById('new-staff-notes').value;
-  
-      if (!name || !email) { showNotification("Name/Email required", "error"); return; }
-  
-      const roleChecks = document.querySelectorAll('.new-staff-role-check');
-      const roles = Array.from(roleChecks).filter(c => c.checked).map(c => c.value).join(', ');
-  
-      btn.disabled = true; btn.textContent = "Creating...";
-      google.script.run.withSuccessHandler(res => {
-          btn.disabled = false; btn.textContent = "Create Staff Member";
-          if (res.success) { showNotification(res.message, "success"); closeAllSidebars(); fetchFullStaffList(); } 
-          else { showNotification(res.message, "error"); }
-      }).api_addStaffMember({ fullName: name, email: email, roles: roles, notes: notes });
-    }
-  
-    // --- ROSTER LOGIC ---
-    function openAccommodationsSidebar(sheetName, examName) {
-      const sidebar = document.getElementById('sidebar-accommodations');
-      sidebar.dataset.sheetName = sheetName;
-      sidebar.dataset.examName = examName;
+    
+    <script>
+      /**
+       * GLOBAL SIDEBAR CONTROLS
+       */
+      function openSidebar(id) {
+        document.getElementById('global-sidebar-overlay').classList.add('open');
+        document.getElementById(id).classList.add('open');
+      }
+    
+      function closeAllSidebars() {
+        document.getElementById('global-sidebar-overlay').classList.remove('open');
+        document.querySelectorAll('.app-sidebar-panel').forEach(el => el.classList.remove('open'));
+      }
+    
+      /**
+       * STAFF SIDEBAR LOGIC
+       */
+      function openAddStaffSidebar() {
+        document.getElementById('form-add-staff').reset();
+        const container = document.getElementById('sidebar-role-list');
+        container.innerHTML = SYSTEM_ROLES.map(role => `
+          <label class="role-pill" id="pill-new-${role}">
+            <input type="checkbox" value="${role}" class="new-staff-role-check" onchange="togglePillClass(this, 'pill-new-${role}')"> 
+            ${role}
+          </label>
+        `).join('');
+        openSidebar('sidebar-add-staff');
+      }
+    
+      function submitNewStaff() {
+        const btn = document.getElementById('btn-submit-new-staff');
+        const name = document.getElementById('new-staff-name').value;
+        const email = document.getElementById('new-staff-email').value;
+        const notes = document.getElementById('new-staff-notes').value;
+    
+        if (!name || !email) {
+            showNotification("Name and Email are required.", "error");
+            return;
+        }
+    
+        const roleChecks = document.querySelectorAll('.new-staff-role-check');
+        const roles = Array.from(roleChecks).filter(c => c.checked).map(c => c.value).join(', ');
+    
+        btn.disabled = true;
+        btn.textContent = "Creating...";
+    
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.textContent = "Create Staff Member";
+                if (res.success) {
+                    showNotification(res.message, "success");
+                    closeAllSidebars();
+                    fetchFullStaffList(); 
+                } else {
+                    showNotification(res.message, "error");
+                }
+            })
+            .api_addStaffMember({ fullName: name, email: email, roles: roles, notes: notes });
+      }
+    
+      /**
+       * NURSING SIDEBAR LOGIC
+       */
+      function openAccommodationsSidebar(sheetName, examName) {
+        const sidebar = document.getElementById('sidebar-accommodations');
+        sidebar.dataset.sheetName = sheetName;
+        sidebar.dataset.examName = examName;
+        
+        const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
+        const sheetData = rootData.sheets.find(s => s.sheetName === sheetName);
+        const examData = sheetData ? sheetData.exams.find(e => e.name === examName) : null;
+        
+        if (!examData) { showNotification("Error finding exam data", "error"); return; }
+    
+        document.getElementById('acc-title').textContent = examName;
+        document.getElementById('acc-subtitle').textContent = sheetData.course.code + ' - ' + sheetData.course.name;
+        document.getElementById('accommodations-general').value = examData.generalNotes || '';
+    
+        const container = document.getElementById('roster-dynamic-list');
+        container.innerHTML = ''; 
+    
+        const roster = examData.rosters || {};
+        const tags = examData.studentTags || {};
+        let hasStudents = false;
+    
+        const locs = ['Augusta', 'UMAAL', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco'];
+    
+        locs.forEach(loc => {
+            const students = roster[loc] || [];
+            if (students.length === 0) return;
+            hasStudents = true;
+    
+            const details = document.createElement('details');
+            details.className = 'location-group';
+            
+            // Create summary with master checkbox
+            const summary = document.createElement('summary');
+            summary.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" class="master-checkbox" 
+                  data-location="${loc}" 
+                  onclick="event.stopPropagation(); toggleAllInLocation(this, '${loc}')"
+                  style="width: 18px; height: 18px; cursor: pointer;"
+                  checked>
+                <span>${loc} (${students.length})</span>
+              </div>
+            `;
+            details.appendChild(summary);
+            
+            const listDiv = document.createElement('div');
+            listDiv.className = 'student-list';
+            listDiv.dataset.location = loc;
+    
+            students.forEach(studentObj => {
+                // studentObj is an object: { name: "John Doe", color: "#ff0000" }
+                const studentName = studentObj.name || studentObj; // Fallback if it's just a string
+                const studentTag = tags[studentName] || {};
+                
+                // Handle both old string format and new object format
+                let noteValue = '';
+                let isExcluded = false;
+                let isLocked = false;
+                let isHighlighted = false;
+                
+                if (typeof studentTag === 'string') {
+                    noteValue = studentTag; // Old format: just a string
+                } else if (typeof studentTag === 'object') {
+                    noteValue = studentTag.note || ''; // New format: object with properties
+                    isExcluded = studentTag.excluded || false;
+                    isLocked = studentTag.locked || false;
+                    isHighlighted = studentTag.highlighted || false;
+                }
+    
+                const studentRow = document.createElement('div');
+                studentRow.className = 'student-row' + (isExcluded ? ' excluded' : '');
+                studentRow.dataset.student = studentName;
+                
+                studentRow.innerHTML = `
+                  <div class="student-controls">
+                    <input type="checkbox" class="student-checkbox" 
+                      data-student="${studentName}" 
+                      ${isExcluded ? '' : 'checked'}
+                      onchange="toggleStudentExclusion(this)">
+                    <span class="student-lock ${isLocked ? 'locked' : ''}" 
+                      data-student="${studentName}"
+                      onclick="toggleStudentLock(this)">
+                      ${isLocked ? '🔒' : '🔓'}
+                    </span>
+                  </div>
+                  <span class="student-name" style="color: ${isExcluded ? '#999' : (studentObj.color || '#000')}">${studentName}</span>
+                  <input type="text" class="student-input" placeholder="Add accommodation..." 
+                    data-student="${studentName}" 
+                    value="${noteValue}"
+                    ${isExcluded ? 'disabled' : ''}>
+                `;
+                
+                listDiv.appendChild(studentRow);
+            });
+            
+            details.appendChild(listDiv);
+            container.appendChild(details);
+        });
+    
+        if (!hasStudents) container.innerHTML = '<div style="padding:10px; color:#888; font-style:italic;">No students assigned to locations yet.</div>';
+    
+        openSidebar('sidebar-accommodations');
+      }
       
-      const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
-      const sheetData = rootData.sheets.find(s => s.sheetName === sheetName);
-      const examData = sheetData ? sheetData.exams.find(e => e.name === examName) : null;
+      /**
+       * Toggle student exclusion
+       * CHECKED = ACTIVE in exam
+       * UNCHECKED = EXCLUDED from exam
+       */
+      function toggleStudentExclusion(checkbox) {
+        const studentName = checkbox.dataset.student;
+        const row = checkbox.closest('.student-row');
+        const input = row.querySelector('.student-input');
+        const nameSpan = row.querySelector('.student-name');
+        
+        if (!checkbox.checked) {
+          // UNCHECKED = EXCLUDED
+          row.classList.add('excluded');
+          input.disabled = true;
+        } else {
+          // CHECKED = ACTIVE
+          row.classList.remove('excluded');
+          input.disabled = false;
+        }
+      }
       
-      if (!examData) { showNotification("Error finding exam data", "error"); return; }
-  
-      document.getElementById('acc-title').textContent = examName;
-      document.getElementById('acc-subtitle').textContent = sheetData.course.code + ' - ' + sheetData.course.name;
-      document.getElementById('accommodations-general').value = examData.generalNotes || '';
-  
-      const container = document.getElementById('roster-dynamic-list');
-      container.innerHTML = ''; 
-  
-      const roster = examData.rosters || {};
-      const tags = examData.studentTags || {};
-      let hasStudents = false;
-  
-      // Ordered Locations
-      const locs = ['Augusta', 'UMAAL', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco'];
-  
-      locs.forEach(loc => {
-          const students = roster[loc] || [];
-          if (students.length === 0) return;
-          hasStudents = true;
-  
-          const details = document.createElement('details');
-          details.className = 'location-group';
-          details.innerHTML = `<summary>${loc} (${students.length})</summary>`;
-          
-          const listDiv = document.createElement('div');
-          listDiv.style.padding = "5px 10px";
-  
-          students.forEach(studentObj => {
-              // studentObj is {name: "John Doe", color: "#000"}
-              const name = studentObj.name;
-              const safeName = name.replace(/[^a-zA-Z0-9]/g, ''); // Safe ID
-              
-              // Get Saved State
-              let note = "";
-              let isExcluded = false;
-              let isLocked = false;
-              let isHighlighted = false;
-  
-              if (tags[name]) {
-                  if (typeof tags[name] === 'object') {
-                      note = tags[name].note || "";
-                      isExcluded = tags[name].excluded || false;
-                      isLocked = tags[name].locked || false;
-                      isHighlighted = tags[name].highlighted || false;
-                  } else {
-                      note = tags[name]; // Old format
-                  }
-              }
-  
-              const row = document.createElement('div');
-              row.className = `roster-row ${isExcluded ? 'excluded' : ''}`;
-              row.id = `row-${safeName}`;
-              
-              row.innerHTML = `
-                  <input type="checkbox" class="exclude-check" data-student="${name}" ${!isExcluded ? 'checked' : ''} onchange="toggleRowExclusion(this, 'row-${safeName}')">
-                  <span class="roster-name" style="color:${studentObj.color || 'black'}">${name}</span>
-                  <input type="text" class="roster-input" placeholder="Note..." value="${note}">
-                  <span class="icon-btn ${isHighlighted ? 'highlight-active' : ''}" onclick="toggleIcon(this, 'highlight-active')" title="Highlight Note">🖊️</span>
-                  <span class="icon-btn ${isLocked ? 'lock-active' : ''}" onclick="toggleIcon(this, 'lock-active')" title="Lock Student">🔒</span>
-              `;
-              listDiv.appendChild(row);
-          });
-          details.appendChild(listDiv);
-          container.appendChild(details);
-      });
-  
-      if (!hasStudents) container.innerHTML = '<div style="padding:10px; color:#888;">No students found in roster section.</div>';
-  
-      openSidebar('sidebar-accommodations');
-    }
-  
-    function toggleRowExclusion(checkbox, rowId) {
-        const row = document.getElementById(rowId);
-        if (checkbox.checked) row.classList.remove('excluded');
-        else row.classList.add('excluded');
-    }
-  
-    function toggleIcon(btn, activeClass) {
-        btn.classList.toggle(activeClass);
-    }
-  
-    function saveAccommodations() {
-      const sidebar = document.getElementById('sidebar-accommodations');
-      const btn = document.getElementById('accommodations-save-btn');
-      const sheetName = sidebar.dataset.sheetName;
-      const examName = sidebar.dataset.examName;
+      /**
+       * Toggle all students in a location
+       * Master checked = all students active
+       * Master unchecked = all students excluded
+       */
+      function toggleAllInLocation(masterCheckbox, location) {
+        const listDiv = document.querySelector(`.student-list[data-location="${location}"]`);
+        const studentCheckboxes = listDiv.querySelectorAll('.student-checkbox');
+        
+        studentCheckboxes.forEach(checkbox => {
+          checkbox.checked = masterCheckbox.checked;
+          toggleStudentExclusion(checkbox); // Apply the visual state
+        });
+      }
       
-      btn.disabled = true; btn.textContent = 'Saving...';
-  
-      const generalNotes = document.getElementById('accommodations-general').value;
-      const studentTags = {};
-  
-      // Scrape all rows
-      document.querySelectorAll('.roster-row').forEach(row => {
-          const checkbox = row.querySelector('.exclude-check');
-          const name = checkbox.dataset.student;
-          const note = row.querySelector('.roster-input').value.trim();
-          const isExcluded = !checkbox.checked;
-          const isHighlighted = row.querySelector('span[title="Highlight Note"]').classList.contains('highlight-active');
-          const isLocked = row.querySelector('span[title="Lock Student"]').classList.contains('lock-active');
-  
-          // Only save if there is data to save (optimization)
-          if (note || isExcluded || isHighlighted || isLocked) {
-              studentTags[name] = {
-                  note: note,
-                  excluded: isExcluded,
-                  highlighted: isHighlighted,
-                  locked: isLocked
-              };
-          }
-      });
-  
-      const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
-      const sheetObj = rootData.sheets.find(s => s.sheetName === sheetName);
-      
-      const payload = {
-          courseCode: sheetObj.course.code,
-          examName: examName,
-          generalNotes: generalNotes,
-          studentTags: studentTags
-      };
-  
-      google.script.run.withSuccessHandler(res => {
-          if (res.success) {
-              // Update Local Cache
-              const examObj = sheetObj.exams.find(e => e.name === examName);
-              if (examObj) {
-                  examObj.generalNotes = generalNotes;
-                  examObj.studentTags = studentTags;
-              }
-              
-              if (examObj.docUrl) {
-                  btn.textContent = 'Updating Doc...';
-                  const docPayload = { settings: rootData.settings, sheets: [{ ...sheetObj, exams: [examObj] }] };
-                  google.script.run.withSuccessHandler(() => {
-                      btn.disabled = false; btn.textContent = 'Save Changes';
-                      closeAllSidebars();
-                      showNotification("Saved DB & Updated Doc!", "success");
-                  }).updateAllNursingDocuments(docPayload);
-              } else {
-                  btn.disabled = false; btn.textContent = 'Save Changes';
-                  closeAllSidebars();
-                  showNotification("Saved to DB!", "success");
-              }
-          } else {
-              btn.disabled = false; btn.textContent = 'Save Changes';
-              showNotification("Save Failed: " + res.message, "error");
-          }
-      }).api_saveNursingAccommodations(payload);
-    }
-  </script>
+      /**
+       * Toggle student lock
+       */
+      function toggleStudentLock(lockIcon) {
+        const isLocked = lockIcon.classList.toggle('locked');
+        lockIcon.textContent = isLocked ? '🔒' : '🔓';
+      }
+    
+      function saveAccommodations() {
+        const sidebar = document.getElementById('sidebar-accommodations');
+        const btn = document.getElementById('accommodations-save-btn');
+        const sheetName = sidebar.dataset.sheetName;
+        const examName = sidebar.dataset.examName;
+        
+        btn.disabled = true; 
+        btn.textContent = 'Saving...';
+    
+        const generalNotes = document.getElementById('accommodations-general').value;
+        const studentTags = {};
+        
+        // Gather all student data from the form
+        document.querySelectorAll('.student-row').forEach(row => {
+            const studentName = row.dataset.student;
+            const noteInput = row.querySelector('.student-input');
+            const checkbox = row.querySelector('.student-checkbox');
+            const lockIcon = row.querySelector('.student-lock');
+            
+            const note = noteInput.value.trim();
+            const excluded = !checkbox.checked; // UNCHECKED = EXCLUDED
+            const locked = lockIcon.classList.contains('locked');
+            
+            // Always save the state for each student
+            studentTags[studentName] = {
+                note: note,
+                excluded: excluded,
+                highlighted: false, // Can be extended later
+                locked: locked
+            };
+        });
+    
+        const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
+        const sheetObj = rootData.sheets.find(s => s.sheetName === sheetName);
+        
+        const payload = {
+            courseCode: sheetObj.course.code,
+            examName: examName,
+            generalNotes: generalNotes,
+            studentTags: studentTags
+        };
+    
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res.success) {
+                    const examObj = sheetObj.exams.find(e => e.name === examName);
+                    if (examObj) {
+                        examObj.generalNotes = generalNotes;
+                        examObj.studentTags = studentTags;
+                    }
+                    
+                    if (examObj.docUrl) {
+                        btn.textContent = 'Updating Doc...';
+                        const docPayload = { settings: rootData.settings, sheets: [{ ...sheetObj, exams: [examObj] }] };
+                        google.script.run.withSuccessHandler(dRes => {
+                            btn.disabled = false; btn.textContent = 'Save Changes';
+                            closeAllSidebars();
+                            showNotification("Saved DB & Updated Doc!", "success");
+                        }).updateAllNursingDocuments(docPayload);
+                    } else {
+                        btn.disabled = false; btn.textContent = 'Save Changes';
+                        closeAllSidebars();
+                        showNotification("Saved to DB!", "success");
+                    }
+                } else {
+                    btn.disabled = false; btn.textContent = 'Save Changes';
+                    showNotification("Save Failed: " + res.message, "error");
+                }
+            })
+            .api_saveNursingAccommodations(payload);
+      }
+    </script>

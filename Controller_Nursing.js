@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * NURSING PROCTORING CONTROLLER
  * Handles: Data Fetching, Document Generation, Calendar Sync, and Logging
- * Features: Roster Management (Exclude/Lock/Highlight), Strikethrough detection
+ * Features: Deep-Search Folder Logic, Fuzzy Matching, Roster Management
  * -------------------------------------------------------------------
  */
 
@@ -35,7 +35,69 @@ function _getNursingSettings() {
 }
 
 /**
+ * HELPER: Normalizes strings for fuzzy comparison
+ * Removes special characters and converts to lowercase.
+ */
+function _normalizeStr(str) {
+  if (!str) return "";
+  return str.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * HELPER: Parses Cell A1 to extract Folder Name and Full Title prefix
+ * Input: "NUR 220 Concepts: Professor Erin Voisine" or "NUR 220 Concepts - Professor Erin Voisine"
+ * Returns: { folderKey: "NUR 220 Concepts", fullTitlePrefix: "NUR 220 Concepts Professor Erin Voisine" }
+ */
+function _parseCellA1(cellValue) {
+  if (!cellValue) return { folderKey: "Unknown", fullTitlePrefix: "Unknown" };
+  
+  const str = String(cellValue).trim();
+  
+  // Try to split by colon first (most common), then hyphen
+  let separator = ':';
+  let parts = str.split(':');
+  
+  if (parts.length === 1) {
+    // No colon found, try hyphen
+    separator = '-';
+    parts = str.split('-');
+  }
+  
+  if (parts.length > 1) {
+    const courseInfo = parts[0].trim(); // "NUR 220 Concepts"
+    const facultyInfo = parts.slice(1).join(separator).trim(); // "Professor Erin Voisine"
+    
+    // Build title prefix matching the old document naming convention (space separator, no colon/hyphen)
+    const fullTitlePrefix = `${courseInfo} ${facultyInfo}`;
+    
+    return {
+      folderKey: courseInfo,
+      fullTitlePrefix: fullTitlePrefix
+    };
+  }
+  
+  // Fallback if no separator found
+  return { folderKey: str, fullTitlePrefix: str };
+}
+
+/**
+ * HELPER: Recursively finds a subfolder by fuzzy name match
+ */
+function _findSubFolder(parentFolder, targetName) {
+  const targetNorm = _normalizeStr(targetName);
+  const folders = parentFolder.getFolders();
+  while (folders.hasNext()) {
+    const folder = folders.next();
+    if (_normalizeStr(folder.getName()) === targetNorm) {
+      return folder;
+    }
+  }
+  return null;
+}
+
+/**
  * Main API called by the frontend.
+ * Fetches sheet data and resolves existing document URLs using deep search.
  */
 function api_getNursingData() {
   try {
@@ -46,17 +108,9 @@ function api_getNursingData() {
 
     const ss = SpreadsheetApp.openById(config.sheetId);
     const sheets = ss.getSheets();
-    const outputFolder = DriveApp.getFolderById(config.folderId);
+    const rootFolder = DriveApp.getFolderById(config.folderId);
     
-    // 1. Cache Existing Docs
-    const existingFiles = {};
-    const files = outputFolder.getFiles();
-    while (files.hasNext()) {
-      const f = files.next();
-      existingFiles[f.getName()] = f.getUrl();
-    }
-
-    // 2. Cache Accommodations DB
+    // Cache Accommodations DB
     const dbMap = getAccommodationsDBMap();
 
     const courseData = [];
@@ -68,17 +122,76 @@ function api_getNursingData() {
       const parsed = parseNursingSheet(sheet, dbMap);
       if (!parsed) return;
 
-      // Attach Doc URLs
+      // --- DEEP SEARCH LOGIC ---
+      // 1. Determine expected folder name from A1
+      const meta = _parseCellA1(parsed.rawA1);
+      
+      console.log("=== Processing Sheet:", sheetName, "===");
+      console.log("📋 Raw A1 cell:", parsed.rawA1);
+      console.log("📁 Extracted folder key:", meta.folderKey);
+      console.log("📄 Full title prefix:", meta.fullTitlePrefix);
+      
+      // 2. Try to find the specific sub-folder for this class
+      let targetFolder = _findSubFolder(rootFolder, meta.folderKey);
+      
+      // 3. Scan files in that folder (if it exists)
+      const existingFiles = [];
+      if (targetFolder) {
+        console.log("📁 Found target folder:", targetFolder.getName());
+        const files = targetFolder.getFiles();
+        while (files.hasNext()) {
+          const f = files.next();
+          existingFiles.push({
+            name: f.getName(),
+            nameNorm: _normalizeStr(f.getName()),
+            url: f.getUrl()
+          });
+        }
+        console.log("📄 Files in folder:", existingFiles.length);
+        existingFiles.forEach(f => console.log("  -", f.name, "→", f.nameNorm));
+      } else {
+        console.log("⚠️ Target folder NOT FOUND:", meta.folderKey);
+      }
+
+      // 4. Attach Doc URLs based on improved fuzzy match
       parsed.exams.forEach(exam => {
-          const docName = `${sheetName} - ${exam.name}`;
-          exam.docUrl = existingFiles[docName] || null;
+        const examNameNorm = _normalizeStr(exam.name);
+        
+        // Build the expected full document title
+        const expectedTitle = `${meta.fullTitlePrefix} - ${exam.name}`;
+        const expectedTitleNorm = _normalizeStr(expectedTitle);
+        
+        console.log("🔍 Looking for exam:", exam.name);
+        console.log("   Expected title:", expectedTitle);
+        console.log("   Normalized:", expectedTitleNorm);
+        
+        // Priority 1: Try exact match on full expected title
+        let match = existingFiles.find(f => f.nameNorm === expectedTitleNorm);
+        
+        // Priority 2: Fallback to partial match (file contains exam name)
+        if (!match) {
+          match = existingFiles.find(f => f.nameNorm.includes(examNameNorm));
+          if (match) {
+            console.log("   ✓ Found via partial match:", match.name);
+          }
+        } else {
+          console.log("   ✓ Found via exact match:", match.name);
+        }
+        
+        if (!match) {
+          console.log("   ✗ No match found for:", exam.name);
+        }
+        
+        exam.docUrl = match ? match.url : null;
       });
 
       if (parsed.exams.length > 0) {
         courseData.push({
           sheetName: sheetName,
           course: parsed.course,
-          exams: parsed.exams
+          exams: parsed.exams,
+          // Pass metadata for creation/updates
+          _meta: meta 
         });
       }
     });
@@ -86,6 +199,7 @@ function api_getNursingData() {
     return { success: true, data: { sheets: courseData, settings: config } };
 
   } catch (e) {
+    console.error("ERROR in api_getNursingData:", e.message, e.stack);
     return { success: false, message: e.message + " (Stack: " + e.stack + ")" };
   }
 }
@@ -202,41 +316,70 @@ function parseNursingSheet(sheet, dbMap) {
   }
 
   return {
+      rawA1: a1,
       course: { code: courseCode, name: courseName },
       exams: exams
   };
 }
 
 /**
- * Creates Google Docs for selected exams.
+ * Creates Google Docs for selected exams using intelligent folder management.
  */
 function createNursingProctoringDocuments(payload) {
   try {
     const config = _getNursingSettings();
     if (!config.folderId) return { success: false, message: "Folder ID missing." };
     
-    const folder = DriveApp.getFolderById(config.folderId);
+    const rootFolder = DriveApp.getFolderById(config.folderId);
     let createdCount = 0;
+    const createdUrls = {}; // Track URLs for response
 
     payload.sheets.forEach(sheetData => {
-      sheetData.exams.forEach(exam => {
-        const docName = `${sheetData.sheetName} - ${exam.name}`;
-        if (folder.getFilesByName(docName).hasNext()) return; 
+      // 1. Resolve Target Folder (Create if missing)
+      const meta = sheetData._meta || _parseCellA1(sheetData.course.name); // Fallback
+      
+      let targetFolder = _findSubFolder(rootFolder, meta.folderKey);
+      if (!targetFolder) {
+        targetFolder = rootFolder.createFolder(meta.folderKey);
+        console.log("📁 Created new folder:", meta.folderKey);
+      }
 
-        const doc = DocumentApp.create(docName);
-        _populateNursingDoc(doc, docName, exam, config.customNotes);
+      // 2. Create Docs in Target Folder
+      sheetData.exams.forEach(exam => {
+        // Build Title: [Course Info] [Faculty] - [Exam Name]
+        // Matches existing naming: "NUR 220 Concepts Professor Erin Voisine - Exam 1"
+        const docTitle = `${meta.fullTitlePrefix} - ${exam.name}`;
+        
+        // Double check existence inside target folder to prevent duplicates
+        const existing = targetFolder.getFilesByName(docTitle);
+        if (existing.hasNext()) {
+          console.log("⚠️ Doc already exists, skipping:", docTitle);
+          return;
+        }
+
+        const doc = DocumentApp.create(docTitle);
+        _populateNursingDoc(doc, docTitle, exam, config.customNotes);
 
         const file = DriveApp.getFileById(doc.getId());
-        folder.addFile(file);
+        targetFolder.addFile(file);
         DriveApp.getRootFolder().removeFile(file);
         
-        if (typeof logSystemAction === 'function') logSystemAction("Nursing", "Created Doc", docName, doc.getId(), `Date: ${exam.date}`);
+        // Track the new URL
+        const newUrl = file.getUrl();
+        createdUrls[exam.name] = newUrl;
+        
+        console.log("✓ Created doc:", docTitle);
+        
+        if (typeof logSystemAction === 'function') logSystemAction("Nursing", "Created Doc", docTitle, doc.getId(), `Date: ${exam.date}`);
         createdCount++;
       });
     });
 
-    return { success: true, message: `Created ${createdCount} documents.` };
-  } catch (e) { return { success: false, message: e.message }; }
+    return { success: true, message: `Created ${createdCount} documents.`, createdUrls: createdUrls };
+  } catch (e) { 
+    console.error("ERROR in createNursingProctoringDocuments:", e.message, e.stack);
+    return { success: false, message: e.message }; 
+  }
 }
 
 /**
@@ -247,29 +390,84 @@ function updateAllNursingDocuments(payload) {
     const config = _getNursingSettings();
     if (!config.folderId) return { success: false, message: "Folder ID missing." };
 
-    const folder = DriveApp.getFolderById(config.folderId);
+    const rootFolder = DriveApp.getFolderById(config.folderId);
     let updatedCount = 0;
 
     payload.sheets.forEach(sheetData => {
+      // 1. Resolve Target Folder
+      const meta = sheetData._meta || _parseCellA1(sheetData.course.name);
+      const targetFolder = _findSubFolder(rootFolder, meta.folderKey);
+      
+      if (!targetFolder) {
+        console.log("⚠️ Cannot update - folder not found:", meta.folderKey);
+        return; // Cannot update if folder doesn't exist
+      }
+
       sheetData.exams.forEach(exam => {
-        const docName = `${sheetData.sheetName} - ${exam.name}`;
-        const files = folder.getFilesByName(docName);
+        // 2. Find File using improved fuzzy match
+        const examNameNorm = _normalizeStr(exam.name);
+        const expectedTitle = `${meta.fullTitlePrefix} - ${exam.name}`;
+        const expectedTitleNorm = _normalizeStr(expectedTitle);
         
-        if (files.hasNext()) {
-          const file = files.next();
-          const doc = DocumentApp.openById(file.getId());
-          
+        let targetFile = null;
+
+        // Priority 1: Exact URL match (if provided by frontend)
+        if (exam.docUrl) {
+          try { 
+            targetFile = DriveApp.getFileByUrl(exam.docUrl);
+            console.log("✓ Found via URL:", exam.docUrl);
+          } catch(e) {
+            console.log("⚠️ URL lookup failed:", e.message);
+          }
+        }
+
+        // Priority 2: Exact title match
+        if (!targetFile) {
+          const files = targetFolder.getFiles();
+          while (files.hasNext()) {
+            const f = files.next();
+            if (_normalizeStr(f.getName()) === expectedTitleNorm) {
+              targetFile = f;
+              console.log("✓ Found via exact title match:", f.getName());
+              break;
+            }
+          }
+        }
+
+        // Priority 3: Partial match (contains exam name)
+        if (!targetFile) {
+          const files = targetFolder.getFiles();
+          while (files.hasNext()) {
+            const f = files.next();
+            if (_normalizeStr(f.getName()).includes(examNameNorm)) {
+              targetFile = f;
+              console.log("✓ Found via partial match:", f.getName());
+              break;
+            }
+          }
+        }
+        
+        if (targetFile) {
+          const doc = DocumentApp.openById(targetFile.getId());
           doc.getBody().clear();
-          _populateNursingDoc(doc, docName, exam, config.customNotes);
+          // Use current file name to preserve any manual renaming user might have done
+          _populateNursingDoc(doc, targetFile.getName(), exam, config.customNotes);
           
-          if (typeof logSystemAction === 'function') logSystemAction("Nursing", "Updated Doc", docName, file.getId(), `Date: ${exam.date}`);
+          console.log("✓ Updated doc:", targetFile.getName());
+          
+          if (typeof logSystemAction === 'function') logSystemAction("Nursing", "Updated Doc", targetFile.getName(), targetFile.getId(), `Date: ${exam.date}`);
           updatedCount++;
+        } else {
+          console.log("✗ No doc found to update for exam:", exam.name);
         }
       });
     });
 
     return { success: true, message: `Updated ${updatedCount} documents.` };
-  } catch (e) { return { success: false, message: e.message }; }
+  } catch (e) { 
+    console.error("ERROR in updateAllNursingDocuments:", e.message, e.stack);
+    return { success: false, message: e.message }; 
+  }
 }
 
 /**
@@ -390,7 +588,10 @@ function api_syncNursingCalendar(payload) {
         const end = new Date(start);
         end.setHours(17, 0, 0); 
 
-        const title = `Proctor: ${sheetData.sheetName} - ${exam.name}`;
+        // Use meta full title if available for better calendar naming
+        const titlePrefix = sheetData._meta ? sheetData._meta.fullTitlePrefix : sheetData.sheetName;
+        const title = `Proctor: ${titlePrefix} - ${exam.name}`;
+        
         const events = cal.getEvents(start, end);
         const exists = events.some(e => e.getTitle() === title);
         
