@@ -14,12 +14,6 @@
     gap: 15px;
   }
 
-  .button-success {
-    background-color: var(--color-primary-green) !important;
-    color: var(--color-text-dark) !important;
-  }
-  .button-success:hover { opacity: 0.9; }
-
   /* Collapsible Course Section Styles */
   .course-section {
     margin-bottom: 15px;
@@ -51,23 +45,39 @@
   .exam-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
+    gap: 25px; /* Increased gap */
   }
 
   .exam-card {
-    border: 1px solid var(--color-border-light);
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* More pronounced shadow */
     display: flex;
     flex-direction: column;
+    background-color: #fff;
+    border-left: 5px solid var(--color-accent-gray); /* Default border */
+  }
+
+  .exam-card.created {
+    border-left-color: var(--color-primary-green);
+  }
+
+  .exam-card.not-created {
+    border-left-color: var(--color-primary-orange);
   }
 
   .exam-card-header {
-    padding: 10px 15px;
+    padding: 12px 15px;
     display: flex;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid var(--color-border-light);
+    background-color: var(--color-primary-navy);
+    color: var(--color-text-light);
+  }
+  
+  .exam-card-header h4 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 500;
   }
 
   .exam-details { padding: 15px; flex-grow: 1; }
@@ -75,7 +85,6 @@
 
   .exam-card-footer {
       padding: 10px 15px;
-      border-top: 1px solid var(--color-border-light);
       background: var(--color-accent-gray);
       display: flex;
       justify-content: space-between;
@@ -87,6 +96,20 @@
       align-items: center;
       gap: 8px;
   }
+
+  /* Button Styles */
+  .button-create {
+    background-color: var(--color-primary-orange) !important;
+    color: var(--color-text-dark) !important;
+  }
+  .button-create:hover { opacity: 0.9; }
+  
+  .button-view {
+    background-color: var(--color-primary-green) !important;
+    color: var(--color-text-dark) !important;
+  }
+  .button-view:hover { opacity: 0.9; }
+
 </style>
 
 <script>
@@ -178,22 +201,22 @@
 
   function buildExamCard(exam, sheetName) {
       const card = document.createElement('div');
-      card.className = 'exam-card';
+      const docExists = !!exam.docUrl;
+      card.className = `exam-card ${docExists ? 'created' : 'not-created'}`;
       card.dataset.sheetName = sheetName;
       card.dataset.examName = exam.name;
       const safeSheetName = sheetName.replace(/'/g, "\\'");
       const safeExamName = exam.name.replace(/'/g, "\\'");
 
-      const docExists = !!exam.docUrl;
-      let docStatusAndActions;
+      let createOrViewButton;
+      let updateButton;
 
       if (docExists) {
-        docStatusAndActions = `
-          <button class="button-tertiary" onclick="handleUpdateSingleExamClick(this, '${safeSheetName}', '${safeExamName}')">Update</button>
-          <a href="${exam.docUrl}" target="_blank" class="button-tertiary">View</a>`;
+        createOrViewButton = `<a href="${exam.docUrl}" target="_blank" class="button-tertiary button-view">View</a>`;
+        updateButton = `<button class="button-tertiary" onclick="handleUpdateSingleExamClick(this, '${safeSheetName}', '${safeExamName}')">Update</button>`;
       } else {
-        docStatusAndActions = `
-          <button class="button-tertiary button-success" onclick="handleCreateSingleExamClick(this, '${safeSheetName}', '${safeExamName}')">Create</button>`;
+        createOrViewButton = `<button class="button-tertiary button-create" onclick="handleCreateSingleExamClick(this, '${safeSheetName}', '${safeExamName}')">Create</button>`;
+        updateButton = `<button class="button-tertiary" disabled>Update</button>`;
       }
 
       card.innerHTML = `
@@ -207,7 +230,10 @@
           </div>
           <div class="exam-card-footer">
              <button class="button-tertiary" onclick="openAccommodationsSidebar('${safeSheetName}', '${safeExamName}')">Accommodations</button>
-             <div class="footer-actions">${docStatusAndActions}</div>
+             <div class="footer-actions">
+                ${updateButton}
+                ${createOrViewButton}
+             </div>
           </div>
       `;
       return card;

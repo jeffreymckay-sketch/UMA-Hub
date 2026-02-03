@@ -50,30 +50,40 @@
     .exam-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
+      gap: 25px; /* Increased gap */
     }
     
     /* Individual Exam Card */
     .exam-card {
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      transition: box-shadow 0.2s, transform 0.2s;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* More pronounced shadow */
+        display: flex;
+        flex-direction: column;
+        background-color: #fff;
+        border-left: 5px solid var(--color-accent-gray); /* Default border */
     }
-    .exam-card:hover {
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      transform: translateY(-2px);
+
+    .exam-card.created {
+        border-left-color: var(--color-primary-green);
+    }
+
+    .exam-card.not-created {
+        border-left-color: var(--color-primary-orange);
     }
     
     .exam-card-header {
-      padding: 12px 15px;
-      font-weight: bold;
-      background: var(--color-primary-navy);
-      color: white;
-      border-radius: 6px 6px 0 0;
-      font-size: 0.95em;
+        padding: 12px 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background-color: var(--color-primary-navy);
+        color: var(--color-text-light);
+    }
+    
+    .exam-card-header h4 {
+        margin: 0;
+        font-size: 1.1em;
+        font-weight: 500;
     }
     
     .exam-card-body {
@@ -115,7 +125,19 @@
     
     .footer-right { display: flex; gap: 5px; }
     
-    /* Small buttons for cards */
+    /* Button Styles */
+    .button-create {
+        background-color: var(--color-primary-orange) !important;
+        color: var(--color-text-dark) !important;
+    }
+    .button-create:hover { opacity: 0.9; }
+    
+    .button-view {
+        background-color: var(--color-primary-green) !important;
+        color: var(--color-text-dark) !important;
+    }
+    .button-view:hover { opacity: 0.9; }
+
     .btn-sm {
       padding: 4px 10px;
       font-size: 0.85em;
@@ -235,27 +257,27 @@
       }
     
       function buildExamCard(exam) {
+          const hasDoc = !!exam.docUrl;
           const card = document.createElement('div');
-          card.className = 'exam-card';
+          card.className = `exam-card ${hasDoc ? 'created' : 'not-created'}`;
           card.dataset.examName = (exam.name || '').toLowerCase();
           
           const safeSheet = (exam._sheetName || '').replace(/'/g, "\\'");
           const safeExam = (exam.name || '').replace(/'/g, "\\'");
           
-          const hasDoc = !!exam.docUrl;
           
           // Document Buttons
-          let mainBtn, viewBtn;
+          let updateButton, createOrViewButton;
           if (hasDoc) {
-              mainBtn = `<button class="button-tertiary btn-sm btn-std" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
-              viewBtn = `<a href="${exam.docUrl}" target="_blank" class="button-tertiary btn-sm btn-std">View</a>`;
+              updateButton = `<button class="button-tertiary btn-sm btn-std" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
+              createOrViewButton = `<a href="${exam.docUrl}" target="_blank" class="button-tertiary btn-sm btn-std button-view">View</a>`;
           } else {
-              mainBtn = `<button class="button-success btn-sm btn-std" style="background:#28a745; color:white; border:none;" onclick="handleSingleAction(this, 'create', '${safeSheet}', '${safeExam}')">Create</button>`;
-              viewBtn = `<button class="btn-sm btn-std" style="opacity:0.5; cursor:not-allowed;" disabled>View</button>`;
+              updateButton = `<button class="btn-sm btn-std" disabled>Update</button>`;
+              createOrViewButton = `<button class="button-tertiary btn-sm btn-std button-create" onclick="handleSingleAction(this, 'create', '${safeSheet}', '${safeExam}')">Create</button>`;
           }
     
           card.innerHTML = `
-              <div class="exam-card-header">${exam.name}</div>
+              <div class="exam-card-header"><h4>${exam.name}</h4></div>
               <div class="exam-card-body">
                   <div class="exam-info-row"><span class="exam-label">Date:</span> <span class="exam-value">${exam.date || '-'}</span></div>
                   <div class="exam-info-row"><span class="exam-label">Site Time:</span> <span class="exam-value">${exam.siteTime || '-'}</span></div>
@@ -265,8 +287,8 @@
               <div class="exam-card-footer">
                   <button class="button-tertiary btn-sm" onclick="openAccommodationsSidebar('${safeSheet}', '${safeExam}')">Accommodations</button>
                   <div class="footer-right">
-                      ${mainBtn}
-                      ${viewBtn}
+                      ${updateButton}
+                      ${createOrViewButton}
                   </div>
               </div>
           `;
