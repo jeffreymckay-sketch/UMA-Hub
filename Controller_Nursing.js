@@ -206,6 +206,7 @@ function api_getNursingData() {
 
 /**
  * CORE PARSER: Handles the "Augusta Anchor" and 2-row skip
+ * UPDATED: Captures ALL location headers, even if empty.
  */
 function parseNursingSheet(sheet, dbMap) {
   const range = sheet.getDataRange();
@@ -247,9 +248,18 @@ function parseNursingSheet(sheet, dbMap) {
   }
 
   // 4. Parse Rosters (Bottom Section)
-  const sheetRoster = {}; // Raw roster from sheet
+  const sheetRoster = {}; 
   if (rosterHeaderIdx !== -1) {
       const locHeaders = data[rosterHeaderIdx];
+      
+      // PRE-FILL all locations found in the header row (so empty locations appear later)
+      locHeaders.forEach(h => {
+          const locName = String(h).trim();
+          if (locName && !sheetRoster[locName]) {
+              sheetRoster[locName] = [];
+          }
+      });
+
       const rosterStartRow = rosterHeaderIdx + 3; // Skip 2 rows
       
       for (let r = rosterStartRow; r < data.length; r++) {
@@ -310,8 +320,8 @@ function parseNursingSheet(sheet, dbMap) {
           room: colMap.room > -1 ? row[colMap.room] : '',
           password: colMap.password > -1 ? row[colMap.password] : '',
           generalNotes: dbEntry.generalNotes || (colMap.accommodations > -1 ? row[colMap.accommodations] : ''),
-          studentTags: dbEntry.studentTags, // This now contains objects {note, excluded, highlighted, locked}
-          rosters: sheetRoster // Attach raw roster, filtering happens in UI/DocGen
+          studentTags: dbEntry.studentTags, 
+          rosters: sheetRoster 
       });
   }
 
@@ -324,6 +334,7 @@ function parseNursingSheet(sheet, dbMap) {
 
 /**
  * Creates Google Docs for selected exams using intelligent folder management.
+ * UPDATED: Returns URLs even if file exists (fixes grey button issue).
  */
 function createNursingProctoringDocuments(payload) {
   try {
@@ -347,13 +358,14 @@ function createNursingProctoringDocuments(payload) {
       // 2. Create Docs in Target Folder
       sheetData.exams.forEach(exam => {
         // Build Title: [Course Info] [Faculty] - [Exam Name]
-        // Matches existing naming: "NUR 220 Concepts Professor Erin Voisine - Exam 1"
         const docTitle = `${meta.fullTitlePrefix} - ${exam.name}`;
         
         // Double check existence inside target folder to prevent duplicates
         const existing = targetFolder.getFilesByName(docTitle);
         if (existing.hasNext()) {
-          console.log("⚠️ Doc already exists, skipping:", docTitle);
+          console.log("⚠️ Doc already exists, skipping creation:", docTitle);
+          // FIX: Add existing URL to response so frontend button activates
+          createdUrls[exam.name] = existing.next().getUrl();
           return;
         }
 
@@ -472,52 +484,78 @@ function updateAllNursingDocuments(payload) {
 
 /**
  * SHARED DOC POPULATOR (The Magic Happens Here)
+ * UPDATED: Removes Table, Uses ListItems, Adds Both Links
  */
 function _populateNursingDoc(doc, title, exam, customNotes) {
     const body = doc.getBody();
     
+    // Title
     body.appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.TITLE);
-    body.appendParagraph(`Date: ${exam.date}`).setHeading(DocumentApp.ParagraphHeading.HEADING2);
     
-    // --- DETAILS TABLE ---
-    const table = body.appendTable();
-    const headerRow = table.appendTableRow();
-    headerRow.appendTableCell("Detail").setBackgroundColor('#f3f3f3').setBold(true);
-    headerRow.appendTableCell("Value").setBackgroundColor('#f3f3f3').setBold(true);
+    // --- EXAM DETAILS (Numbered List) ---
+    body.appendParagraph("Exam Details").setHeading(DocumentApp.ParagraphHeading.HEADING1);
     
-    table.appendTableRow().appendTableCell("Site Time").getParent().appendTableCell(exam.siteTime || "-");
-    table.appendTableRow().appendTableCell("Zoom Time").getParent().appendTableCell(exam.zoomTime || "-");
-    const pwCell = table.appendTableRow().appendTableCell("Password").getParent().appendTableCell(exam.password || "-");
-    pwCell.setBackgroundColor('#fff8e1'); 
+    // Extract Faculty/Course info from title (Everything before " - Exam Name")
+    const facultyInfo = title.split(' - ')[0] || title;
 
+    body.appendListItem(`Faculty: ${facultyInfo}`);
+    body.appendListItem(`Date: ${exam.date}`);
+    body.appendListItem(`Start Time (On Site): ${exam.siteTime || "N/A"}`);
+    body.appendListItem(`Start Time (Zoom): ${exam.zoomTime || "N/A"}`);
+    body.appendListItem(`Duration: ${exam.duration || "-"}`);
+    body.appendListItem(`Password: ${exam.password || "-"}`);
+
+    // --- IMPORTANT LINKS ---
+    body.appendParagraph("Important Links").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    
+    // Link 1: Red Flag Form
+    body.appendParagraph("Red Flag Reporting Form")
+        .setLinkUrl("https://docs.google.com/forms/d/e/1FAIpQLSfORKCKol8SsRldNKfvsDy3ILNs9HcFv3gKb8TuxrNrlqxijw/viewform")
+        .setBold(true)
+        .setForegroundColor("#1155cc")
+        .setUnderline(true);
+
+    // Link 2: Nursing Protocol
+    body.appendParagraph("Nursing Protocol")
+        .setLinkUrl("https://docs.google.com/document/d/1TgKtmoDFqXLK0lBFPNirOAz_TW4S3E_BFhS934VcjOo/edit")
+        .setBold(true)
+        .setForegroundColor("#1155cc")
+        .setUnderline(true);
+
+    // --- CUSTOM NOTES (General Instructions) ---
     if (customNotes) {
         body.appendParagraph("General Instructions").setHeading(DocumentApp.ParagraphHeading.HEADING1);
         body.appendParagraph(customNotes).setItalic(true);
     }
 
+    // --- ACCOMMODATIONS (Green Box) ---
     if (exam.generalNotes) {
         body.appendParagraph("Exam Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1);
         const p = body.appendParagraph(exam.generalNotes);
-        p.setBackgroundColor('#e8f5e9'); 
+        p.setBackgroundColor('#e8f5e9'); // Green background
         p.setPaddingTop(5).setPaddingBottom(5).setPaddingLeft(10).setPaddingRight(10);
     }
 
-    // --- ROSTERS WITH EXCLUSION & HIGHLIGHTING ---
+    // --- ROSTERS (All Locations) ---
     if (exam.rosters && Object.keys(exam.rosters).length > 0) {
-        body.appendParagraph("Rosters & Specific Needs").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        body.appendParagraph("Location Rosters").setHeading(DocumentApp.ParagraphHeading.HEADING1);
         
+        // Iterate through ALL locations found in the sheet
         for (const [location, students] of Object.entries(exam.rosters)) {
-            // Filter students first
+            body.appendParagraph(location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+            // Filter students (remove excluded)
             const activeStudents = students.filter(s => {
                 const tagData = (exam.studentTags && exam.studentTags[s.name]) ? exam.studentTags[s.name] : null;
-                // If tagData is an object, check excluded. If string (old data), assume included.
                 if (tagData && typeof tagData === 'object' && tagData.excluded) return false;
                 return true;
             });
 
-            if(activeStudents.length > 0) {
-                body.appendParagraph(location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-                
+            if (activeStudents.length === 0) {
+                // Empty Location
+                body.appendParagraph("(No students assigned)");
+            } else {
+                // List Students
                 activeStudents.forEach(studentObj => {
                     const li = body.appendListItem(studentObj.name);
                     
@@ -537,9 +575,8 @@ function _populateNursingDoc(doc, title, exam, customNotes) {
                         }
                     }
 
-                    // Apply Color (Sheet Color vs Lock)
+                    // Apply Color
                     if (isLocked) {
-                        // If locked, we ignore sheet color (default black)
                         li.setForegroundColor('#000000'); 
                     } else if (studentObj.color && studentObj.color !== '#000000') {
                         li.setForegroundColor(studentObj.color);
@@ -550,12 +587,12 @@ function _populateNursingDoc(doc, title, exam, customNotes) {
                         const tagText = ` [${note}]`;
                         const text = li.appendText(tagText);
                         text.setBold(true);
-                        text.setForegroundColor('#000000'); // Reset color for the tag text
+                        text.setForegroundColor('#000000'); 
                         
                         if (isHighlighted) {
-                            text.setBackgroundColor('#ffff00'); // Yellow Highlight
+                            text.setBackgroundColor('#ffff00'); 
                         } else {
-                            text.setBackgroundColor('#fff59d'); // Default subtle yellow
+                            text.setBackgroundColor('#fff59d'); 
                         }
                     }
                 });
