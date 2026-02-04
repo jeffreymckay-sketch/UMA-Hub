@@ -1,0 +1,544 @@
+<style>
+    /* --- NURSING TOOL SPECIFIC STYLES --- */
+    
+    /* Header & Actions */
+    .proctoring-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    .proctoring-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    
+    /* Course Accordion Sections */
+    .course-section {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .course-header {
+      padding: 15px 20px;
+      background: #f8f9fa;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--color-primary-navy);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s;
+    }
+    .course-header:hover { background: #e9ecef; }
+    .course-header::after { content: '▼'; font-size: 0.8em; color: #666; transition: transform 0.3s; }
+    
+    /* --- ACCORDION ANIMATION --- */
+    .course-section.open .course-header::after { transform: rotate(180deg); }
+    
+    /* The outer wrapper handles the height transition */
+    .course-content { 
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.35s ease-out;
+      background: #fff;
+    }
+    
+    .course-section.open .course-content { 
+      grid-template-rows: 1fr;
+    }
+
+    /* The inner wrapper holds the actual padding and content */
+    .course-content-inner {
+      overflow: hidden;
+      padding: 0 20px; /* Horizontal padding always present */
+      opacity: 0;
+      transition: opacity 0.3s ease-out, padding 0.3s ease;
+    }
+
+    /* When open, add vertical padding and fade in */
+    .course-section.open .course-content-inner {
+      padding-top: 20px;
+      padding-bottom: 20px;
+      opacity: 1;
+    }
+    
+    /* Exam Grid Layout */
+    .exam-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 25px; 
+    }
+    
+    /* --- REDESIGNED EXAM CARD --- */
+    .exam-card {
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: flex;
+        flex-direction: column;
+        background-color: #fff;
+        /* NEW: Bold Purple Border */
+        border: 3px solid var(--color-brand-purple); 
+        overflow: hidden; /* Ensures header background doesn't bleed out */
+    }
+
+    .exam-card-header {
+        padding: 12px 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #fff; /* White text for contrast */
+    }
+    
+    .exam-card-header h4 {
+        margin: 0;
+        font-size: 1.15em;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    /* Status-Specific Headers */
+    .header-created {
+        background-color: var(--color-primary-green);
+    }
+
+    .header-not-created {
+        background-color: var(--color-primary-orange);
+    }
+    
+    .exam-card-body {
+      padding: 15px;
+      flex-grow: 1;
+      font-size: 0.95em;
+    }
+    
+    .exam-info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #ddd; /* Lighter dashed line */
+    }
+    .exam-info-row:last-child { border-bottom: none; margin-bottom: 0; }
+    
+    .exam-label { color: #555; font-weight: 500; }
+    .exam-value { font-weight: 700; color: #222; text-align: right; }
+    
+    .password-badge {
+      background: #f0f0f0;
+      color: #333;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-weight: bold;
+      border: 1px solid #ccc;
+    }
+    
+    .exam-card-footer {
+      padding: 12px 15px;
+      background: #fff; /* Cleaner look than gray */
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .footer-right { display: flex; gap: 8px; }
+    
+    /* --- NEW BUTTON STYLES --- */
+    
+    .btn-sm {
+      padding: 6px 14px;
+      font-size: 0.9em;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 600;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    
+    .btn-sm:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-sm:active { transform: translateY(0); }
+
+    .btn-std { min-width: 70px; text-align: center; }
+
+    /* Students Button (Navy) */
+    .button-navy {
+        background-color: var(--color-primary-navy);
+        color: white !important;
+    }
+
+    /* Active Update Button (Navy) */
+    .button-update-active {
+        background-color: var(--color-primary-navy);
+        color: white !important;
+    }
+
+    /* Inactive Update Button (Light Green) */
+    .button-update-inactive {
+        background-color: var(--color-accent-lightgreen); 
+        color: #555 !important; /* Darker text for readability on light background */
+        cursor: not-allowed;
+        opacity: 0.8;
+    }
+    .button-update-inactive:hover { opacity: 0.8; transform: none; }
+
+    /* Create Button (Orange) */
+    .button-create {
+        background-color: var(--color-primary-orange) !important;
+        color: white !important; 
+    }
+    
+    /* View Button (Green) */
+    .button-view {
+        background-color: var(--color-primary-green) !important;
+        color: white !important; 
+    }
+
+</style>
+    
+<script>
+    // --- Global State for Batching ---
+    let batchState = {
+    queue: [],
+    total: 0,
+    processed: 0,
+    action: '', 
+    isRunning: false
+    };
+
+    function loadNursingPage() {
+    // Ensure the Doc Management tab is active
+    const docTabBtn = document.querySelector('button[onclick*="Nursing-DocManagement"]');
+    if (docTabBtn) openTab({ currentTarget: docTabBtn }, 'Nursing-DocManagement');
+
+    renderNursingSettings(); // Populate the settings tab form
+    
+    // Check if data exists in cache
+    if (g.nursingData && g.nursingData.success) {
+        renderNursingDocManagement(g.nursingData);
+    } else {
+        // Load if missing
+        const view = document.getElementById('Nursing-DocManagement');
+        view.innerHTML = '<div class="loader-container" style="position:relative; height:200px;"><div class="loader-ring"></div></div>';
+        google.script.run
+        .withSuccessHandler(res => {
+            g.nursingData = res;
+            if(res.success) renderNursingDocManagement(res);
+            else view.innerHTML = `<div class="error-message">${res.message}</div>`;
+        })
+        .api_getNursingData();
+    }
+    }
+
+    function renderNursingDocManagement(response) {
+    const view = document.getElementById('Nursing-DocManagement');
+    view.innerHTML = '';
+
+    // Header Controls
+    const header = document.createElement('div');
+    header.className = 'proctoring-header';
+    header.innerHTML = `
+        <h2 style="margin:0; color: var(--color-primary-navy);">Nursing Doc Management</h2>
+        <div class="proctoring-actions">
+        <input type="text" id="exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterExams()" style="width:200px">
+        <button id="nursing-create-btn" class="button-primary" onclick="handleBulkAction('create')">Generate All</button>
+        <button id="nursing-update-btn" class="button-secondary" onclick="handleBulkAction('update')">Update All</button>
+        </div>
+    `;
+    view.appendChild(header);
+
+    // Group Data by Course Code
+    const courses = {};
+    if (response.data && response.data.sheets) {
+        response.data.sheets.forEach(sheet => {
+            const code = sheet.course.code || "Unknown";
+            if (!courses[code]) {
+                courses[code] = { name: sheet.course.name, exams: [] };
+            }
+            // Add sheetName to exam object for easy access in callbacks
+            sheet.exams.forEach(e => courses[code].exams.push({ ...e, _sheetName: sheet.sheetName }));
+        });
+    }
+
+    const container = document.createElement('div');
+    container.id = 'course-container';
+
+    if (Object.keys(courses).length === 0) {
+        container.innerHTML = '<div style="padding:40px; text-align:center; color:#888; background:#f9f9f9; border-radius:8px;">No exams found. Check that your Sheet ID is correct in Settings.</div>';
+    }
+
+    // Build UI Sections
+    for (const [code, data] of Object.entries(courses)) {
+        container.appendChild(buildCourseSection(code, data.name, data.exams));
+    }
+    view.appendChild(container);
+    }
+
+    function buildCourseSection(code, name, exams) {
+        const section = document.createElement('div');
+        section.className = 'course-section'; // Starts closed
+        
+        const header = document.createElement('div');
+        header.className = 'course-header';
+        header.innerHTML = `<span>${code} - ${name}</span> <span style="font-weight:normal; font-size:0.9em; color:#666;">(${exams.length} exams)</span>`;
+        header.onclick = () => section.classList.toggle('open');
+        
+        // Wrapper 1: The animator (handles the slide)
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'course-content';
+        
+        // Wrapper 2: The inner container (handles padding/overflow)
+        const contentInner = document.createElement('div');
+        contentInner.className = 'course-content-inner';
+
+        const grid = document.createElement('div');
+        grid.className = 'exam-grid';
+        
+        exams.forEach(exam => grid.appendChild(buildExamCard(exam)));
+        
+        // Nest the elements: Wrapper -> Inner -> Grid
+        contentInner.appendChild(grid);
+        contentWrapper.appendChild(contentInner);
+        
+        section.appendChild(header);
+        section.appendChild(contentWrapper);
+        return section;
+    }
+
+    function buildExamCard(exam) {
+        const hasDoc = !!exam.docUrl;
+        
+        // 1. Determine Header Color Class
+        const headerClass = hasDoc ? 'header-created' : 'header-not-created';
+        
+        const card = document.createElement('div');
+        card.className = 'exam-card'; // Border is now applied to all via CSS
+        card.dataset.examName = (exam.name || '').toLowerCase();
+        
+        const safeSheet = (exam._sheetName || '').replace(/'/g, "\\'");
+        const safeExam = (exam.name || '').replace(/'/g, "\\'");
+        
+        
+        // 2. Configure Buttons based on new specs
+        let updateButton, createOrViewButton;
+        
+        if (hasDoc) {
+            // Update Active: Navy Blue
+            updateButton = `<button class="btn-sm btn-std button-update-active" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
+            // View: Green
+            createOrViewButton = `<a href="${exam.docUrl}" target="_blank" class="btn-sm btn-std button-view">View</a>`;
+        } else {
+            // Update Inactive: Light Green (#EDF7DF)
+            updateButton = `<button class="btn-sm btn-std button-update-inactive" disabled>Update</button>`;
+            // Create: Bright Orange
+            createOrViewButton = `<button class="btn-sm btn-std button-create" onclick="handleSingleAction(this, 'create', '${safeSheet}', '${safeExam}')">Create</button>`;
+        }
+
+        // 3. Render Card HTML
+        card.innerHTML = `
+            <div class="exam-card-header ${headerClass}"><h4>${exam.name}</h4></div>
+            <div class="exam-card-body">
+                <div class="exam-info-row">
+                    <span class="exam-label">Date:</span> 
+                    <span class="exam-value">
+                        ${exam.date ? new Date(exam.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}
+                    </span>
+                </div>
+                <div class="exam-info-row"><span class="exam-label">Site Time:</span> <span class="exam-value">${exam.siteTime || '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Zoom Time:</span> <span class="exam-value">${exam.zoomTime || '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Password:</span> <span class="password-badge">${exam.password || '-'}</span></div>
+            </div>
+            <div class="exam-card-footer">
+                <button class="btn-sm button-navy" onclick="openAccommodationsSidebar('${safeSheet}', '${safeExam}')">Students</button>
+                <div class="footer-right">
+                    ${updateButton}
+                    ${createOrViewButton}
+                </div>
+            </div>
+        `;
+        return card;
+    }
+
+    // --- Handlers ---
+
+    function handleSingleAction(btn, action, sheetName, examName) {
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = '...';
+        
+        const func = action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
+        const sheet = g.nursingData.data.sheets.find(s => s.sheetName === sheetName);
+        const exam = sheet.exams.find(e => e.name === examName);
+        
+        // Wrap in expected array structure for bulk function
+        const payload = { settings: g.nursingData.data.settings, sheets: [{ ...sheet, exams: [exam] }] };
+
+        google.script.run
+        .withSuccessHandler(res => {
+            if(res.success) {
+                showNotification(res.message, 'success');
+                exam.docUrl = res.docUrl || exam.docUrl; // Optimistic update
+                
+                // Re-render card to update buttons state
+                const newCard = buildExamCard({ ...exam, _sheetName: sheetName });
+                btn.closest('.exam-card').replaceWith(newCard);
+            } else {
+                showNotification(res.message, 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        })
+        .withFailureHandler(err => {
+            showNotification(err.message, 'error');
+            btn.disabled = false;
+            btn.textContent = originalText;
+        })
+        [func](payload);
+    }
+
+    // --- Batch Processing Logic ---
+
+    function handleBulkAction(action) {
+        if (!g.nursingData || !g.nursingData.data) return;
+        const allExams = [];
+        g.nursingData.data.sheets.forEach(sheet => {
+            sheet.exams.forEach(exam => {
+                allExams.push({ sheetName: sheet.sheetName, course: sheet.course, exam: exam });
+            });
+        });
+        if (allExams.length === 0) { showNotification("No exams found.", "error"); return; }
+        
+        batchState = { queue: allExams, total: allExams.length, processed: 0, action: action, isRunning: true };
+        
+        // Visual feedback
+        document.getElementById('nursing-create-btn').disabled = true;
+        document.getElementById('nursing-update-btn').disabled = true;
+        showProgressModal(true);
+        document.getElementById('progress-title').textContent = "Processing Docs...";
+        
+        processNextBatch();
+    }
+
+    function processNextBatch() {
+        const BATCH_SIZE = 5;
+        if (batchState.processed >= batchState.total) { finishBatchProcess(); return; }
+        
+        const chunk = batchState.queue.slice(batchState.processed, batchState.processed + BATCH_SIZE);
+        const tempSheetsMap = {};
+        chunk.forEach(item => {
+            if (!tempSheetsMap[item.sheetName]) {
+                tempSheetsMap[item.sheetName] = { sheetName: item.sheetName, course: item.course, exams: [] };
+            }
+            tempSheetsMap[item.sheetName].exams.push(item.exam);
+        });
+        
+        const payload = { settings: g.nursingData.data.settings, sheets: Object.values(tempSheetsMap) };
+        const func = batchState.action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
+        
+        updateProgressUI(batchState.processed, batchState.total, `Processing items ${batchState.processed + 1} - ${Math.min(batchState.processed + BATCH_SIZE, batchState.total)}...`);
+        
+        google.script.run.withSuccessHandler(res => {
+                if (res.success) { batchState.processed += chunk.length; processNextBatch(); } 
+                else { showNotification("Batch failed: " + res.message, "error"); finishBatchProcess(false); }
+            }).withFailureHandler(err => { showNotification("Server error: " + err.message, "error"); finishBatchProcess(false); })
+            [func](payload);
+    }
+
+    function finishBatchProcess(success = true) {
+        showProgressModal(false);
+        document.getElementById('nursing-create-btn').disabled = false;
+        document.getElementById('nursing-update-btn').disabled = false;
+        if (success) {
+            showNotification("Complete!", "success");
+            g.nursingData = null; // Clear cache
+            loadNursingPage(); // Refresh to update button states (Create -> Update)
+        }
+    }
+
+    function showProgressModal(show) {
+        let el = document.getElementById('progress-overlay');
+        if (!el) {
+            document.body.insertAdjacentHTML('beforeend', `
+            <div id="progress-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:20000; display:flex; justify-content:center; align-items:center;">
+                <div class="progress-box" style="background:#fff; padding:25px; border-radius:8px; text-align:center; min-width:300px;">
+                    <h3 id="progress-title" style="margin-top:0;">Processing...</h3>
+                    <div id="progress-stats" style="font-weight:bold; margin-bottom:10px;">0 / 0</div>
+                    <div style="background:#eee; height:15px; width:100%; margin:10px 0; border-radius:10px; overflow:hidden;">
+                        <div id="progress-fill" style="background:var(--color-primary-green); height:100%; width:0%; transition:width 0.3s;"></div>
+                    </div>
+                    <div id="progress-subtext" style="font-size:0.9em; color:#666;">Initializing...</div>
+                </div>
+            </div>`);
+            el = document.getElementById('progress-overlay');
+        }
+        el.style.display = show ? 'flex' : 'none';
+    }
+
+    function updateProgressUI(current, total, message) {
+        const pct = Math.round((current / total) * 100);
+        document.getElementById('progress-stats').textContent = `${current} / ${total}`;
+        document.getElementById('progress-fill').style.width = `${pct}%`;
+        document.getElementById('progress-subtext').textContent = message;
+    }
+
+    function filterExams() {
+        const term = document.getElementById('exam-search').value.toLowerCase();
+        document.querySelectorAll('.course-section').forEach(section => {
+            let visible = 0;
+            section.querySelectorAll('.exam-card').forEach(card => {
+                if(card.dataset.examName.includes(term)) {
+                    card.style.display = 'flex'; visible++;
+                } else { card.style.display = 'none'; }
+            });
+            section.style.display = visible ? 'block' : 'none';
+            if(term && visible) section.classList.add('open');
+        });
+    }
+    
+    function renderNursingSettings() {
+        const settings = g.allSettings.nursing_settings || {};
+        const view = document.getElementById('Nursing-Settings');
+        view.innerHTML = `
+            <h2>Nursing Proctoring Settings</h2>
+            <div class="form-vertical" style="max-width:600px;">
+                <div class="form-group"><label>Sheet ID (or URL)</label><input id="nursing-sheet-id" class="form-input" value="${settings.nursingSheetId||''}"></div>
+                <div class="form-group"><label>Folder ID (or URL)</label><input id="nursing-folder-id" class="form-input" value="${settings.nursingFolderId||''}"></div>
+                <div class="form-group">
+                    <label>Target Calendar ID</label>
+                    <input id="nursing-calendar-id" class="form-input" value="${settings.nursingCalendarId||''}" placeholder="e.g. primary or xxxx@group.calendar.google.com">
+                </div>
+                <div class="form-group"><label>Custom Notes (Appears on all docs)</label><textarea id="nursing-custom-notes" class="form-input" rows="3">${settings.customNotes||''}</textarea></div>
+                <button class="button-primary" onclick="saveNursingSettings(this)">Save Settings</button>
+            </div>`;
+    }
+    
+    function saveNursingSettings(btn) {
+        const settings = {
+            nursingSheetId: document.getElementById('nursing-sheet-id').value,
+            nursingFolderId: document.getElementById('nursing-folder-id').value,
+            nursingCalendarId: document.getElementById('nursing-calendar-id').value,
+            customNotes: document.getElementById('nursing-custom-notes').value
+        };
+        btn.textContent = 'Saving...';
+        google.script.run.withSuccessHandler(res => {
+            btn.textContent = 'Save Settings';
+            if(res.success) { 
+                g.allSettings.nursing_settings = settings; 
+                g.nursingData = null; // Clear cache so main view reloads with new IDs
+                showNotification('Saved', 'success'); 
+            }
+        }).api_saveSettings('nursing_settings', settings);
+    }
+</script>

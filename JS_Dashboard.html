@@ -1,0 +1,179 @@
+<script>
+  /**
+   * Main entry point for the Dashboard page.
+   * Implements on-demand loading for dashboard data.
+   */
+  function loadDashboardPage() {
+    const dashboardView = document.getElementById('page-Dashboard');
+
+    // 1. Check if data is already cached in the global object
+    if (g.dashboardData && !g.dashboardData.error) {
+      renderDashboard(g.dashboardData);
+      return;
+    }
+
+    // 2. If not cached, fetch it from the server
+    dashboardView.innerHTML = '<div class="loader-ring"></div>'; // Show loader
+
+    google.script.run
+      .withSuccessHandler(handleDashboardDataSuccess)
+      .withFailureHandler(handleDashboardDataFailure)
+      .api_getDashboardData();
+  }
+
+  /**
+   * SUCCESS HANDLER
+   */
+  function handleDashboardDataSuccess(response) {
+    if (response.success) {
+      g.dashboardData = response.data; // Cache the data globally
+      renderDashboard(g.dashboardData);
+    } else {
+      handleDashboardDataFailure({ message: response.message });
+    }
+  }
+
+  /**
+   * FAILURE HANDLER
+   */
+  function handleDashboardDataFailure(error) {
+    console.error("Failed to load Dashboard data:", error.message);
+    const dashboardView = document.getElementById('page-Dashboard');
+    dashboardView.innerHTML = `<div class="error-message">Could not load Dashboard. Error: ${error.message}</div>`;
+  }
+
+  // --- Render Functions ---
+
+  function renderDashboard(data) {
+    const { availability, preferences } = data;
+    const dashboardView = document.getElementById('page-Dashboard');
+    dashboardView.innerHTML = ''; // Clear loader or previous content
+
+    const availabilityWidget = document.createElement('div');
+    availabilityWidget.className = 'widget';
+    availabilityWidget.innerHTML = buildAvailabilityHtml(availability);
+    dashboardView.appendChild(availabilityWidget);
+
+    const preferencesWidget = document.createElement('div');
+    preferencesWidget.className = 'widget';
+    preferencesWidget.innerHTML = buildPreferencesHtml(preferences);
+    dashboardView.appendChild(preferencesWidget);
+  }
+
+  function buildAvailabilityHtml(availabilityData) {
+    let tableRows = availabilityData.map(slot => `
+      <tr>
+        <td><strong>${slot.day}</strong></td>
+        <td>${slot.start || 'N/A'}</td>
+        <td>${slot.end || 'N/A'}</td>
+        <td><button class="button-danger" onclick="deleteAvailability('${slot.id}')">Remove Block</button></td>
+      </tr>`).join('');
+
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const dayOptions = days.map(d => `<option value="${d}">${d}</option>`).join('');
+
+    return `
+      <h2>My Unavailable Times (Blackouts)</h2>
+      <p style="color:#666; margin-bottom:15px;">
+        Please list specific times when you are <strong>NOT</strong> available to work (e.g., classes, other jobs).
+      </p>
+      
+      <table class="data-table">
+        <thead>
+            <tr>
+                <th>Day</th>
+                <th>Unavailable From</th>
+                <th>Unavailable To</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${tableRows.length > 0 ? tableRows : '<tr><td colspan="4" style="text-align:center; color:green;">No blackout times set. You are listed as Fully Available.</td></tr>'}
+        </tbody>
+      </table>
+      
+      <div class="form-container" style="background:#fff0f0; border:1px solid #ffcccc; padding:15px; border-radius:6px; margin-top:15px;">
+        <h3 style="margin-top:0; color:#d9534f;">Block a Time</h3>
+        <form id="add-availability-form" class="inline-form">
+          <select name="day" required class="form-input">${dayOptions}</select>
+          <input type="time" name="start" required class="form-input">
+          <span style="align-self:center;">to</span>
+          <input type="time" name="end" required class="form-input">
+          <button type="button" class="button-danger" onclick="addAvailability()">Block Time</button>
+        </form>
+      </div>
+    `;
+  }
+
+  function buildPreferencesHtml(preferencesData) {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    const timeSlots = ["Morning", "Afternoon", "Evening"];
+    const options = ["Yes Please", "No Thanks", "Eh, Sure"];
+
+    let tableRows = days.map(day => {
+      let cells = timeSlots.map(slot => {
+        const timeBlock = `${day}_${slot}`;
+        const currentPref = preferencesData[timeBlock] || 'Eh, Sure';
+        
+        let selectOptions = options.map(opt => {
+            let style = "";
+            if(opt === "Yes Please") style="color:green; font-weight:bold;";
+            if(opt === "No Thanks") style="color:orange;";
+            return `<option value="${opt}" style="${style}" ${opt === currentPref ? 'selected' : ''}>${opt}</option>`;
+        }).join('');
+        
+        return `<td><select name="${timeBlock}" class="form-input" style="width:100%">${selectOptions}</select></td>`;
+      }).join('');
+      return `<tr><th>${day}</th>${cells}</tr>`;
+    }).join('');
+
+    return `
+      <h2>Shift Preferences</h2>
+      <p>Let us know what time blocks you <em>prefer</em> to work. This helps us assign shifts you actually want.</p>
+      <form id="preferences-form">
+        <table class="data-table preferences-table">
+          <thead><tr><th></th><th>Morning (<12pm)</th><th>Afternoon (12-5pm)</th><th>Evening (>5pm)</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div class="form-actions" style="margin-top:15px;">
+          <button type="button" class="button-primary" onclick="savePreferences()">Save Preferences</button>
+        </div>
+      </form>
+    `;
+  }
+
+  // --- Client-to-Server Communication ---
+
+  function handleUpdateResponse(response) {
+    if (response.success) {
+      showNotification(response.message, 'success');
+      // Invalidate the cache so the next load gets fresh data
+      g.dashboardData = null; 
+      loadDashboardPage(); // Reload the dashboard view to show the change
+    } else {
+      showNotification(response.message, 'error');
+    }
+  }
+
+  function addAvailability() {
+    const form = document.getElementById('add-availability-form');
+    const formData = Object.fromEntries(new FormData(form).entries());
+    if (!formData.day || !formData.start || !formData.end) {
+      showNotification('Please fill out all fields.', 'error');
+      return;
+    }
+    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_addAvailability(formData);
+  }
+
+  function deleteAvailability(recordId) {
+    if (!confirm('Remove this blackout time?')) return;
+    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_deleteAvailability(recordId);
+  }
+
+  function savePreferences() {
+    const form = document.getElementById('preferences-form');
+    const formData = Object.fromEntries(new FormData(form).entries());
+    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_updateStaffPreferences(formData);
+  }
+
+</script>

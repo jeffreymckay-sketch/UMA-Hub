@@ -1,0 +1,588 @@
+<script>
+  // Local cache for this tool
+  let localEventTypes = [];
+  let chartsLoaded = false;
+
+  /**
+   * Main entry point for the Reporting page.
+   */
+  function loadReportingPage() {
+    const reportingView = document.getElementById('page-Reporting');
+
+    // If already rendered, just refresh selectors
+    if (reportingView.innerHTML.trim() !== '') {
+      populateCalendarSelector();
+      populateCategoryFilter(); 
+      return;
+    }
+
+    // Load Google Charts Library dynamically
+    if (!chartsLoaded) {
+        const script = document.createElement('script');
+        script.src = 'https://www.gstatic.com/charts/loader.js';
+        script.onload = () => {
+            google.charts.load('current', {'packages':['corechart']});
+            chartsLoaded = true;
+        };
+        document.head.appendChild(script);
+    }
+
+    const content = `
+      <style>
+        #page-Reporting .tab-nav {
+          display: flex;
+          border-bottom: 1px solid var(--color-border-light);
+          margin-bottom: 20px;
+        }
+        #page-Reporting .tab-link {
+          padding: 10px 20px;
+          cursor: pointer;
+        }
+        #page-Reporting .tab-link.active {
+          font-weight: bold;
+          border: 1px solid var(--color-border-light);
+          border-bottom: 1px solid white;
+          background-color: white;
+          margin-bottom: -1px;
+        }
+        #page-Reporting .form-group-inline {
+            display: flex;
+            align-items: flex-end;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .scan-progress {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f0fe;
+            border-radius: 4px;
+            color: var(--color-primary-navy);
+            display: none;
+        }
+        
+        /* Stats Dashboard Styles */
+        .stats-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #fff;
+            border: 1px solid var(--color-border-light);
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .stat-value { font-size: 1.8em; font-weight: bold; color: var(--color-primary-navy); }
+        .stat-label { color: #666; font-size: 0.9em; margin-top: 5px; }
+
+        /* Analysis Section */
+        .analysis-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+            border: 1px solid var(--color-border-light);
+            border-radius: 8px;
+            padding: 20px;
+            background: #fff;
+        }
+        .chart-wrapper { flex: 1; min-width: 300px; height: 300px; }
+        .breakdown-wrapper { flex: 1; min-width: 300px; }
+        
+        /* Settings Table Styles */
+        .settings-table input { width: 100%; border: 1px solid #ddd; padding: 5px; border-radius: 3px; }
+        .settings-table textarea { width: 100%; border: 1px solid #ddd; padding: 5px; border-radius: 3px; resize: vertical; }
+        .btn-icon { background: none; border: none; cursor: pointer; color: #999; font-size: 1.2em; }
+        .btn-icon:hover { color: var(--color-danger); }
+      </style>
+
+      <h4>Stats & Reports</h4>
+      <p>Tools for analyzing calendar data, reporting on staff assignments, and managing event discovery settings.</p>
+
+      <div class="tab-nav">
+        <button class="tab-link active" onclick="openTab(event, 'reporting-tab-inspector')">Calendar Stats</button>
+        <button class="tab-link" onclick="openTab(event, 'reporting-tab-assignments')">Assignment Stats</button>
+        <button class="tab-link" onclick="openTab(event, 'reporting-tab-settings')">Settings</button>
+      </div>
+
+      <!-- INSPECTOR TAB -->
+      <div id="reporting-tab-inspector" class="tab-content" style="display: block;">
+        <div class="card">
+            <div class="card-header">Calendar Inspector</div>
+            <div class="card-body">
+                <p>Select a date range, categories, and calendars to analyze.</p>
+                
+                <div class="form-group-inline">
+                    <div class="form-field">
+                        <label for="inspector-start-date">Start Date</label>
+                        <input type="date" id="inspector-start-date">
+                    </div>
+                    <div class="form-field">
+                        <label for="inspector-end-date">End Date</label>
+                        <input type="date" id="inspector-end-date">
+                    </div>
+                </div>
+
+                <div class="form-field" style="margin-bottom: 20px;">
+                  <label for="inspector-category-filter">Filter by Category (Optional)</label>
+                  <select multiple id="inspector-category-filter" class="form-input" style="height: 100px;" onchange="triggerRender()">
+                    <option value="ALL" selected>All Categories</option>
+                  </select>
+                  <small style="color:#666;">Hold Ctrl/Cmd to select multiple. Leave as "All" to see everything.</small>
+                </div>
+
+                <div class="form-field" style="margin-bottom: 20px;">
+                  <label for="inspector-calendar-select">Calendars to Scan</label>
+                  <select multiple id="inspector-calendar-select" class="form-input" style="height: 150px;"></select>
+                </div>
+
+                <button id="btn-scan-cals" class="button-primary" onclick="handleCalendarScan()">Scan Calendars</button>
+                
+                <div id="scan-progress" class="scan-progress"></div>
+                <div id="inspector-results-area" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+      </div>
+
+      <!-- ASSIGNMENTS TAB -->
+      <div id="reporting-tab-assignments" class="tab-content" style="display: none;">
+         <div class="card">
+            <div class="card-header">Assignment Report Generator</div>
+            <div class="card-body">
+                <p>Functionality to generate staff assignment reports will be added in a future phase.</p>
+            </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS TAB -->
+      <div id="reporting-tab-settings" class="tab-content" style="display: none;">
+         <div class="card">
+            <div class="card-header">Event Categories</div>
+            <div class="card-body">
+                <p>Define categories and keywords to automatically classify calendar events.</p>
+                <table class="data-table settings-table" id="settings-types-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%">Category</th>
+                            <th style="width: 65%">Keywords (comma separated)</th>
+                            <th style="width: 10%"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Rows injected here -->
+                    </tbody>
+                </table>
+                <div style="margin-top: 15px; display: flex; justify-content: space-between;">
+                    <button class="button-secondary" onclick="addSettingsRow()">+ Add Category</button>
+                    <button class="button-primary" onclick="saveSettingsTypes(this)">Save Changes</button>
+                </div>
+                <div id="settings-feedback" style="margin-top: 10px;"></div>
+            </div>
+        </div>
+      </div>
+    `;
+
+    reportingView.innerHTML = content;
+    
+    // Initialize Data
+    populateCalendarSelector();
+    fetchEventTypes(); 
+
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+    document.getElementById('inspector-start-date').value = firstDayOfMonth;
+    document.getElementById('inspector-end-date').value = lastDayOfMonth;
+  }
+
+  /**
+   * Fetches Event Types from server and updates both UI spots (Filter & Settings).
+   */
+  function fetchEventTypes() {
+      google.script.run
+        .withSuccessHandler(response => {
+            if (response.success) {
+                localEventTypes = response.data;
+                populateCategoryFilter();
+                renderSettingsTable(localEventTypes);
+            }
+        })
+        .api_getEventTypes();
+  }
+
+  function populateCategoryFilter() {
+      const select = document.getElementById('inspector-category-filter');
+      if (!select) return;
+      
+      select.innerHTML = '<option value="ALL" selected>All Categories</option>';
+      
+      const uncatOpt = document.createElement('option');
+      uncatOpt.value = 'Uncategorized';
+      uncatOpt.textContent = 'Uncategorized';
+      select.appendChild(uncatOpt);
+
+      localEventTypes.forEach(type => {
+          const option = document.createElement('option');
+          option.value = type.name;
+          option.textContent = type.name;
+          select.appendChild(option);
+      });
+  }
+
+  function populateCalendarSelector() {
+    const select = document.getElementById('inspector-calendar-select');
+    if (!select) return; 
+    select.innerHTML = ''; 
+    if (g.allCalendars && g.allCalendars.length > 0) {
+      g.allCalendars.forEach(cal => {
+        const option = document.createElement('option');
+        option.value = cal.id;
+        option.textContent = cal.name + (cal.isOwned ? " (Owner)" : "");
+        if (cal.isOwned) option.style.fontWeight = "bold";
+        select.appendChild(option);
+      });
+    } else {
+      select.innerHTML = '<option disabled>No calendars found.</option>';
+    }
+  }
+
+  // --- SETTINGS TAB LOGIC ---
+
+  function renderSettingsTable(types) {
+      const tbody = document.querySelector('#settings-types-table tbody');
+      if(!tbody) return;
+      tbody.innerHTML = '';
+      if (!types || types.length === 0) {
+          addSettingsRow(); 
+          return;
+      }
+      types.forEach(type => addSettingsRow(type.name, type.keywords));
+  }
+
+  function addSettingsRow(name = '', keywords = '') {
+      const tbody = document.querySelector('#settings-types-table tbody');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" value="${name}" placeholder="Category Name"></td>
+        <td><textarea rows="1" placeholder="e.g. Meeting, Staff, Weekly">${keywords}</textarea></td>
+        <td style="text-align: center;"><button class="btn-icon" onclick="this.closest('tr').remove()">&#10006;</button></td>
+      `;
+      tbody.appendChild(tr);
+  }
+
+  function saveSettingsTypes(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      const feedback = document.getElementById('settings-feedback');
+      feedback.innerHTML = '';
+
+      const rows = document.querySelectorAll('#settings-types-table tbody tr');
+      const newTypes = [];
+      rows.forEach(row => {
+          const name = row.querySelector('input').value.trim();
+          const keywords = row.querySelector('textarea').value.trim();
+          if (name) newTypes.push({ name, keywords });
+      });
+
+      google.script.run
+        .withSuccessHandler(res => {
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+            if (res.success) {
+                feedback.innerHTML = '<span style="color: green;">Saved!</span>';
+                localEventTypes = newTypes; 
+                populateCategoryFilter(); 
+                setTimeout(() => feedback.innerHTML = '', 3000);
+            } else {
+                feedback.innerHTML = `<span style="color: red;">Error: ${res.message}</span>`;
+            }
+        })
+        .withFailureHandler(err => {
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+            feedback.innerHTML = `<span style="color: red;">Error: ${err.message}</span>`;
+        })
+        .api_saveEventTypes(newTypes);
+  }
+
+  // --- SCAN LOGIC ---
+  
+  let scanState = {
+      queue: [],
+      results: [],
+      startDate: null,
+      endDate: null,
+      isScanning: false
+  };
+
+  function handleCalendarScan() {
+    const startDate = document.getElementById('inspector-start-date').value;
+    const endDate = document.getElementById('inspector-end-date').value;
+    const calendarSelect = document.getElementById('inspector-calendar-select');
+    const selectedCalendars = [...calendarSelect.selectedOptions].map(opt => opt.value);
+    
+    if (!startDate || !endDate || selectedCalendars.length === 0) {
+      alert('Please select a start date, end date, and at least one calendar.');
+      return;
+    }
+
+    scanState = {
+        queue: selectedCalendars,
+        results: [],
+        startDate: startDate,
+        endDate: endDate,
+        isScanning: true
+    };
+
+    document.getElementById('btn-scan-cals').disabled = true;
+    document.getElementById('inspector-results-area').innerHTML = '';
+    const progressEl = document.getElementById('scan-progress');
+    progressEl.style.display = 'block';
+    progressEl.textContent = `Starting scan of ${selectedCalendars.length} calendars...`;
+
+    processNextCalendar();
+  }
+
+  function processNextCalendar() {
+      if (scanState.queue.length === 0) {
+          finishScan();
+          return;
+      }
+
+      const nextCalId = scanState.queue.shift();
+      const progressEl = document.getElementById('scan-progress');
+      progressEl.textContent = `Scanning... (${scanState.queue.length} remaining)`;
+
+      google.script.run
+        .withSuccessHandler(response => {
+            if (response.success && response.data) {
+                scanState.results = scanState.results.concat(response.data);
+            }
+            processNextCalendar();
+        })
+        .withFailureHandler(err => {
+            console.error("Scan error:", err);
+            processNextCalendar();
+        })
+        .api_inspectCalendars(scanState.startDate, scanState.endDate, [nextCalId]);
+  }
+
+  function finishScan() {
+      document.getElementById('btn-scan-cals').disabled = false;
+      document.getElementById('scan-progress').style.display = 'none';
+      renderInspectorResults();
+  }
+
+  function triggerRender() {
+      if (scanState.results.length > 0) {
+          renderInspectorResults();
+      }
+  }
+
+  // --- EXPORT LOGIC ---
+  function handleExportClick() {
+      const btn = document.getElementById('btn-export-report');
+      btn.disabled = true;
+      btn.textContent = 'Generating Sheet...';
+
+      // Re-apply current filter to get the exact list to export
+      const filterSelect = document.getElementById('inspector-category-filter');
+      const selectedFilters = [...filterSelect.selectedOptions].map(o => o.value);
+      const showAll = selectedFilters.includes('ALL') || selectedFilters.length === 0;
+      
+      const eventsToExport = scanState.results.filter(e => {
+          if (showAll) return true;
+          const cat = e.category || 'Uncategorized';
+          return selectedFilters.includes(cat);
+      });
+
+      google.script.run
+        .withSuccessHandler(res => {
+            btn.disabled = false;
+            btn.textContent = 'Export to Sheets';
+            if (res.success) {
+                window.open(res.url, '_blank');
+            } else {
+                alert("Export failed: " + res.message);
+            }
+        })
+        .withFailureHandler(err => {
+            btn.disabled = false;
+            btn.textContent = 'Export to Sheets';
+            alert("Export failed: " + err.message);
+        })
+        .api_exportReport(eventsToExport);
+  }
+
+  function renderInspectorResults() {
+    const events = scanState.results;
+    const resultsArea = document.getElementById('inspector-results-area');
+
+    if (!events || events.length === 0) {
+      resultsArea.innerHTML = '<p>No events found for the selected criteria.</p>';
+      return;
+    }
+
+    // --- FILTER LOGIC ---
+    const filterSelect = document.getElementById('inspector-category-filter');
+    const selectedFilters = [...filterSelect.selectedOptions].map(o => o.value);
+    const showAll = selectedFilters.includes('ALL') || selectedFilters.length === 0;
+    
+    const filteredEvents = events.filter(e => {
+        if (showAll) return true;
+        const cat = e.category || 'Uncategorized';
+        return selectedFilters.includes(cat);
+    });
+
+    if (filteredEvents.length === 0) {
+        resultsArea.innerHTML = '<p>Events found, but none match the selected Category Filter.</p>';
+        return;
+    }
+    
+    filteredEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+
+    // --- 1. Calculate Stats ---
+    let totalEvents = filteredEvents.length;
+    let totalMinutes = 0;
+    let categoryCounts = {};
+    let categoryMinutes = {};
+
+    filteredEvents.forEach(e => {
+        const dur = e.durationMinutes || 0;
+        totalMinutes += dur;
+        const cat = e.category || 'Uncategorized';
+        
+        if (!categoryCounts[cat]) categoryCounts[cat] = 0;
+        categoryCounts[cat]++;
+        
+        if (!categoryMinutes[cat]) categoryMinutes[cat] = 0;
+        categoryMinutes[cat] += dur;
+    });
+
+    const totalHours = (totalMinutes / 60).toFixed(1);
+    
+    let topCat = 'None';
+    let topCount = 0;
+    for (const [cat, count] of Object.entries(categoryCounts)) {
+        if (count > topCount) { topCount = count; topCat = cat; }
+    }
+
+    // --- 2. Render Dashboard ---
+    let html = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+          <h3>Scan Results</h3>
+          <button id="btn-export-report" class="button-secondary" onclick="handleExportClick()">Export to Sheets</button>
+      </div>
+
+      <div class="stats-dashboard">
+        <div class="stat-card">
+            <div class="stat-value">${totalEvents}</div>
+            <div class="stat-label">Total Events</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${totalHours}</div>
+            <div class="stat-label">Total Hours</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${topCat}</div>
+            <div class="stat-label">Top Category (${topCount})</div>
+        </div>
+      </div>
+    `;
+
+    // --- 3. Render Analysis (Chart & Breakdown) ---
+    html += `
+        <div class="analysis-container">
+            <div id="chart_div" class="chart-wrapper"></div>
+            <div class="breakdown-wrapper">
+                <table class="data-table" style="margin-top:0;">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Events</th>
+                            <th>Hours</th>
+                            <th>%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+
+    const sortedCats = Object.keys(categoryMinutes).sort((a,b) => categoryMinutes[b] - categoryMinutes[a]);
+    const chartData = [['Category', 'Hours']];
+
+    sortedCats.forEach(cat => {
+        const hrs = parseFloat((categoryMinutes[cat] / 60).toFixed(1));
+        const pct = totalMinutes > 0 ? Math.round((categoryMinutes[cat] / totalMinutes) * 100) : 0;
+        chartData.push([cat, hrs]);
+        
+        html += `
+            <tr>
+                <td>${cat}</td>
+                <td>${categoryCounts[cat]}</td>
+                <td>${hrs}</td>
+                <td>${pct}%</td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table></div></div>`;
+
+    // --- 4. Render Data Table ---
+    html += `
+      <h4>Event Details</h4>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Category</th>
+            <th>Summary</th>
+            <th>Calendar</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    filteredEvents.forEach(event => {
+      const summary = event.summary || '(No Title)';
+      const calName = event.calendar || 'Unknown';
+      const category = event.category || 'Uncategorized';
+      const startDate = event.start ? new Date(event.start) : null;
+      const endDate = event.end ? new Date(event.end) : null;
+
+      html += `
+            <tr>
+                <td>${startDate ? startDate.toLocaleDateString() : 'N/A'}</td>
+                <td>
+                    ${startDate ? startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''} - 
+                    ${endDate ? endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </td>
+                <td><span style="font-weight:500; color:var(--color-primary-navy);">${category}</span></td>
+                <td>${summary}</td>
+                <td>${calName}</td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    resultsArea.innerHTML = html;
+
+    // --- 5. Draw Chart ---
+    if (typeof google !== 'undefined' && google.charts) {
+        setTimeout(() => {
+            const data = google.visualization.arrayToDataTable(chartData);
+            const options = {
+                title: 'Hours by Category',
+                pieHole: 0.4,
+                chartArea: { width: '90%', height: '80%' },
+                colors: ['#003057', '#FF7F11', '#A4D65E', '#777', '#333'] 
+            };
+            const chart = new google.visualization.PieChart(document.getElementById('chart_div'));
+            chart.draw(data, options);
+        }, 100);
+    }
+  }
+</script>

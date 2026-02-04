@@ -1,0 +1,105 @@
+<style>
+#app-notifications {
+  position: fixed;
+  top: 80px; /* Below the header */
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 350px;
+}
+
+.notification-toast {
+  padding: 15px 20px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  background-color: #fff;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  border-left: 5px solid #666;
+}
+
+.notification-toast.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.notification-toast.success {
+  border-left-color: #1e8e3e;
+  background-color: #f7fef9;
+}
+
+.notification-toast.success .notification-header {
+  color: #1e8e3e;
+}
+
+.notification-toast.error {
+  border-left-color: #d93025;
+  background-color: #fef7f7;
+}
+
+.notification-toast.error .notification-header {
+  color: #d93025;
+}
+
+.notification-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+</style>
+
+<div id="app-notifications"></div>
+
+<script>
+  /**
+   * Shows a toast notification at the top-right of the screen.
+   * @param {string} message The message to display.
+   * @param {string} type Can be 'success' or 'error' to control the color.
+   * @param {number} duration How long the notification should be visible (in ms).
+   */
+  function showNotification(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('app-notifications');
+    if (!container) {
+        console.error("Notification container not found!");
+        return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `notification-toast ${type}`;
+    
+    let headerText = 'Information';
+    if (type === 'success') {
+        headerText = 'Success';
+    } else if (type === 'error') {
+        headerText = 'Error';
+    }
+
+    toast.innerHTML = `
+      <div class="notification-header">${headerText}</div>
+      <div class="notification-message">${message}</div>
+    `;
+
+    container.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.classList.add('show');
+    }, 100); // Small delay for the animation to trigger correctly
+
+    // Automatically remove after duration
+    const timeoutId = setTimeout(() => {
+      toast.classList.remove('show');
+      // Remove the element from DOM after transition ends to prevent clutter
+      toast.addEventListener('transitionend', () => toast.remove());
+    }, duration);
+
+    // Allow user to dismiss by clicking
+    toast.addEventListener('click', () => {
+        clearTimeout(timeoutId);
+        toast.classList.remove('show');
+        toast.addEventListener('transitionend', () => toast.remove());
+    });
+  }
+</script>
