@@ -1,470 +1,493 @@
 /**
  * -------------------------------------------------------------------
- * MLT PROCTORING CONTROLLER
- * Features: Persistent ID Updates, Accommodation Preservation, Logging
- *           Time & Duration Parsing for Calendar Sync
+ * MLT PROCTORING CONTROLLER (REFACTORED)
+ * Features: API-Driven UI, Deep Folder Search, Database Persistence,
+ * Gap-tolerant Roster Scanning (30 rows), D1-based Folders.
+ * UPDATED: Tracks "Unassigned" students for Sidebar visibility only.
  * -------------------------------------------------------------------
  */
 
-function mlt_getSettingsAndIDs() {
-  const settings = getSettings(CONFIG.SETTINGS_KEYS.MLT);
-  
-  if (!settings.config) {
-    settings.config = CONFIG.MLT.DEFAULTS.KEYWORDS;
-    settings.rosterKeyword = CONFIG.MLT.DEFAULTS.ROSTER_KEYWORD;
+// --- LOCAL CONFIGURATION DEFAULTS ---
+const MLT_CONSTANTS = {
+  SETTINGS_KEY: 'MLT_SETTINGS_V2', 
+  DEFAULTS: {
+    ROSTER_KEYWORD: 'Students',
+    KEYWORDS: {
+      EXAM: 'Exam',
+      DATE: 'Date',
+      START_TIME: 'Start Time',
+      START_SITE: 'Site',
+      DURATION: 'Duration',
+      ROOM: 'Room',
+      PASSWORD: 'Password'
+    }
   }
-  
-  if (!settings.spreadsheetUrl || !settings.targetFolderId) {
-    throw new Error('MLT Settings are incomplete. Please go to MLT Settings to save URLs.');
-  }
+};
 
-  const spreadsheetId = extractFileIdFromUrl(settings.spreadsheetUrl);
-  const targetFolderId = extractFileIdFromUrl(settings.targetFolderId);
-  
-  if (!spreadsheetId) throw new Error('Invalid MLT Sheet URL.');
-  if (!targetFolderId) throw new Error('Invalid Target Folder URL.');
-  
-  return { settings, spreadsheetId, targetFolderId };
+// --- SHARED HELPERS ---
+
+function _mlt_normalizeStr(str) {
+  if (!str) return "";
+  return str.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function mlt_generateAllDocuments() {
+function _mlt_findSubFolder(parentFolder, targetName) {
+  const targetNorm = _mlt_normalizeStr(targetName);
+  const folders = parentFolder.getFolders();
+  while (folders.hasNext()) {
+    const folder = folders.next();
+    if (_mlt_normalizeStr(folder.getName()) === targetNorm) {
+      return folder;
+    }
+  }
+  return null;
+}
+
+/**
+ * 1. GETTER
+ */
+function _getMLTSettings() {
+  let allProps = {};
   try {
-    const { settings, spreadsheetId, targetFolderId } = mlt_getSettingsAndIDs();
-    const targetFolder = DriveApp.getFolderById(targetFolderId);
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-    let docsGenerated = 0;
-    let docsUpdated = 0;
-    let debugLog = [];
-
-    const sheets = spreadsheet.getSheets();
-    for (const sheet of sheets) {
-      const allValues = sheet.getDataRange().getValues();
-      if (!allValues || allValues.length === 0) continue;
-
-      const discoveredExams = mlt_discoverExamsOnSheet(sheet, allValues, settings);
-      
-      if (discoveredExams.length === 0) continue;
-
-      // MLT Title Logic: Cell D1 (index 3) or Sheet Name
-      const sheetTitle = (allValues[0] && allValues[0][3]) ? allValues[0][3] : sheet.getName();
-      
-      for (const exam of discoveredExams) {
-        const docTitle = `${sheetTitle} - ${exam.name}`;
-        const existingFiles = targetFolder.getFilesByName(docTitle);
-        
-        let doc;
-        let actionType = "";
-        let preservedAccommodations = "";
-
-        if (existingFiles.hasNext()) {
-          // UPDATE EXISTING
-          const file = existingFiles.next();
-          doc = DocumentApp.openById(file.getId());
-          const body = doc.getBody();
-          
-          // 1. Preserve Accommodations
-          preservedAccommodations = mlt_findSectionText(body, "Accommodations");
-          
-          // 2. Clear Body (Safe Method)
-          body.setText('');
-          
-          actionType = "Updated";
-          docsUpdated++;
-        } else {
-          // CREATE NEW
-          doc = DocumentApp.create(docTitle);
-          const newDocFile = DriveApp.getFileById(doc.getId());
-          targetFolder.addFile(newDocFile);
-          DriveApp.getRootFolder().removeFile(newDocFile);
-          
-          actionType = "Created";
-          docsGenerated++;
-        }
-        
-        // 3. Populate Content
-        mlt_populateDocContent(doc.getBody(), docTitle, exam.data, sheet, settings);
-        
-        // 4. Restore Accommodations
-        if (preservedAccommodations) {
-           const b = doc.getBody();
-           let i = mlt_findInsertionIndex(b, ["Notes", "General Notes", "Rosters", "Location Rosters"]);
-           b.insertParagraph(i, "Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1);
-           b.insertParagraph(i+1, preservedAccommodations);
-        }
-
-        doc.saveAndClose();
-        
-        // 5. Log Action
-        logSystemAction("MLT", actionType, docTitle, doc.getId(), `Exam Date: ${exam.data.date}`);
-      }
-      debugLog.push(`Processed ${sheet.getName()}: ${discoveredExams.length} exams.`);
-    }
-    return { data: `Success! Created ${docsGenerated}, Updated ${docsUpdated}.\n${debugLog.join('\n')}` };
-  } catch (e) { return { error: e.message }; }
-}
-
-function mlt_discoverExamsOnSheet(sheet, allValues, settings) {
-    const exams = [];
-    const config = settings.config; 
-    const rosterKeyword = (settings.rosterKeyword || CONFIG.MLT.DEFAULTS.ROSTER_KEYWORD).toLowerCase();
-    
-    let headerRowIndex = -1;
-    
-    for(let i=0; i<allValues.length; i++) {
-        const rowStr = allValues[i].join(' ').toLowerCase();
-        if(rowStr.includes(config.EXAM) && rowStr.includes(config.DATE)) { 
-            headerRowIndex = i; 
-            break; 
-        }
-    }
-    if (headerRowIndex === -1) return [];
-
-    const headers = allValues[headerRowIndex].map(h => String(h).toLowerCase());
-    
-    const colMap = {};
-    for (const [key, keyword] of Object.entries(config)) {
-        colMap[key] = headers.findIndex(h => h.includes(keyword.toLowerCase()));
-    }
-    
-    if (colMap.EXAM === -1 || colMap.DATE === -1) return [];
-
-    const allFontLines = sheet.getDataRange().getFontLines();
-
-    for (let i = headerRowIndex + 1; i < allValues.length; i++) {
-        const row = allValues[i];
-        if (String(row[0]).toLowerCase().trim().includes(rosterKeyword)) break;
-        
-        const examName = String(row[colMap.EXAM]).trim();
-        if (!examName) continue; 
-        
-        if (allFontLines[i][colMap.DATE] === 'line-through') continue;
-        
-        let startTimeVal = '';
-        if (colMap.START_TIME > -1) startTimeVal = row[colMap.START_TIME];
-        else if (colMap.START_SITE > -1) startTimeVal = row[colMap.START_SITE];
-
-        exams.push({
-            name: examName,
-            data: {
-                date: row[colMap.DATE],
-                startTime: startTimeVal,
-                duration: (colMap.DURATION > -1) ? row[colMap.DURATION] : '',
-                room: (colMap.ROOM > -1) ? row[colMap.ROOM] : '',
-                password: (colMap.PASSWORD > -1) ? row[colMap.PASSWORD] : ''
-            }
-        });
-    }
-    return exams;
-}
-
-function mlt_populateDocContent(body, docTitle, data, sheet, settings) {
-  const allValues = sheet.getDataRange().getValues();
-  const allFontColors = sheet.getDataRange().getFontColors();
-  const rosterKeyword = (settings.rosterKeyword || CONFIG.MLT.DEFAULTS.ROSTER_KEYWORD).toLowerCase();
-  
-  let rosterRow = -1;
-  for(let i=0; i<allValues.length; i++) {
-      if(String(allValues[i][0]).toLowerCase().trim().includes(rosterKeyword)) { rosterRow = i; break; }
+    const raw = PropertiesService.getScriptProperties().getProperty(MLT_CONSTANTS.SETTINGS_KEY);
+    if (raw) allProps = JSON.parse(raw);
+  } catch (e) {
+    console.error("Error reading MLT settings:", e);
   }
 
-  body.appendParagraph(docTitle).setHeading(DocumentApp.ParagraphHeading.TITLE);
-  body.appendParagraph('Exam Details').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  
-  const addDetail = (label, val, highlight) => {
-      const item = body.appendListItem('');
-      item.appendText(`${label}: `);
-      let displayVal = val;
-      if (!displayVal || displayVal === '') { displayVal = (label === 'Date') ? "TBD" : " "; }
-      
-      if (displayVal instanceof Date) {
-          if (label === 'Start Time') {
-             displayVal = displayVal.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-          } else {
-             displayVal = displayVal.toLocaleDateString();
-          }
-      }
-      
-      const text = item.appendText(String(displayVal));
-      if(highlight && String(displayVal).trim() !== "") text.setBackgroundColor('#FFFF00');
+  if (!allProps.config) allProps.config = MLT_CONSTANTS.DEFAULTS.KEYWORDS;
+  if (!allProps.rosterKeyword) allProps.rosterKeyword = MLT_CONSTANTS.DEFAULTS.ROSTER_KEYWORD;
+
+  const extractId = (input) => {
+    if (!input) return null;
+    const match = input.match(/[-\w]{25,}/); 
+    return match ? match[0] : input;
   };
 
-  let dateStr = "";
-  if (data.date) { try { dateStr = new Date(data.date).toLocaleDateString("en-US", {weekday:'long', month:'long', day:'numeric'}); } catch(e){ dateStr = String(data.date); } }
-
-  addDetail('Date', dateStr, true);
-  addDetail('Start Time', data.startTime, true);
-  addDetail('Duration', data.duration, true);
-  addDetail('Room', data.room, false);
-  addDetail('Password', data.password, true);
-
-  if (settings.customNotes) {
-      body.appendParagraph('');
-      body.appendParagraph('Notes').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-      body.appendParagraph(settings.customNotes);
-  }
-
-  if (rosterRow !== -1) {
-      body.appendParagraph('Rosters').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-      const headers = allValues[rosterRow];
-      for (let c = 0; c < headers.length; c++) {
-          const header = String(headers[c]).trim();
-          if (!header) continue;
-          body.appendParagraph(header).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-          for (let r = rosterRow + 3; r < allValues.length; r++) {
-              const student = String(allValues[r][c]).trim();
-              if (student) {
-                   const li = body.appendListItem(student);
-                   li.setGlyphType(DocumentApp.GlyphType.BULLET);
-                   if(allFontColors[r][c] !== '#000000') li.setForegroundColor(allFontColors[r][c]);
-              }
-          }
-      }
-  }
+  return {
+    sheetId: extractId(allProps.spreadsheetUrl),
+    folderId: extractId(allProps.targetFolderId),
+    calendarId: allProps.calendarId || "", 
+    customNotes: allProps.customNotes || "",
+    config: allProps.config,
+    rosterKeyword: allProps.rosterKeyword
+  };
 }
 
-function mlt_syncExamsToCalendar(calendarId, startStr, endStr, overwrite) {
-    try {
-        if (!calendarId) throw new Error("Calendar ID missing.");
-        const cal = CalendarApp.getCalendarById(calendarId);
-        if (!cal) throw new Error("Calendar not found. Check permissions or ID.");
-        
-        const startDate = new Date(startStr);
-        const endDate = new Date(endStr);
-        endDate.setHours(23, 59, 59);
-
-        if (overwrite) {
-            const events = cal.getEvents(startDate, endDate);
-            events.forEach(e => {
-                if (e.getTag('AppSource') === 'StaffHub') {
-                    e.deleteEvent();
-                }
-            });
-        }
-
-        const { settings, spreadsheetId } = mlt_getSettingsAndIDs();
-        const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-        const sheets = spreadsheet.getSheets();
-        
-        let count = 0;
-
-        for (const sheet of sheets) {
-            const allValues = sheet.getDataRange().getValues();
-            const discovered = mlt_discoverExamsOnSheet(sheet, allValues, settings);
-            
-            const sheetTitle = sheet.getName();
-
-            for (const exam of discovered) {
-                if (!exam.data.date) continue;
-                const examDate = new Date(exam.data.date);
-                if (examDate < startDate || examDate > endDate) continue;
-
-                let hour = 9, min = 0;
-                const rawTime = exam.data.startTime;
-                
-                if (rawTime instanceof Date) {
-                    hour = rawTime.getHours();
-                    min = rawTime.getMinutes();
-                } else if (rawTime) {
-                    const timeStr = String(rawTime);
-                    const timeMatch = timeStr.match(/(\d+):(\d+)/);
-                    if (timeMatch) {
-                        hour = parseInt(timeMatch[1]);
-                        min = parseInt(timeMatch[2]);
-                        if (timeStr.toLowerCase().includes('pm') && hour < 12) hour += 12;
-                    }
-                }
-
-                let durationMinutes = 120;
-                const rawDur = exam.data.duration;
-                if (rawDur) {
-                    const durStr = String(rawDur).trim();
-                    if (durStr.includes(':')) {
-                        const parts = durStr.split(':');
-                        durationMinutes = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
-                    } else if (durStr.toLowerCase().includes('h')) {
-                        durationMinutes = parseFloat(durStr) * 60;
-                    } else {
-                        const val = parseFloat(durStr);
-                        if (!isNaN(val)) {
-                            durationMinutes = (val <= 8) ? val * 60 : val;
-                        }
-                    }
-                }
-
-                const eventStart = new Date(examDate);
-                eventStart.setHours(hour, min);
-                
-                const eventEnd = new Date(eventStart.getTime() + (durationMinutes * 60000));
-
-                const title = `${sheetTitle} - ${exam.name}`;
-                const location = exam.data.room || "TBD";
-                const desc = `Password: ${exam.data.password}\nDuration: ${exam.data.duration}`;
-
-                const event = cal.createEvent(title, eventStart, eventEnd, { location: location, description: desc });
-                event.setTag('AppSource', 'StaffHub');
-                
-                count++;
-            }
-        }
-        
-        logSystemAction("MLT", "Calendar Sync", "N/A", calendarId, `Synced ${count} events.`);
-        return { success: true, message: `Synced ${count} exams to calendar.` };
-    } catch (e) {
-        return { success: false, message: e.message };
-    }
-}
-
-function mlt_getActiveDocsList() { 
-    try { 
-        const { targetFolderId } = mlt_getSettingsAndIDs(); 
-        const list = []; 
-        const files = DriveApp.getFolderById(targetFolderId).getFiles(); 
-        while(files.hasNext()) { 
-            const f = files.next(); 
-            if(f.getMimeType() === MimeType.GOOGLE_DOCS) list.push({name: f.getName(), id: f.getId(), url: f.getUrl()}); 
-        } 
-        return { data: list }; 
-    } catch(e) { 
-        return { error: e.message }; 
-    } 
-}
-
-function mlt_refreshAllActiveDocs() { 
-  return mlt_generateAllDocuments(); 
-}
-
-function mlt_getDocsFromFolder() { 
-    return mlt_getActiveDocsList(); 
-}
-
+/**
+ * 2. SAVER
+ */
 function mlt_saveSettings(settingsObj) {
     try {
-        const current = getSettings(CONFIG.SETTINGS_KEYS.MLT);
+        let current = {};
+        const raw = PropertiesService.getScriptProperties().getProperty(MLT_CONSTANTS.SETTINGS_KEY);
+        if (raw) { try { current = JSON.parse(raw); } catch(e) {} }
+
         const newSettings = { ...current, ...settingsObj };
-        saveSettings(CONFIG.SETTINGS_KEYS.MLT, newSettings);
+        if (!newSettings.config) newSettings.config = MLT_CONSTANTS.DEFAULTS.KEYWORDS;
+
+        PropertiesService.getScriptProperties().setProperty(MLT_CONSTANTS.SETTINGS_KEY, JSON.stringify(newSettings));
         return { success: true, message: "MLT Settings Saved." };
-    } catch (e) { return { success: false, message: e.message }; }
+    } catch (e) { 
+        return { success: false, message: "Save Failed: " + e.message }; 
+    }
 }
 
-function mlt_getSettingsData() {
-    try {
-        const s = getSettings(CONFIG.SETTINGS_KEYS.MLT);
-        if (!s.config) s.config = CONFIG.MLT.DEFAULTS.KEYWORDS;
-        if (!s.rosterKeyword) s.rosterKeyword = CONFIG.MLT.DEFAULTS.ROSTER_KEYWORD;
-        return { success: true, data: s };
-    } catch (e) { return { success: false, message: e.message }; }
-}
-
-function mlt_regenerateSingleDocById(docId) {
+/**
+ * 3. API
+ */
+function api_getMLTData() {
   try {
-    const doc = DocumentApp.openById(docId);
-    const targetTitle = doc.getName();
-    
-    const { settings, spreadsheetId } = mlt_getSettingsAndIDs();
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-    const sheets = spreadsheet.getSheets();
-    
-    let foundMatch = false;
+    const settings = _getMLTSettings();
+    if (!settings.sheetId || !settings.folderId) {
+      return { success: false, message: "MLT settings incomplete. Please check Settings tab." };
+    }
 
-    for (const sheet of sheets) {
-      const allValues = sheet.getDataRange().getValues();
-      if (!allValues || allValues.length === 0) continue;
+    const ss = SpreadsheetApp.openById(settings.sheetId);
+    const sheets = ss.getSheets();
+    const rootFolder = DriveApp.getFolderById(settings.folderId);
+    const dbMap = getAccommodationsDBMap(); 
+
+    const courseData = [];
+
+    sheets.forEach(sheet => {
+      const sheetName = sheet.getName();
+      if (sheetName.startsWith("_")) return; 
+
+      const parsed = parseMLTSheet(sheet, settings, dbMap);
+      if (!parsed) return;
+
+      const folderKey = parsed.fullTitle; 
+      let targetFolder = _mlt_findSubFolder(rootFolder, folderKey);
       
-      const discoveredExams = mlt_discoverExamsOnSheet(sheet, allValues, settings);
-      const sheetTitle = (allValues[0] && allValues[0][3]) ? allValues[0][3] : sheet.getName();
-
-      for (const exam of discoveredExams) {
-        const generatedTitle = `${sheetTitle} - ${exam.name}`;
-        
-        if (generatedTitle === targetTitle) {
-          foundMatch = true;
-          
-          const body = doc.getBody();
-          const preservedAccommodations = mlt_findSectionText(body, "Accommodations");
-          
-          body.setText('');
-          mlt_populateDocContent(body, targetTitle, exam.data, sheet, settings);
-          
-          if (preservedAccommodations) {
-             let i = mlt_findInsertionIndex(body, ["Notes", "General Notes", "Rosters", "Location Rosters"]);
-             body.insertParagraph(i, "Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1);
-             body.insertParagraph(i+1, preservedAccommodations);
-          }
-          
-          doc.saveAndClose();
-          logSystemAction("MLT", "Regenerated Single", targetTitle, docId, `Exam Date: ${exam.data.date}`);
-          break; 
+      const existingFiles = [];
+      if (targetFolder) {
+        const files = targetFolder.getFiles();
+        while (files.hasNext()) {
+          const f = files.next();
+          existingFiles.push({
+            name: f.getName(),
+            nameNorm: _mlt_normalizeStr(f.getName()),
+            url: f.getUrl()
+          });
         }
       }
-      if (foundMatch) break;
-    }
 
-    if (!foundMatch) {
-      return { error: "Could not find matching data in the spreadsheet. Has the Exam Name or Sheet Title changed?" };
-    }
+      parsed.exams.forEach(exam => {
+        const examNameNorm = _mlt_normalizeStr(exam.name);
+        const expectedTitle = `${parsed.fullTitle} - ${exam.name}`;
+        const expectedTitleNorm = _mlt_normalizeStr(expectedTitle);
+        
+        let match = existingFiles.find(f => f.nameNorm === expectedTitleNorm);
+        if (!match) match = existingFiles.find(f => f.nameNorm.includes(examNameNorm));
+        
+        exam.docUrl = match ? match.url : null;
+      });
 
-    return { data: "Document updated successfully." };
+      if (parsed.exams.length > 0) {
+        courseData.push({
+          sheetName: sheetName,
+          course: parsed.course, 
+          fullTitle: parsed.fullTitle,
+          exams: parsed.exams
+        });
+      }
+    });
+
+    return { success: true, data: { sheets: courseData, settings: settings } };
 
   } catch (e) {
-    return { error: e.message };
+    console.error("MLT API Error", e);
+    return { success: false, message: e.message };
   }
 }
 
-function mlt_getAccommodations(id) { 
-    try { 
-        return { data: mlt_findSectionText(DocumentApp.openById(id).getBody(), "Accommodations") }; 
-    } catch (e) { return { error: e.message }; } 
-}
+/**
+ * PARSER
+ */
+function parseMLTSheet(sheet, settings, dbMap) {
+  const data = sheet.getDataRange().getValues();
+  const fontLines = sheet.getDataRange().getFontLines();
+  const fontColors = sheet.getDataRange().getFontColors();
 
-function mlt_saveAccommodations(id, t) { 
-    try { 
-        const d = DocumentApp.openById(id); 
-        const b = d.getBody(); 
-        mlt_removeSection(b, "Accommodations"); 
-        if(t){ 
-            let i = mlt_findInsertionIndex(b, ["Notes", "General Notes", "Rosters", "Location Rosters"]); 
-            b.insertParagraph(i, "Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1); 
-            b.insertParagraph(i+1, t); 
-        } 
-        d.saveAndClose(); 
-        return { success: true }; 
-    } catch (e) { return { error: e.message }; } 
-}
+  if (data.length < 5) return null;
 
-function mlt_removeSection(b, h) {
-  const p = b.getParagraphs();
-  for (let i = 0; i < p.length; i++) {
-    if (p[i].getHeading() == DocumentApp.ParagraphHeading.HEADING1 && p[i].getText() == h) {
-      let el = p[i];
-      while (el && (el.getType() != DocumentApp.ElementType.PARAGRAPH || el.asParagraph().getHeading() != DocumentApp.ParagraphHeading.HEADING1)) {
-        let next = el.getNextSibling();
-        if (b.getNumChildren() === 1) b.appendParagraph(""); 
-        b.removeChild(el);
-        el = next;
-      }
-      return;
+  // 1. Course Info
+  const d1 = (data[0] && data[0][3]) ? String(data[0][3]).trim() : sheet.getName();
+  let courseCode = "MLT";
+  let courseName = d1;
+  const splitMatch = d1.match(/^([A-Z]{2,4}\s?\d{3}[A-Z]?)\s?[:\-]?\s?(.*)/i);
+  if (splitMatch) {
+      courseCode = splitMatch[1].trim();
+      courseName = splitMatch[2].trim();
+  }
+
+  // 2. Header Row
+  const config = settings.config;
+  let headerRowIndex = -1;
+  for(let i=0; i<20; i++) { 
+     if (!data[i]) continue;
+     const rowStr = data[i].join(' ').toLowerCase();
+     if(rowStr.includes(config.EXAM.toLowerCase()) && rowStr.includes(config.DATE.toLowerCase())) { 
+         headerRowIndex = i; 
+         break; 
+     }
+  }
+  if (headerRowIndex === -1) return null;
+
+  // 3. Roster Anchor
+  const rosterKeyword = (settings.rosterKeyword || "students").toLowerCase();
+  let rosterHeaderIdx = -1;
+  for(let i = headerRowIndex + 1; i < data.length; i++) {
+     if (String(data[i][0]).trim().toLowerCase().includes(rosterKeyword)) {
+         rosterHeaderIdx = i;
+         break;
+     }
+  }
+
+  // 4. Parse Rosters (UPDATED FOR UNASSIGNED LOGIC)
+  const sheetRoster = {};
+  const allAssigned = new Set(); // Track students who have a location
+  const masterList = [];         // Track all students in Column 0
+
+  if (rosterHeaderIdx !== -1) {
+    const locHeaders = data[rosterHeaderIdx]; 
+    locHeaders.forEach((h, idx) => {
+        if (idx === 0) return; 
+        const loc = String(h).trim();
+        if (loc && !sheetRoster[loc]) sheetRoster[loc] = [];
+    });
+
+    const startRow = rosterHeaderIdx + 2; 
+    const maxScan = Math.min(startRow + 30, data.length); 
+
+    for (let r = startRow; r < maxScan; r++) {
+       // A. Capture Master List (Col 0)
+       const masterName = String(data[r][0]).trim();
+       if (masterName) masterList.push({ name: masterName, row: r });
+
+       // B. Capture Assigned (Cols 1+)
+       for (let c = 1; c < locHeaders.length; c++) { 
+           const loc = String(locHeaders[c]).trim();
+           if (!loc) continue;
+           const rawVal = data[r][c];
+           if (rawVal) {
+               const name = String(rawVal).trim();
+               if (name) {
+                  if (!sheetRoster[loc]) sheetRoster[loc] = [];
+                  sheetRoster[loc].push({ name: name, color: fontColors[r][c] });
+                  allAssigned.add(name.toLowerCase()); // Mark as assigned
+               }
+           }
+       }
     }
-  }
-}
 
-function mlt_findSectionText(body, heading) {
-    const paragraphs = body.getParagraphs();
-    for (let i = 0; i < paragraphs.length; i++) {
-        if (paragraphs[i].getHeading() == DocumentApp.ParagraphHeading.HEADING1 && paragraphs[i].getText() == heading) {
-            return (i + 1 < paragraphs.length) ? paragraphs[i + 1].getText() : "";
+    // C. Calculate Unassigned
+    const unassigned = [];
+    masterList.forEach(student => {
+        if (!allAssigned.has(student.name.toLowerCase())) {
+            unassigned.push({ name: student.name, color: '#000000' });
         }
+    });
+
+    if (unassigned.length > 0) {
+        sheetRoster['Unassigned'] = unassigned;
     }
-    return "";
+  }
+
+  // 5. Parse Exams
+  const headers = data[headerRowIndex].map(h => String(h).trim().toLowerCase());
+  const colMap = {};
+  for (const [key, val] of Object.entries(config)) {
+      colMap[key] = headers.findIndex(h => h.includes(val.toLowerCase()));
+  }
+  
+  const colIdx = {
+      name: colMap.EXAM,
+      date: colMap.DATE,
+      startTime: (colMap.START_TIME > -1) ? colMap.START_TIME : colMap.START_SITE,
+      duration: colMap.DURATION,
+      room: colMap.ROOM,
+      password: colMap.PASSWORD
+  };
+
+  if (colIdx.name === -1 || colIdx.date === -1) return null;
+
+  const exams = [];
+  const scanEnd = (rosterHeaderIdx !== -1) ? rosterHeaderIdx : data.length;
+
+  for (let i = headerRowIndex + 1; i < scanEnd; i++) {
+      const row = data[i];
+      const examName = String(row[colIdx.name]).trim();
+      
+      if (!examName) continue;
+      if (examName.toLowerCase().includes('total')) continue;
+      if (fontLines[i][colIdx.date] === 'line-through') continue; 
+
+      const dbKey = `${d1}|${examName}`; 
+      const dbEntry = dbMap[dbKey] || { generalNotes: "", studentTags: {} };
+      
+      let dateVal = row[colIdx.date];
+      if (dateVal instanceof Date) dateVal = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+      let timeVal = "";
+      if (colIdx.startTime > -1) {
+          const rawT = row[colIdx.startTime];
+          if (rawT instanceof Date) timeVal = Utilities.formatDate(rawT, Session.getScriptTimeZone(), "hh:mm a");
+          else timeVal = String(rawT);
+      }
+
+      exams.push({
+          name: examName,
+          date: dateVal,
+          siteTime: timeVal,
+          duration: (colIdx.duration > -1) ? row[colIdx.duration] : "",
+          room: (colIdx.room > -1) ? row[colIdx.room] : "",
+          password: (colIdx.password > -1) ? row[colIdx.password] : "",
+          generalNotes: dbEntry.generalNotes, 
+          studentTags: dbEntry.studentTags,   
+          rosters: sheetRoster
+      });
+  }
+
+  return { 
+      course: { code: courseCode, name: courseName },
+      fullTitle: d1,
+      exams 
+  };
 }
 
-function mlt_findInsertionIndex(body, possibleHeaders) {
-    for (const t of possibleHeaders) {
-        for (let i = 0; i < body.getNumChildren(); i++) {
-            const e = body.getChild(i);
-            if (e.getType() == DocumentApp.ElementType.PARAGRAPH && e.asParagraph().getHeading() == DocumentApp.ParagraphHeading.HEADING1 && e.getText() == t) {
-                return i;
+/**
+ * GENERATOR
+ */
+function createMLTProctoringDocuments(payload) {
+  try {
+    const settings = _getMLTSettings();
+    const rootFolder = DriveApp.getFolderById(settings.folderId);
+    let createdCount = 0;
+    const createdUrls = {};
+
+    payload.sheets.forEach(sheetData => {
+        const folderName = sheetData.fullTitle;
+        let targetFolder = _mlt_findSubFolder(rootFolder, folderName);
+        if (!targetFolder) {
+            targetFolder = rootFolder.createFolder(folderName);
+        }
+
+        sheetData.exams.forEach(exam => {
+            const docTitle = `${folderName} - ${exam.name}`;
+            
+            const existing = targetFolder.getFilesByName(docTitle);
+            if (existing.hasNext()) {
+                createdUrls[exam.name] = existing.next().getUrl();
+                return;
+            }
+
+            const doc = DocumentApp.create(docTitle);
+            _populateMLTDoc(doc, docTitle, exam, settings.customNotes);
+            
+            const file = DriveApp.getFileById(doc.getId());
+            targetFolder.addFile(file);
+            DriveApp.getRootFolder().removeFile(file);
+
+            createdUrls[exam.name] = file.getUrl();
+            createdCount++;
+
+            try {
+                if (typeof logSystemAction === 'function') {
+                    logSystemAction("MLT", "Created Doc", docTitle, doc.getId(), `Date: ${exam.date}`);
+                }
+            } catch (e) { console.warn("Log failed: " + e.message); }
+        });
+    });
+
+    return { success: true, message: `Created ${createdCount} documents.`, docUrl: null, createdUrls: createdUrls };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * UPDATER
+ */
+function updateAllMLTDocuments(payload) {
+  try {
+    const settings = _getMLTSettings();
+    const rootFolder = DriveApp.getFolderById(settings.folderId);
+    let updatedCount = 0;
+
+    payload.sheets.forEach(sheetData => {
+        const folderName = sheetData.fullTitle;
+        const targetFolder = _mlt_findSubFolder(rootFolder, folderName);
+        
+        if (!targetFolder) return; 
+
+        sheetData.exams.forEach(exam => {
+            const expectedTitle = `${folderName} - ${exam.name}`;
+            const expectedNorm = _mlt_normalizeStr(expectedTitle);
+            const examNorm = _mlt_normalizeStr(exam.name);
+
+            let targetFile = null;
+            if (exam.docUrl) {
+                try { targetFile = DriveApp.getFileByUrl(exam.docUrl); } catch(e){}
+            }
+
+            if (!targetFile) {
+                const files = targetFolder.getFiles();
+                while (files.hasNext()) {
+                    const f = files.next();
+                    const fNorm = _mlt_normalizeStr(f.getName());
+                    if (fNorm === expectedNorm || fNorm.includes(examNorm)) {
+                        targetFile = f;
+                        break;
+                    }
+                }
+            }
+
+            if (targetFile) {
+                const doc = DocumentApp.openById(targetFile.getId());
+                doc.getBody().clear();
+                _populateMLTDoc(doc, targetFile.getName(), exam, settings.customNotes);
+                updatedCount++;
+                
+                try {
+                    if (typeof logSystemAction === 'function') {
+                        logSystemAction("MLT", "Updated Doc", targetFile.getName(), targetFile.getId(), `Date: ${exam.date}`);
+                    }
+                } catch (e) { console.warn("Log failed: " + e.message); }
+            }
+        });
+    });
+
+    return { success: true, message: `Updated ${updatedCount} documents.` };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function _populateMLTDoc(doc, title, exam, customNotes) {
+    const body = doc.getBody();
+    
+    body.appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.TITLE);
+    
+    body.appendParagraph("Exam Details").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    body.appendListItem(`Date: ${exam.date || "TBD"}`);
+    body.appendListItem(`Start Time: ${exam.siteTime || "TBD"}`);
+    body.appendListItem(`Duration: ${exam.duration || "-"}`);
+    body.appendListItem(`Room: ${exam.room || "TBD"}`);
+    body.appendListItem(`Password: ${exam.password || "-"}`);
+
+    if (customNotes) {
+        body.appendParagraph("General Instructions").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        body.appendParagraph(customNotes).setItalic(true);
+    }
+
+    if (exam.generalNotes) {
+        body.appendParagraph("Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        const p = body.appendParagraph(exam.generalNotes);
+        p.setBackgroundColor('#e8f5e9');
+        p.setPaddingTop(5).setPaddingBottom(5).setPaddingLeft(10).setPaddingRight(10);
+    }
+
+    if (exam.rosters && Object.keys(exam.rosters).length > 0) {
+        body.appendParagraph("Rosters").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        
+        for (const [location, students] of Object.entries(exam.rosters)) {
+            // SKIP UNASSIGNED IN THE DOC (Sidebar will still see it)
+            if (location === 'Unassigned') continue; 
+
+            body.appendParagraph(location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+            
+            const active = students.filter(s => {
+                const tags = (exam.studentTags && exam.studentTags[s.name]) ? exam.studentTags[s.name] : null;
+                return !(tags && tags.excluded);
+            });
+
+            if (active.length === 0) {
+                body.appendParagraph("(No students)");
+            } else {
+                active.forEach(s => {
+                    const li = body.appendListItem(s.name);
+                    
+                    if (exam.studentTags && exam.studentTags[s.name]) {
+                        const tag = exam.studentTags[s.name];
+                        if (tag.note) {
+                           const t = li.appendText(` [${tag.note}]`);
+                           t.setBold(true);
+                           t.setBackgroundColor(tag.highlighted ? '#ffff00' : '#fff59d');
+                        }
+                    }
+                    if (s.color && s.color !== '#000000') li.setForegroundColor(s.color);
+                });
             }
         }
     }
-    return body.getNumChildren();
+    
+    body.appendHorizontalRule();
+    body.appendParagraph("Generated by Staff Hub (MLT)").setAlignment(DocumentApp.HorizontalAlignment.CENTER).setForegroundColor('#888888').setFontSize(8);
+    doc.saveAndClose();
+}
+
+function api_saveMLTAccommodations(payload) {
+    return api_saveNursingAccommodations(payload);
 }

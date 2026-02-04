@@ -4,6 +4,7 @@
     userInfo: null,
     dashboardData: null,
     mstData: null,
+    mltData: null, // ADDED: Placeholder for MLT data
     allSettings: {},
     writableCalendars: null,
     allCalendars: null, 
@@ -30,7 +31,8 @@
       title: 'Proctoring',
       roles: ['Proctor', 'Admin'],
       children: [
-        { id: 'Nursing', title: 'Nursing', roles: ['Proctor', 'Admin'] }
+        { id: 'Nursing', title: 'Nursing', roles: ['Proctor', 'Admin'] },
+        { id: 'MLT', title: 'MLT', roles: ['Proctor', 'Admin'] } // ADDED: MLT Menu Item
       ]
     },
     { id: 'Reporting', title: 'Stats & Reports', roles: ['Admin', 'Lead'] },
@@ -58,6 +60,7 @@
     if (response && response.success) {
       g.userInfo = response.data.userInfo;
       g.mstData = response.data.mstData;
+      g.mltData = response.data.mltData; // ADDED: Capture MLT data
       g.allSettings = response.data.settings || {};
       g.writableCalendars = response.data.writableCalendars;
       g.allCalendars = response.data.allCalendars;
@@ -190,6 +193,7 @@
       if (pageId === 'Dashboard') { if(typeof loadDashboardPage === 'function') loadDashboardPage(); }
       else if (pageId === 'MST') { if(typeof loadMstPage === 'function') loadMstPage(); }
       else if (pageId === 'Nursing') { if(typeof loadNursingPage === 'function') loadNursingPage(); }
+      else if (pageId === 'MLT') { if(typeof loadMLTPage === 'function') loadMLTPage(); } // ADDED: Navigation
       else if (pageId === 'Reporting') { if(typeof loadReportingPage === 'function') loadReportingPage(); }
       else if (pageId === 'TechHub') { if(typeof loadTechHubPage === 'function') loadTechHubPage(); }
       else if (pageId === 'Settings') { if(typeof loadSettingsPage === 'function') loadSettingsPage(); }
