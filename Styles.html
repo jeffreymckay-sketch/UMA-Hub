@@ -9,8 +9,8 @@
     --color-text-dark: #333333;
     --color-border-light: #dddddd;
     --color-danger: #d9534f;
-    --color-accent-purple: #583583
-    --color-accent-lightgreen: #EDF7DF
+    --color-accent-purple: #583583;
+    --color-accent-lightgreen: #EDF7DF;
   }
 
   /* Basic Reset & Body */
@@ -26,7 +26,7 @@
   /* --- Loader --- */
   .loader-container {
     position: fixed; 
-    top: 0; left: 0; 
+    top: 0; left: 0;
     width: 100%; height: 100%;
     display: flex; 
     justify-content: center; 
@@ -63,7 +63,45 @@
     width: 100%;
     z-index: 1000;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-sizing: border-box; /* Ensures padding doesn't add to width */
   }
+
+  .header-left { 
+    display: flex;
+    align-items: center;
+    min-width: 0; /* Allows shrinking */
+    flex: 1;
+  }
+
+  .app-title { 
+    margin: 0;
+    font-size: 20px; 
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* FIX: Added constraints to prevent right-side cutoff */
+  .user-info { 
+    display: flex; 
+    align-items: center;
+    text-align: right;
+    margin-left: 20px;
+    min-width: 0; /* Critical for ellipsis to work in flex */
+    max-width: 40%; /* Prevents info from squishing the title */
+  }
+
+  /* FIX: Truncate long emails/roles */
+  #user-email {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    line-height: 1.2;
+  }
+
   .app-sidebar {
     background-color: #ffffff;
     width: 220px;
@@ -90,11 +128,7 @@
     margin-left: 0;
   }
 
-  /* --- Header & Navigation --- */
-  .header-left { display: flex; align-items: center; }
   .sidebar-toggle { cursor: pointer; font-size: 24px; padding: 10px; margin-right: 10px;}
-  .app-title { margin: 0; font-size: 20px; font-weight: 500; }
-  .user-info { display: flex; align-items: center; }
   #user-photo { width: 38px; height: 38px; border-radius: 50%; margin-left: 15px; border: 2px solid var(--color-text-light); }
   
   .main-nav .nav-item {
@@ -106,7 +140,7 @@
     border-left: 5px solid transparent;
     font-size: 16px;
     transition: background-color 0.2s ease, border-color 0.2s ease;
-    position: relative; /* Needed for arrow positioning */
+    position: relative;
   }
   .main-nav .nav-item:hover {
     background-color: var(--color-accent-gray);
@@ -130,13 +164,13 @@
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease-out;
-    background-color: #fafafa; /* Slightly different background for sub-items */
+    background-color: #fafafa;
   }
   .sub-menu.open {
-      max-height: 200px; 
+      max-height: 200px;
   }
   .sub-menu .nav-item {
-      padding-left: 40px; /* Indent sub-menu items */
+      padding-left: 40px;
       font-size: 15px;
   }
 
@@ -164,7 +198,7 @@
   }
   .tab-link {
     padding: 10px 20px;
-    margin-bottom: -2px; /* Pulls the link down to overlap the border */
+    margin-bottom: -2px;
     border: 2px solid transparent;
     border-bottom: none;
     text-decoration: none;
@@ -177,7 +211,7 @@
   }
   .tab-link.active {
     border-color: var(--color-border-light);
-    border-bottom-color: transparent; /* Allows background to show through */
+    border-bottom-color: transparent;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     background-color: #fff;
@@ -194,7 +228,7 @@
     border-collapse: collapse;
     margin-top: 15px;
     border-radius: 6px;
-    overflow: hidden; /* Ensures the radius is applied to corners */
+    overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
   .data-table th, .data-table td {
@@ -212,7 +246,7 @@
     background-color: var(--color-accent-gray);
   }
   .data-table tbody tr:hover {
-    background-color: #e8f0fe; /* A light blue for hover */
+    background-color: #e8f0fe;
   }
 
   /* --- Form Styles --- */
@@ -237,8 +271,8 @@
   button:hover { opacity: 0.9; }
   .button-primary { background-color: var(--color-primary-navy); }
   .button-danger { background-color: var(--color-danger); }
+  .button-secondary { background-color: #6c757d; color: white; }
+  .button-success { background-color: #28a745; color: white; }
 
-  /* --- Utility Classes --- */
   .hidden { display: none; }
-
 </style>

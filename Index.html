@@ -22,7 +22,9 @@
     </div>
 
     <div class="app-content" id="app-content">
-      <div id="page-Dashboard" class="page-view"></div>
+      <div id="page-Availability" class="page-view"></div>
+      
+      <div id="page-UserGuide" class="page-view" style="display:none;"></div>
       
       <div id="page-MST" class="page-view" style="display:none;"></div>
       
@@ -55,11 +57,13 @@
     </div>
 
     <?!= include('Part_Notifications'); ?>
-    <?!= include('Module_Sidebars'); ?> <?!= include('JS_Core'); ?>
+    <?!= include('Module_Sidebars'); ?>
+    <?!= include('JS_Core'); ?>
     <?!= include('JS_Dashboard'); ?>
-    <?!= include('JS_MST'); ?>
+    <?!= include('JS_UserGuide'); ?> <?!= include('JS_MST'); ?>
     <?!= include('JS_Nursing'); ?>
-    <?!= include('JS_MLT'); ?> <?!= include('JS_Reporting'); ?>
+    <?!= include('JS_MLT'); ?>
+    <?!= include('JS_Reporting'); ?>
     <?!= include('JS_TechHub'); ?>
     <?!= include('JS_Settings'); ?>
     

@@ -1,0 +1,546 @@
+<script>
+    /**
+     * Main entry point for the User Guide page.
+     */
+    function loadUserGuidePage() {
+      const view = document.getElementById('page-UserGuide');
+      
+      // If already rendered, don't re-render
+      if (view.innerHTML.trim() !== '') return;
+  
+      // Render the Tab Container & Content
+      view.innerHTML = `
+        <style>
+          /* User Guide Specific Styles */
+          .guide-intro {
+              font-size: 1.05em;
+              line-height: 1.6;
+              color: #444;
+              margin-bottom: 25px;
+              background: #fff;
+              padding: 20px;
+              border-radius: 8px;
+              border: 1px solid var(--color-border-light);
+              box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+          }
+  
+          /* --- ACCORDION CONTAINER (The "Card") --- */
+          .guide-accordion {
+              background-color: #ffffff;
+              /* Now using the global brand color */
+              border: 4px solid var(--color-accent-purple); 
+              border-radius: 8px;
+              margin-bottom: 15px;
+              overflow: hidden;
+              transition: all 0.3s ease;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+          }
+  
+          .guide-accordion:hover {
+              box-shadow: 0 7px 12px rgba(0,0,0,0.1);
+              transform: translateY(-1px);
+          }
+  
+          /* --- HEADER (The Clickable "Menu Item") --- */
+          .guide-header {
+              padding: 15px 20px;
+              cursor: pointer;
+              font-weight: 600;
+              font-size: 1.1em;
+              color: var(--color-primary-navy);
+              background-color: #f8f9fa;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              user-select: none;
+              transition: background-color 0.2s;
+          }
+  
+          .guide-header:hover {
+              background-color: #e9ecef;
+          }
+  
+          /* Icon Rotation */
+          .guide-icon {
+              font-size: 1.2em;
+              color: #666;
+              transition: transform 0.3s ease;
+              font-weight: normal;
+          }
+  
+          /* --- CONTENT ANIMATION WRAPPER --- */
+          .guide-content {
+              display: grid;
+              grid-template-rows: 0fr;
+              transition: grid-template-rows 0.3s ease-out;
+              background-color: #fff;
+          }
+  
+          .guide-inner-panel {
+              min-height: 0;
+              overflow: hidden;
+          }
+  
+          .guide-body-text {
+              padding: 20px;
+              line-height: 1.6;
+              color: #333;
+          }
+  
+          /* --- OPEN STATE --- */
+          /* use '>' to ensure we only target the DIRECT child, not grandchildren */
+          .guide-accordion.open > .guide-content {
+              grid-template-rows: 1fr;
+          }
+  
+          .guide-accordion.open > .guide-header {
+              border-bottom: 1px solid var(--color-border-light);
+              background-color: #f0f4f8; 
+          }
+  
+          .guide-accordion.open > .guide-header .guide-icon {
+              transform: rotate(45deg);
+              color: var(--color-primary-orange);
+          }
+  
+          /* --- NESTED ACCORDIONS --- */
+          .guide-accordion .guide-accordion {
+              margin: 15px 0;
+              border: 1px solid #ddd; /* Nested ones have thinner gray border */
+              border-left: 4px solid var(--color-accent-purple); /* Accent on left */
+          }
+          
+          /* Ensure nested headers don't inherit the main border styles */
+          .guide-accordion .guide-accordion .guide-header {
+              font-size: 1em;
+              background-color: #fff;
+          }
+          
+          .guide-accordion .guide-accordion:hover {
+               box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+          }
+  
+          /* Typography */
+          .guide-body-text ul { padding-left: 20px; margin-bottom: 0; }
+          .guide-body-text li { margin-bottom: 10px; }
+          .guide-highlight { color: var(--color-primary-orange); font-weight: bold; }
+        </style>
+  
+        <div class="widget">
+          <h2 style="margin-top:0; border-bottom:none;">User Guide</h2>
+          <p style="color:#666; margin-bottom:20px;">Documentation and help resources for the Department Management App.</p>
+  
+          <div class="tab-bar">
+            <button class="tab-link active" onclick="openTab(event, 'guide-welcome')">Welcome</button>
+            <button class="tab-link" onclick="openTab(event, 'guide-dashboard')">Dashboard</button>
+            <button class="tab-link" onclick="openTab(event, 'guide-logistics')">Logistics</button>
+            <button class="tab-link" onclick="openTab(event, 'guide-proctoring')">Proctoring</button>
+            <button class="tab-link" onclick="openTab(event, 'guide-reporting')">Stats & Reports</button>
+          </div>
+  
+          <div id="guide-welcome" class="tab-content" style="display:block; padding-top:20px;">
+              <div class="guide-intro">
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">The Logistics Staff Hub: A User’s Guide</h3>
+                  <p style="font-style:italic; color:#666; margin-bottom:15px;">"How to manage the chaos without opening a spreadsheet."</p>
+                  <p>Welcome to the Staff Hub. This application was built because looking at a spreadsheet with 5,000 rows makes human eyes cross. This tool does the heavy lifting for you. It manages schedules, creates documents, and puts things on calendars so you don't have to.</p>
+              </div>
+              
+              <div class="guide-accordion open">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Who Are You? (Roles)</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>Before we start, let’s figure out where you fit in the food chain.</p>
+                              <ul>
+                                  <li><strong>Admin:</strong> You see everything. You can break everything. Please be careful.</li>
+                                  <li><strong>Lead:</strong> You manage the schedules and the people. You have power, but not enough to delete the database by accident.</li>
+                                  <li><strong>Staff:</strong> You are here to see when you work and tell us when you can’t.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <div id="guide-dashboard" class="tab-content" style="display:none; padding-top:20px;">
+              <div class="guide-intro">
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">The Staff Dashboard</h3>
+                  <p>Welcome to your Dashboard, the first thing you see when you log in and—with any luck—the last thing you’ll need to look at before you go off to do actual work. Think of this as your personal <strong>"Leave Me Alone" coordinator</strong>.</p>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>1. Unavailable Times (The "Blackout" Zone)</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>This section is for listing the times when you are strictly unavailable—perhaps because you are in class, at another job, or participating in a competitive napping league.</p>
+                              <ul>
+                                  <li><strong>How to Add a Block:</strong> Select the day, pick your start and end times, and click "Block Time". It’s as easy as pie, but significantly less delicious.</li>
+                                  <li><strong>How it Protects Your Workflow:</strong> Once you save a "Blackout" time, it acts as a magical digital barrier. If a manager tries to schedule you during your blocked hours, the system will wave a red flag and tell them it's a no-go.</li>
+                                  <li><strong>Changing Your Mind:</strong> If your napping league gets canceled and you suddenly want to work, just click "Remove Block" next to the entry.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>2. Shift Preferences (Your "Wish List")</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>This part lets you rank your favorite (and least favorite) times to work. You have three distinct options for each time block:</p>
+                              <ul>
+                                  <li><span class="guide-highlight" style="color:green;">"Yes Please"</span>: Use this for shifts you actually enjoy. Selecting this gives you a gold star in the system.</li>
+                                  <li><span class="guide-highlight" style="color:orange;">"No Thanks"</span>: Use this for times that are technically possible but would make you very grumpy.</li>
+                                  <li><span class="guide-highlight" style="color:#666;">"Eh, Sure"</span>: This is for when you are feeling neutral, like a Switzerland of scheduling.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Safety Features & Peace of Mind</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>We know the word "database" sounds like something that might accidentally delete your digital existence, but we’ve built in some safety nets so you can click with confidence:</p>
+                              <ul>
+                                  <li><strong>The Conflict Flyout:</strong> If you accidentally select a shift that conflicts with your "Blackout" times, a warning window will pop up to double-check with you.</li>
+                                  <li><strong>Non-Destructive Saving:</strong> When you update your preferences, the app surgically removes your old choices and neatly tucks in the new ones in the Master Spreadsheet.</li>
+                                  <li><strong>Automatic Cache Refresh:</strong> Whenever you save a change, the app automatically tosses out the "old" view and grabs the freshest data.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <div id="guide-logistics" class="tab-content" style="display:none; padding-top:20px;">
+              <div class="guide-intro">
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">Logistics Tools</h3>
+                  <p>Welcome to the Logistics Section, where we handle the complicated business of getting people to places at times they are supposed to be there.</p>
+              </div>
+              
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Tool Guide: MST</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>1. Classroom Management</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>This tool is essentially the "Grand Central Station" for course logistics.</p>
+                                              <ul>
+                                                  <li><strong>Assigning Staff:</strong> To put someone in charge of a class, simply select their name from the dropdown menu and click "Save".</li>
+                                                  <li><strong>Zoom Link Management:</strong> You can paste the link directly into the Zoom Link box. The system saves this instantly.</li>
+                                                  <li><strong>Workflow Safety:</strong> We use a "Script Lock" here to prevent two people from saving changes at the exact same microsecond.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>2. Calendar Sync</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>Once your classroom assignments are perfect, this tool helps you push that information out to a Google Calendar.</p>
+                                              <ul>
+                                                  <li><strong>The Preview Step:</strong> Before anything happens, the app will show you exactly what it intends to do (New, Update, or Synced).</li>
+                                                  <li><strong>Selective Syncing:</strong> You can check or uncheck individual boxes to ensure only ready classes are touched.</li>
+                                                  <li><strong>Non-Destructive Design:</strong> If a class moves, the app will surgically delete the old event and create the new one.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>3. Settings</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>This is the "Under the Hood" tab where you tell the MST tool where to look for its information.</p>
+                                              <ul>
+                                                  <li><strong>Selecting the Source:</strong> Pick the specific tab in the Master Spreadsheet that contains your course schedule.</li>
+                                                  <li><strong>Workflow Safety:</strong> Creates a dedicated connection so the tool doesn't pull data from the wrong sheet.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Tool Guide: Tech Hub</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>Welcome to the Tech Hub section. This is where we manage the complex choreography of student staff shifts.</p>
+  
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>1. Semester Roster</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>This is your master planning board. It lists every shift for the entire week.</p>
+                                              <ul>
+                                                  <li><strong>Smart Staff Selection:</strong> It ranks people based on the Dashboard preferences they set earlier.
+                                                      <ul>
+                                                          <li><span style="color:green">★ Gold Star:</span> "Yes Please!"</li>
+                                                          <li><span style="color:orange">⚠ Warning Icon:</span> "No Thanks".</li>
+                                                          <li><span style="color:red">Unavailable:</span> Overlaps with a "Blackout" time.</li>
+                                                      </ul>
+                                                  </li>
+                                                  <li><strong>Workflow Safety:</strong> A warning window will pop up if you schedule a conflict.</li>
+                                                  <li><strong>Saving:</strong> Click "Save Full Roster" to update every shift at once.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>2. Calendar Sync</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>Tell Google Calendar about the roster so staff actually show up.</p>
+                                              <ul>
+                                                  <li><strong>The Preview Step:</strong> Compares your roster to the calendar and shows "New" or "Updating" statuses.</li>
+                                                  <li><strong>Invite Awareness:</strong> Automatically invites the assigned staff member to the calendar event.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>3. Manage Shifts</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>Think of this as the "Blueprint" area for defining the typical week.</p>
+                                              <ul>
+                                                  <li><strong>Adding/Deleting Shifts:</strong> Create descriptions, days, and times. Deleting removes it permanently.</li>
+                                                  <li><strong>The Zoom Toggle:</strong> Automatically includes the Tech Hub’s Zoom link in the calendar event.</li>
+                                                  <li><strong>Safety Lock:</strong> Deleting a shift also scrubs the staff assignment from the database.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <div id="guide-proctoring" class="tab-content" style="display:none; padding-top:20px;">
+              <div class="guide-intro">
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">Tool Guide: Proctoring (Nursing & MLT)</h3>
+                  <p>Welcome to the Proctoring Section. Whether you are handling Nursing or MLT, these tools are essentially identical twins.</p>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>1. Doc Management (The "Roster Robot")</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>This is where the heavy lifting happens. The app scans your Master Spreadsheet for upcoming exams.</p>
+                              <ul>
+                                  <li><span class="guide-highlight" style="color:var(--color-primary-orange);">"Create" (Bright Orange)</span>: Builds a Google Doc in the correct folder with exam details.</li>
+                                  <li><span class="guide-highlight" style="color:var(--color-primary-navy);">"Update" (Navy Blue)</span>: Refreshes the existing document with new spreadsheet data.</li>
+                                  <li><strong>The "View" Button (Green):</strong> Takes you directly to the Google Doc.</li>
+                                  <li><strong>Generate All / Update All:</strong> Batch processing buttons for handling multiple exams at once.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>2. Students & Accommodations (The Sidebar)</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>Click "Students" on any exam card to open this surgical tool.</p>
+                              <ul>
+                                  <li><strong>Active vs. Excluded:</strong> Uncheck a student to cross them out and exclude them from the document.</li>
+                                  <li><strong>The "Lock" Feature:</strong> Prevents your manual notes from being overwritten during a refresh.</li>
+                                  <li><strong>General Notes:</strong> Instructions typed here appear in a "Green Box" on the final document.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>3. Workflow Safety & Reliability</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <ul>
+                                  <li><strong>Fuzzy Matching:</strong> Uses logic to find folders/files even with slight name variations.</li>
+                                  <li><strong>Non-Destructive Syncing:</strong> Updates existing files instead of creating duplicates, preserving URL links.</li>
+                                  <li><strong>Safety Anchors:</strong> Looks for specific keywords (e.g., "Augusta") to locate student lists accurately.</li>
+                                  <li><strong>Audit Logging:</strong> Records actions to a log sheet for accountability.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+          <div id="guide-reporting" class="tab-content" style="display:none; padding-top:20px;">
+              <div class="guide-intro">
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">Tool Guide: Stats & Reports (The "Crystal Ball")</h3>
+                  <p>Welcome to the Stats & Reports section, where we take chaotic calendar entries and turn them into charts.</p>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>1. Calendar Inspector</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>This digital bloodhound finds and categorizes every event within a timeframe.</p>
+                              <ul>
+                                  <li><strong>Setting the Date Range:</strong> Defaults to the current month.</li>
+                                  <li><strong>Selective Scanning:</strong> Choose specific calendars and filter by categories.</li>
+                                  <li><strong>The Big Picture:</strong> Generates a dashboard of total events and hours.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>2. Analysis & Charts</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <ul>
+                                  <li><strong>The Pie Chart:</strong> Shows the percentage of time spent in each category.</li>
+                                  <li><strong>The Detail Table:</strong> A full list of every event found, including date and calendar source.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>3. Exporting to Sheets</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <ul>
+                                  <li><strong>Workflow Safety:</strong> Creates a brand new spreadsheet snapshot without touching master data.</li>
+                                  <li><strong>Automatic Formatting:</strong> The exported sheet comes presentation-ready with bold headers and frozen rows.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>4. Settings (The "Categorizer")</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>Teach the app how to categorize events automatically.</p>
+                              <ul>
+                                  <li><strong>How it Works:</strong> Define categories (e.g., "Proctoring") and keywords (e.g., "Exam").</li>
+                                  <li><strong>Safety Net:</strong> Rules are saved to the "Event Types" tab in the Master Spreadsheet.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+  
+        </div>
+      `;
+    }
+  
+    // --- Helper to Toggle the Div-based Accordion ---
+    function toggleGuide(headerEl) {
+        // Find the parent container (.guide-accordion)
+        const container = headerEl.parentElement;
+        
+        // Toggle class
+        container.classList.toggle('open');
+        
+        // Stop propagation if nested to prevent parent from closing when child is clicked
+        if (window.event) {
+            window.event.stopPropagation();
+        }
+    }
+  </script>

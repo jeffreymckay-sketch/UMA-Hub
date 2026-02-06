@@ -1,19 +1,137 @@
+<style>
+  /* --- Availability Page Specific Styles --- */
+  
+  /* Layout Grid */
+  .avail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+  }
+
+  /* Blackout Card Styling */
+  .avail-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    border-left: 5px solid var(--color-danger);
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s; /* Added opacity for fade out */
+  }
+
+  .avail-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 12px rgba(0,0,0,0.1);
+  }
+
+  .avail-info h4 { margin: 0 0 5px 0; color: var(--color-primary-navy); }
+  .avail-time { color: #666; font-size: 0.9em; font-weight: 500; }
+
+  .btn-icon-danger {
+    background: none; border: none; cursor: pointer; color: #999;
+    font-size: 1.2em; padding: 5px; border-radius: 50%;
+    transition: all 0.2s;
+  }
+  .btn-icon-danger:hover {
+    background-color: #fef2f2; color: var(--color-danger);
+  }
+
+  /* Shared Accordion Styles */
+  .dashboard-accordion {
+    background-color: #ffffff;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .accordion-header {
+    padding: 15px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--color-primary-navy);
+    background-color: #f8f9fa;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  
+  .accordion-header:hover { background-color: #e9ecef; }
+
+  .accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    background-color: #fff;
+  }
+
+  /* Open State */
+  .dashboard-accordion.open .accordion-content {
+    max-height: 1000px;
+    overflow: visible;
+  }
+  
+  .dashboard-accordion.open .accordion-header {
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .accordion-icon { transition: transform 0.3s; }
+  .dashboard-accordion.open .accordion-icon { transform: rotate(45deg); color: var(--color-primary-orange); }
+
+  /* Modern Form Controls */
+  .modern-form { padding: 20px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; }
+  .input-group { display: flex; flex-direction: column; flex: 1; min-width: 150px; }
+  .input-group label { font-size: 0.85em; font-weight: bold; color: #555; margin-bottom: 5px; }
+  
+  .modern-select {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+    background-color: #fff;
+    cursor: pointer;
+  }
+  .modern-select:focus { border-color: var(--color-primary-navy); outline: none; }
+
+  /* Empty State */
+  .empty-state-card {
+    grid-column: 1 / -1;
+    background: #f8fcf9;
+    border: 2px dashed #a4d65e;
+    color: #2c5e2e;
+    padding: 30px;
+    text-align: center;
+    border-radius: 8px;
+  }
+
+  /* Preference Table Polish */
+  .pref-wrapper { padding: 20px; }
+  .pref-select {
+    width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd;
+    cursor: pointer; font-size: 0.9em;
+  }
+</style>
+
 <script>
   /**
-   * Main entry point for the Dashboard page.
-   * Implements on-demand loading for dashboard data.
+   * Main entry point for the Availability page.
    */
-  function loadDashboardPage() {
-    const dashboardView = document.getElementById('page-Dashboard');
-
-    // 1. Check if data is already cached in the global object
+  function loadAvailabilityPage() {
+    const dashboardView = document.getElementById('page-Availability');
+    
+    // 1. Check if data is already cached
     if (g.dashboardData && !g.dashboardData.error) {
       renderDashboard(g.dashboardData);
       return;
     }
 
-    // 2. If not cached, fetch it from the server
-    dashboardView.innerHTML = '<div class="loader-ring"></div>'; // Show loader
+    // 2. If not cached, fetch it
+    dashboardView.innerHTML = '<div class="loader-ring"></div>';
 
     google.script.run
       .withSuccessHandler(handleDashboardDataSuccess)
@@ -21,159 +139,341 @@
       .api_getDashboardData();
   }
 
-  /**
-   * SUCCESS HANDLER
-   */
   function handleDashboardDataSuccess(response) {
     if (response.success) {
-      g.dashboardData = response.data; // Cache the data globally
+      g.dashboardData = response.data;
       renderDashboard(g.dashboardData);
     } else {
       handleDashboardDataFailure({ message: response.message });
     }
   }
 
-  /**
-   * FAILURE HANDLER
-   */
   function handleDashboardDataFailure(error) {
-    console.error("Failed to load Dashboard data:", error.message);
-    const dashboardView = document.getElementById('page-Dashboard');
-    dashboardView.innerHTML = `<div class="error-message">Could not load Dashboard. Error: ${error.message}</div>`;
+    console.error("Failed to load Availability data:", error.message);
+    const dashboardView = document.getElementById('page-Availability');
+    dashboardView.innerHTML = `<div class="error-message">Could not load Availability data. Error: ${error.message}</div>`;
   }
 
   // --- Render Functions ---
 
   function renderDashboard(data) {
     const { availability, preferences } = data;
-    const dashboardView = document.getElementById('page-Dashboard');
-    dashboardView.innerHTML = ''; // Clear loader or previous content
+    const dashboardView = document.getElementById('page-Availability');
+    
+    // Check if we are re-rendering over existing content to preserve accordion state
+    const existingAddBlock = document.getElementById('add-block-acc');
+    const existingPref = document.getElementById('pref-acc');
+    const isAddBlockOpen = existingAddBlock ? existingAddBlock.classList.contains('open') : false;
+    // Preferences defaults to open if not previously rendered, or preserves state
+    const isPrefOpen = existingPref ? existingPref.classList.contains('open') : true;
 
-    const availabilityWidget = document.createElement('div');
-    availabilityWidget.className = 'widget';
-    availabilityWidget.innerHTML = buildAvailabilityHtml(availability);
-    dashboardView.appendChild(availabilityWidget);
+    dashboardView.innerHTML = ''; 
 
-    const preferencesWidget = document.createElement('div');
-    preferencesWidget.className = 'widget';
-    preferencesWidget.innerHTML = buildPreferencesHtml(preferences);
-    dashboardView.appendChild(preferencesWidget);
+    // Header
+    const header = document.createElement('h2');
+    header.style.marginTop = '0';
+    header.style.color = 'var(--color-primary-navy)';
+    header.innerHTML = 'Availability & Preferences';
+    dashboardView.appendChild(header);
+
+    // 1. Availability Section
+    const availSection = document.createElement('div');
+    availSection.innerHTML = buildAvailabilityHtml(availability, isAddBlockOpen);
+    dashboardView.appendChild(availSection);
+
+    // 2. Preferences Section
+    const prefSection = document.createElement('div');
+    prefSection.style.marginTop = "20px";
+    prefSection.innerHTML = buildPreferencesHtml(preferences, isPrefOpen);
+    dashboardView.appendChild(prefSection);
   }
 
-  function buildAvailabilityHtml(availabilityData) {
-    let tableRows = availabilityData.map(slot => `
-      <tr>
-        <td><strong>${slot.day}</strong></td>
-        <td>${slot.start || 'N/A'}</td>
-        <td>${slot.end || 'N/A'}</td>
-        <td><button class="button-danger" onclick="deleteAvailability('${slot.id}')">Remove Block</button></td>
-      </tr>`).join('');
-
+  function buildAvailabilityHtml(availabilityData, isOpen) {
+    const timeOptions = generateTimeOptions();
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const dayOptions = days.map(d => `<option value="${d}">${d}</option>`).join('');
 
+    let cardsHtml = '';
+    if (availabilityData.length > 0) {
+        cardsHtml = availabilityData.map(slot => `
+            <div class="avail-card" id="card-${slot.id}">
+                <div class="avail-info">
+                    <h4>${slot.day}</h4>
+                    <div class="avail-time">${formatTimeDisplay(slot.start)} &ndash; ${formatTimeDisplay(slot.end)}</div>
+                </div>
+                <button class="btn-icon-danger" onclick="deleteAvailability(this, '${slot.id}')" title="Remove Block">
+                    &#128465;
+                </button>
+            </div>
+        `).join('');
+    } else {
+        cardsHtml = `
+            <div class="empty-state-card" id="avail-empty-state">
+                <h3>✅ Fully Available</h3>
+                <p style="margin:0;">You have no blackout times set. You are listed as available for any shift.</p>
+            </div>
+        `;
+    }
+
+    const openClass = isOpen ? 'open' : '';
+
     return `
-      <h2>My Unavailable Times (Blackouts)</h2>
-      <p style="color:#666; margin-bottom:15px;">
-        Please list specific times when you are <strong>NOT</strong> available to work (e.g., classes, other jobs).
+      <h3 style="color:#555; border-bottom:1px solid #eee; padding-bottom:10px;">My Unavailable Times (Blackouts)</h3>
+      <p style="color:#666; margin-bottom:20px; font-size:0.95em;">
+        Add times when you strictly <strong>cannot</strong> work (classes, other jobs).
       </p>
-      
-      <table class="data-table">
-        <thead>
-            <tr>
-                <th>Day</th>
-                <th>Unavailable From</th>
-                <th>Unavailable To</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${tableRows.length > 0 ? tableRows : '<tr><td colspan="4" style="text-align:center; color:green;">No blackout times set. You are listed as Fully Available.</td></tr>'}
-        </tbody>
-      </table>
-      
-      <div class="form-container" style="background:#fff0f0; border:1px solid #ffcccc; padding:15px; border-radius:6px; margin-top:15px;">
-        <h3 style="margin-top:0; color:#d9534f;">Block a Time</h3>
-        <form id="add-availability-form" class="inline-form">
-          <select name="day" required class="form-input">${dayOptions}</select>
-          <input type="time" name="start" required class="form-input">
-          <span style="align-self:center;">to</span>
-          <input type="time" name="end" required class="form-input">
-          <button type="button" class="button-danger" onclick="addAvailability()">Block Time</button>
-        </form>
+
+      <div class="avail-grid" id="avail-card-grid">
+        ${cardsHtml}
+      </div>
+
+      <div class="dashboard-accordion ${openClass}" id="add-block-acc">
+        <div class="accordion-header" onclick="toggleAccordion('add-block-acc')">
+            <span>+ Block New Time</span>
+            <span class="accordion-icon">+</span>
+        </div>
+        <div class="accordion-content">
+            <form id="add-availability-form" class="modern-form">
+                <div class="input-group">
+                    <label>Day of Week</label>
+                    <select name="day" required class="modern-select">${dayOptions}</select>
+                </div>
+                <div class="input-group">
+                    <label>Unavailable From</label>
+                    <select name="start" required class="modern-select">${timeOptions}</select>
+                </div>
+                <div class="input-group">
+                    <label>Unavailable Until</label>
+                    <select name="end" required class="modern-select">${timeOptions}</select>
+                </div>
+                <button type="button" class="button-danger" style="height:42px;" onclick="addAvailability(this)">Save Block</button>
+            </form>
+        </div>
       </div>
     `;
   }
 
-  function buildPreferencesHtml(preferencesData) {
+  function buildPreferencesHtml(preferencesData, isOpen) {
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-    const timeSlots = ["Morning", "Afternoon", "Evening"];
+    const timeSlots = [
+        { key: "Morning", label: "Morning (<12pm)" }, 
+        { key: "Afternoon", label: "Afternoon (12-5pm)" }, 
+        { key: "Evening", label: "Evening (>5pm)" }
+    ];
     const options = ["Yes Please", "No Thanks", "Eh, Sure"];
 
     let tableRows = days.map(day => {
       let cells = timeSlots.map(slot => {
-        const timeBlock = `${day}_${slot}`;
+        const timeBlock = `${day}_${slot.key}`;
         const currentPref = preferencesData[timeBlock] || 'Eh, Sure';
         
+        let initialStyle = "";
+        if (currentPref === "Yes Please") initialStyle = "color:green; font-weight:bold;";
+        else if (currentPref === "No Thanks") initialStyle = "color:orange;";
+
         let selectOptions = options.map(opt => {
-            let style = "";
-            if(opt === "Yes Please") style="color:green; font-weight:bold;";
-            if(opt === "No Thanks") style="color:orange;";
-            return `<option value="${opt}" style="${style}" ${opt === currentPref ? 'selected' : ''}>${opt}</option>`;
+            let optStyle = "";
+            if(opt === "Yes Please") optStyle="color:green; font-weight:bold;";
+            if(opt === "No Thanks") optStyle="color:orange;";
+            return `<option value="${opt}" style="${optStyle}" ${opt === currentPref ? 'selected' : ''}>${opt}</option>`;
         }).join('');
         
-        return `<td><select name="${timeBlock}" class="form-input" style="width:100%">${selectOptions}</select></td>`;
+        return `<td>
+            <select name="${timeBlock}" class="pref-select" style="${initialStyle}" onchange="updatePrefColor(this)">
+                ${selectOptions}
+            </select>
+        </td>`;
       }).join('');
       return `<tr><th>${day}</th>${cells}</tr>`;
     }).join('');
 
+    const openClass = isOpen ? 'open' : '';
+
     return `
-      <h2>Shift Preferences</h2>
-      <p>Let us know what time blocks you <em>prefer</em> to work. This helps us assign shifts you actually want.</p>
-      <form id="preferences-form">
-        <table class="data-table preferences-table">
-          <thead><tr><th></th><th>Morning (<12pm)</th><th>Afternoon (12-5pm)</th><th>Evening (>5pm)</th></tr></thead>
-          <tbody>${tableRows}</tbody>
-        </table>
-        <div class="form-actions" style="margin-top:15px;">
-          <button type="button" class="button-primary" onclick="savePreferences()">Save Preferences</button>
-        </div>
-      </form>
+      <div class="dashboard-accordion ${openClass}" id="pref-acc">
+          <div class="accordion-header" onclick="toggleAccordion('pref-acc')">
+              <span>Shift Preferences</span>
+              <span class="accordion-icon">+</span>
+          </div>
+          <div class="accordion-content">
+              <div class="pref-wrapper">
+                  <p style="color:#666; margin-top:0;">Rank your preferred working times to help us build a better schedule.</p>
+                  <form id="preferences-form">
+                    <table class="data-table preferences-table">
+                      <thead>
+                        <tr>
+                            <th></th>
+                            ${timeSlots.map(s => `<th>${s.label}</th>`).join('')}
+                        </tr>
+                      </thead>
+                      <tbody>${tableRows}</tbody>
+                    </table>
+                    <div class="form-actions" style="margin-top:20px; text-align:right;">
+                      <button type="button" class="button-primary" onclick="savePreferences(this)">Save Preferences</button>
+                    </div>
+                  </form>
+              </div>
+          </div>
+      </div>
     `;
   }
 
-  // --- Client-to-Server Communication ---
+  // --- Helper Functions ---
 
-  function handleUpdateResponse(response) {
-    if (response.success) {
-      showNotification(response.message, 'success');
-      // Invalidate the cache so the next load gets fresh data
-      g.dashboardData = null; 
-      loadDashboardPage(); // Reload the dashboard view to show the change
-    } else {
-      showNotification(response.message, 'error');
-    }
+  function toggleAccordion(id) {
+      const acc = document.getElementById(id);
+      acc.classList.toggle('open');
   }
 
-  function addAvailability() {
+  function updatePrefColor(selectEl) {
+      const val = selectEl.value;
+      selectEl.style.color = "";
+      selectEl.style.fontWeight = "";
+      
+      if (val === "Yes Please") {
+          selectEl.style.color = "green";
+          selectEl.style.fontWeight = "bold";
+      } else if (val === "No Thanks") {
+          selectEl.style.color = "orange";
+      }
+  }
+
+  function generateTimeOptions() {
+      let options = '';
+      for (let h = 0; h < 24; h++) {
+          for (let m = 0; m < 60; m += 15) {
+              const hour = h;
+              const minute = m;
+              const ampm = hour >= 12 ? 'PM' : 'AM';
+              const hour12 = hour % 12 || 12;
+              const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+              const displayStr = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+              options += `<option value="${timeStr}">${displayStr}</option>`;
+          }
+      }
+      return options;
+  }
+
+  function formatTimeDisplay(timeStr) {
+      if(!timeStr) return 'N/A';
+      const [h, m] = timeStr.split(':');
+      const hour = parseInt(h);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${m} ${ampm}`;
+  }
+
+  // --- ACTIONS ---
+
+  function addAvailability(btn) {
     const form = document.getElementById('add-availability-form');
     const formData = Object.fromEntries(new FormData(form).entries());
-    if (!formData.day || !formData.start || !formData.end) {
-      showNotification('Please fill out all fields.', 'error');
-      return;
+    
+    if (formData.start >= formData.end) {
+        showNotification('End time must be after start time.', 'error');
+        return;
     }
-    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_addAvailability(formData);
+
+    if(btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    google.script.run
+      .withSuccessHandler(res => {
+          // Add requires reload to get the new ID created by the server
+          if(res.success) {
+              showNotification(res.message, 'success');
+              g.dashboardData = null; 
+              loadAvailabilityPage();
+          } else {
+              if(btn) { btn.disabled = false; btn.textContent = 'Save Block'; }
+              showNotification(res.message, 'error');
+          }
+      })
+      .withFailureHandler(err => {
+          if(btn) { btn.disabled = false; btn.textContent = 'Save Block'; }
+          showNotification(err.message, 'error');
+      })
+      .api_addAvailability(formData);
   }
 
-  function deleteAvailability(recordId) {
+  /**
+   * Optimistic Delete: Removes element immediately without full reload
+   */
+  function deleteAvailability(btn, recordId) {
     if (!confirm('Remove this blackout time?')) return;
-    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_deleteAvailability(recordId);
+    
+    const card = document.getElementById('card-' + recordId);
+    if(card) {
+        card.style.opacity = '0.5';
+        card.style.pointerEvents = 'none';
+    }
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if(res.success) {
+                showNotification(res.message, 'success');
+                // Remove from DOM
+                if(card) card.remove();
+                
+                // Update Cache locally
+                if(g.dashboardData && g.dashboardData.availability) {
+                    g.dashboardData.availability = g.dashboardData.availability.filter(a => a.id !== recordId);
+                    
+                    // Show empty state if needed
+                    if(g.dashboardData.availability.length === 0) {
+                        const grid = document.getElementById('avail-card-grid');
+                        grid.innerHTML = `
+                            <div class="empty-state-card">
+                                <h3>✅ Fully Available</h3>
+                                <p style="margin:0;">You have no blackout times set. You are listed as available for any shift.</p>
+                            </div>`;
+                    }
+                }
+            } else {
+                if(card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
+                showNotification(res.message, 'error');
+            }
+        })
+        .withFailureHandler(err => {
+            if(card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
+            showNotification(err.message, 'error');
+        })
+        .api_deleteAvailability(recordId);
   }
 
-  function savePreferences() {
+  /**
+   * Save Preferences: Does NOT reload page, just updates cache and UI
+   */
+  function savePreferences(btn) {
     const form = document.getElementById('preferences-form');
     const formData = Object.fromEntries(new FormData(form).entries());
-    google.script.run.withSuccessHandler(handleUpdateResponse).withFailureHandler(err => showNotification(err.message, 'error')).api_updateStaffPreferences(formData);
+    
+    if(btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    google.script.run
+      .withSuccessHandler(res => {
+          if(res.success) {
+              showNotification(res.message, 'success');
+              // Update local cache so we don't revert if user navigates away
+              if(g.dashboardData) g.dashboardData.preferences = formData;
+              
+              // Reset button
+              btn.textContent = 'Saved! ✅';
+              btn.style.backgroundColor = '#28a745';
+              setTimeout(() => {
+                  btn.disabled = false; 
+                  btn.textContent = 'Save Preferences';
+                  btn.style.backgroundColor = '';
+              }, 2000);
+          } else {
+              if(btn) { btn.disabled = false; btn.textContent = 'Save Preferences'; }
+              showNotification(res.message, 'error');
+          }
+      })
+      .withFailureHandler(err => {
+          if(btn) { btn.disabled = false; btn.textContent = 'Save Preferences'; }
+          showNotification(err.message, 'error');
+      })
+      .api_updateStaffPreferences(formData);
   }
 
 </script>
