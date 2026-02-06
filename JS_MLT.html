@@ -1,6 +1,7 @@
 <style>
     /* Styling inherits from JS_Nursing.html mostly */
-    #mlt-course-container { margin-top: 15px; }
+    #mlt-course-container { margin-top: 15px;
+    }
 </style>
 
 <script>
@@ -20,10 +21,8 @@
     // --- 1. SIDEBAR OPENER PATCH ---
     // Overrides global function to support MLT data
     const originalSidebarFn = window.openAccommodationsSidebar;
-
     window.openAccommodationsSidebar = function(sheetName, examName, type) {
         console.log("Opening Sidebar for:", sheetName, examName, type);
-        
         let targetDataSource = null;
 
         if (type === 'mlt') {
@@ -40,6 +39,7 @@
         }
 
         // HACK: Temporarily swap nursingData so the old function finds the exam
+        // The shared sidebar relies on 'g.nursingData' being the source of truth.
         const tempHold = g.nursingData;
         g.nursingData = targetDataSource; 
              
@@ -57,10 +57,8 @@
     // --- 2. SIDEBAR SAVER PATCH ---
     // Intercepts the Save action to inject MLT data if needed
     const originalSaveFn = window.saveAccommodations;
-
     window.saveAccommodations = function() {
         console.log("Intercepted Save. Is MLT?", isMltSidebarOpen);
-
         // If we are in MLT mode, we must swap the data again just for this save operation
         if (isMltSidebarOpen) {
             const tempHold = g.nursingData;
@@ -91,17 +89,21 @@
 
        renderMLTSettings();
 
+       // LAZY LOAD CHECK
        if (g.mltData && g.mltData.success) {
            renderMLTDocManagement(g.mltData);
        } else {
            const view = document.getElementById('MLT-DocManagement');
-           view.innerHTML = '<div class="loader-container" style="position:relative; height:200px;"><div class="loader-ring"></div></div>';
+           view.innerHTML = '<div class="loader-container" style="position:relative; height:300px; background:transparent;"><div class="loader-ring"></div></div>';
            
            google.script.run
            .withSuccessHandler(res => {
-               g.mltData = res;
+               g.mltData = res; // Cache result
                if(res.success) renderMLTDocManagement(res);
                else view.innerHTML = `<div class="error-message">${res.message}</div>`;
+           })
+           .withFailureHandler(err => {
+               view.innerHTML = `<div class="error-message">Failed to load MLT data: ${err.message}</div>`;
            })
            .api_getMLTData();
        }
@@ -125,7 +127,6 @@
 
        const container = document.createElement('div');
        container.id = 'mlt-course-container';
-
        if (!response.data || !response.data.sheets || response.data.sheets.length === 0) {
            container.innerHTML = '<div style="padding:40px; text-align:center;">No exams found. Check Settings.</div>';
        } else {
@@ -157,7 +158,7 @@
         exams.forEach(exam => {
             grid.appendChild(buildMLTExamCard({ ...exam, _sheetName: sheetName, _fullTitle: fullTitle }));
         });
-        
+
         contentInner.appendChild(grid);
         contentWrapper.appendChild(contentInner);
         section.appendChild(header);
@@ -172,7 +173,6 @@
         const card = document.createElement('div');
         card.className = 'exam-card';
         card.dataset.examName = (exam.name || '').toLowerCase();
-
         const safeSheet = (exam._sheetName || '').replace(/'/g, "\\'");
         const safeExam = (exam.name || '').replace(/'/g, "\\'");
 
@@ -208,10 +208,9 @@
         btn.textContent = '...';
 
         const func = action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
-        
         const sheetObj = g.mltData.data.sheets.find(s => s.sheetName === sheetName);
         const examObj = sheetObj.exams.find(e => e.name === examName);
-        
+
         const payload = { 
             sheets: [{ 
                 fullTitle: sheetObj.fullTitle, 
@@ -224,7 +223,8 @@
             if(res.success) {
                 showNotification(res.message, 'success');
                 if(res.createdUrls && res.createdUrls[examName]) examObj.docUrl = res.createdUrls[examName];
-                
+                else if(res.docUrl) examObj.docUrl = res.docUrl; // Try generic
+
                 const newCard = buildMLTExamCard({ ...examObj, _sheetName: sheetName, _fullTitle: sheetObj.fullTitle });
                 btn.closest('.exam-card').replaceWith(newCard);
             } else {
@@ -232,13 +232,17 @@
                 btn.disabled = false;
                 btn.textContent = (action==='create'?'Create':'Update');
             }
-        }).withFailureHandler(e => showNotification(e.message,'error'))[func](payload);
+        }).withFailureHandler(e => {
+            showNotification(e.message,'error');
+            btn.disabled = false;
+            btn.textContent = (action==='create'?'Create':'Update');
+        })[func](payload);
     }
 
     function handleMLTBulkAction(action) {
         if (!g.mltData || !g.mltData.data) return;
+
         const allItems = [];
-        
         g.mltData.data.sheets.forEach(sheet => {
             sheet.exams.forEach(exam => {
                 allItems.push({ 
@@ -260,8 +264,9 @@
         if (mltBatchState.processed >= mltBatchState.total) {
             showProgressModal(false);
             showNotification("Batch Complete", "success");
-            g.mltData = null; // Clear cache
-            loadMLTPage(); // Reload
+            
+            // Re-render to reflect new buttons
+            renderMLTDocManagement(g.mltData);
             return;
         }
 
@@ -277,22 +282,34 @@
         const func = mltBatchState.action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
 
         updateProgressUI(mltBatchState.processed, mltBatchState.total, "Processing...");
-
+        
         google.script.run.withSuccessHandler(res => {
             if(res.success) {
+                // Update local URLs
+                if(res.createdUrls) {
+                    for(const [eName, eUrl] of Object.entries(res.createdUrls)) {
+                        g.mltData.data.sheets.forEach(s => {
+                            const found = s.exams.find(e => e.name === eName);
+                            if(found) found.docUrl = eUrl;
+                        });
+                    }
+                }
                 mltBatchState.processed += chunk.length;
                 processNextMLTBatch();
             } else {
                 showNotification("Error: " + res.message, "error");
                 showProgressModal(false);
             }
+        }).withFailureHandler(err => {
+            showNotification("Error: " + err.message, "error");
+            showProgressModal(false);
         })[func](payload);
     }
 
     function renderMLTSettings() {
         const s = (g.allSettings.mlt_settings_new) ? g.allSettings.mlt_settings_new : (g.allSettings.MLT || {}); 
         const existingVal = (g.mltData && g.mltData.data && g.mltData.data.settings) ? g.mltData.data.settings : {};
-        
+
         const sheetUrl = existingVal.sheetId || s.spreadsheetUrl || '';
         const folderUrl = existingVal.folderId || s.targetFolderId || '';
         const notes = existingVal.customNotes || s.customNotes || '';
@@ -319,7 +336,12 @@
         google.script.run.withSuccessHandler(() => {
             btn.textContent = 'Save';
             showNotification('Saved', 'success');
-            g.mltData = null; // Force reload
+            g.mltData = null; // Force reload on next view
+            
+            // Update global settings
+            if(!g.allSettings.mlt_settings_new) g.allSettings.mlt_settings_new = {};
+            g.allSettings.mlt_settings_new = val;
+
         }).mlt_saveSettings(val);
     }
 

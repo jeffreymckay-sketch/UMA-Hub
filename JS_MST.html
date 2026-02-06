@@ -2,9 +2,8 @@
   /* --- MST Card Layout Styles --- */
   
   /* Robust Button Styles */
-  /* Added display:inline-block to support DIV buttons */
   .button-primary {
-    display: inline-block; 
+    display: inline-block;
     cursor: pointer; 
     font-family: inherit; 
     transition: opacity 0.2s;
@@ -35,12 +34,13 @@
     user-select: none;
   }
 
-  .button-primary:hover, .button-success:hover { opacity: 0.9; }
+  .button-primary:hover, .button-success:hover { opacity: 0.9;
+  }
   
-  /* Disabled state for DIVs */
+  /* Disabled state */
   .button-primary[disabled], .button-success[disabled], 
   .button-primary.disabled, .button-success.disabled { 
-    background-color: #ccc; 
+    background-color: #ccc;
     cursor: not-allowed; 
     pointer-events: none;
   }
@@ -67,7 +67,8 @@
     vertical-align: middle;
   }
   
-  .data-table tr:hover { background-color: #f9f9f9; }
+  .data-table tr:hover { background-color: #f9f9f9;
+  }
 
   /* Assignment Cell Styles */
   .assign-wrapper {
@@ -99,7 +100,8 @@
 
   /* --- Calendar Sync Layout --- */
   .sync-controls {
-    background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #ddd;
+    background: #fff;
+    padding: 15px; border-radius: 8px; border: 1px solid #ddd;
     margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end;
   }
   
@@ -110,69 +112,86 @@
 
   .sync-card {
     background: #fff; border: 1px solid #ddd; border-radius: 6px;
-    display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex; flex-direction: column;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     transition: transform 0.2s, box-shadow 0.2s;
     position: relative;
     overflow: hidden;
   }
   
   .sync-card.status-new { border-left: 5px solid #28a745; }
-  .sync-card.status-update { border-left: 5px solid #f39c12; }
-  .sync-card.status-synced { border-left: 5px solid #bdc3c7; opacity: 0.7; }
+  .sync-card.status-update { border-left: 5px solid #f39c12;
+  }
+  .sync-card.status-synced { border-left: 5px solid #bdc3c7; opacity: 0.7;
+  }
   
   .sync-card-header {
     padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #eee;
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex;
+    justify-content: space-between; align-items: center;
   }
   
-  .sync-card-body { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+  .sync-card-body { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; gap: 8px;
+  }
   
   .sync-input-group { display: flex; flex-direction: column; font-size: 0.9em; }
-  .sync-input-group label { font-size: 0.8em; color: #666; margin-bottom: 2px; font-weight: 600; }
+  .sync-input-group label { font-size: 0.8em;
+    color: #666; margin-bottom: 2px; font-weight: 600; }
   .sync-input { 
-    padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; 
+    padding: 5px 8px;
+    border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; 
     font-size: 1em;
   }
   
   /* Diff Styles */
   .diff-container {
-    background: #fff3cd; border: 1px solid #ffeeba; padding: 8px; border-radius: 4px; margin-bottom: 5px;
+    background: #fff3cd; border: 1px solid #ffeeba;
+    padding: 8px; border-radius: 4px; margin-bottom: 5px;
   }
   .diff-item {
-    display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; font-size: 0.85em; color: #856404;
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-bottom: 4px; font-size: 0.85em; color: #856404;
   }
   .diff-item:last-child { margin-bottom: 0; }
-  .diff-item input { margin-top: 2px; }
+  .diff-item input { margin-top: 2px;
+  }
 
   .sync-info-section {
     background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.85em; color: #555;
     border: 1px solid #eee;
   }
   .sync-info-row { margin-bottom: 2px; }
-  .sync-info-label { font-weight: bold; color: #333; margin-right: 5px; }
+  .sync-info-label { font-weight: bold; color: #333; margin-right: 5px;
+  }
 
   .sync-card-footer {
     padding: 8px 12px; background: #fff; border-top: 1px solid #eee;
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between;
+    align-items: center;
   }
 
   .status-badge {
-    padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
   .status-badge.new { background: #d4edda; color: #155724; }
-  .status-badge.update { background: #fff3cd; color: #856404; }
+  .status-badge.update { background: #fff3cd; color: #856404;
+  }
   .status-badge.synced { background: #e2e3e5; color: #383d41; }
 
   /* Filters */
   .filter-bar { 
-    margin-bottom: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; 
+    margin-bottom: 15px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap; 
     padding: 5px; background: #f8f9fa; border-radius: 30px; border: 1px solid #eee;
   }
   .filter-btn { 
     padding: 5px 12px; border: 1px solid transparent; background: transparent; 
-    border-radius: 20px; cursor: pointer; font-size: 0.85em; color: #666; font-weight: 500;
+    border-radius: 20px;
+    cursor: pointer; font-size: 0.85em; color: #666; font-weight: 500;
   }
-  .filter-btn:hover { background: #e9ecef; }
+  .filter-btn:hover { background: #e9ecef;
+  }
   .filter-btn.active { 
     background: var(--color-primary-navy, #00274c); 
     color: #fff; 
@@ -180,7 +199,8 @@
   }
 
   /* Form Elements */
-  .form-field { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+  .form-field { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;
+  }
   .form-field label { display: block; margin-bottom: 4px; font-weight: bold; }
 
 </style>
@@ -191,34 +211,50 @@
  */
 function loadMstPage() {
   const pageContainer = document.getElementById('page-MST');
-  if (pageContainer.childElementCount > 0) return;
-
-  console.log("Loading MST page...");
-
-  if (!g.mstData || g.mstData.error) {
-    pageContainer.innerHTML = `<div class="error-message">Could not load MST tool. Error: ${g.mstData ? g.mstData.error : 'Unknown'}</div>`;
-    return;
+  
+  // Create basic layout if not present
+  if (pageContainer.childElementCount === 0) {
+      pageContainer.innerHTML = `
+        <div class="widget">
+          <nav class="tab-nav">
+            <a href="#" class="tab-link active" data-tab="classroom">Classroom Management</a>
+            <a href="#" class="tab-link" data-tab="calendar">Calendar Sync</a>
+            <a href="#" class="tab-link" data-tab="settings">Settings</a>
+          </nav>
+          <div id="mst-classroom" class="tab-content active"></div>
+          <div id="mst-calendar" class="tab-content" style="display:none;"></div>
+          <div id="mst-settings" class="tab-content" style="display:none;"></div>
+        </div>
+      `;
+      
+      pageContainer.querySelectorAll('.tab-link').forEach(link => {
+        link.addEventListener('click', e => handleMstTabClick(e, pageContainer));
+      });
   }
 
-  const initialHtml = `
-    <div class="widget">
-      <nav class="tab-nav">
-        <a href="#" class="tab-link active" data-tab="classroom">Classroom Management</a>
-        <a href="#" class="tab-link" data-tab="calendar">Calendar Sync</a>
-        <a href="#" class="tab-link" data-tab="settings">Settings</a>
-      </nav>
-      <div id="mst-classroom" class="tab-content active"></div>
-      <div id="mst-calendar" class="tab-content" style="display:none;"></div>
-      <div id="mst-settings" class="tab-content" style="display:none;"></div>
-    </div>
-  `;
-  pageContainer.innerHTML = initialHtml;
-
-  pageContainer.querySelectorAll('.tab-link').forEach(link => {
-    link.addEventListener('click', e => handleMstTabClick(e, pageContainer));
-  });
-
-  loadMstClassroomTab(); 
+  // --- LAZY LOADING ---
+  if (g.mstData && !g.mstData.error) {
+      // Data exists, render immediately
+      loadMstClassroomTab();
+  } else {
+      // Data missing, fetch it
+      const classroomTab = document.getElementById('mst-classroom');
+      classroomTab.innerHTML = '<div class="loader-container" style="position:relative; height:300px; background:transparent;"><div class="loader-ring"></div></div>';
+      
+      google.script.run
+        .withSuccessHandler(res => {
+            if (res.success) {
+                g.mstData = res;
+                loadMstClassroomTab();
+            } else {
+                classroomTab.innerHTML = `<div class="error-message">Error loading MST data: ${res.message}</div>`;
+            }
+        })
+        .withFailureHandler(err => {
+            classroomTab.innerHTML = `<div class="error-message">Server Error: ${err.message}</div>`;
+        })
+        .api_getMstViewData();
+  }
 }
 
 function handleMstTabClick(e, pageContainer) {
@@ -228,7 +264,6 @@ function handleMstTabClick(e, pageContainer) {
   pageContainer.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
   e.target.classList.add('active');
   pageContainer.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-
   const activeContent = document.getElementById(`mst-${tabId}`);
   activeContent.style.display = 'block';
 
@@ -243,8 +278,13 @@ function handleMstTabClick(e, pageContainer) {
 
 function loadMstClassroomTab() {
   const container = document.getElementById('mst-classroom');
-  if (container.childElementCount > 0) return;
-  renderScheduleTable(container, g.mstData.courseAssignments, g.mstData.mstStaffList);
+  // Only render if we have data
+  if (!g.mstData || !g.mstData.data) return;
+  
+  // Re-render only if container is empty (or we want to force refresh)
+  if (container.querySelector('table')) return; 
+
+  renderScheduleTable(container, g.mstData.data.courseAssignments, g.mstData.data.mstStaffList);
 }
 
 function renderScheduleTable(container, schedule, staffList) {
@@ -304,7 +344,6 @@ function updateZoomLink(courseId, inputEl) {
     const newVal = inputEl.value;
     inputEl.disabled = true;
     inputEl.style.opacity = '0.7';
-    
     google.script.run
         .withSuccessHandler(res => {
             inputEl.disabled = false;
@@ -333,7 +372,6 @@ function assignStaff(courseId, event) {
   const btn = event.target;
   const originalText = btn.textContent;
   btn.disabled = true; btn.textContent = '...';
-
   google.script.run
     .withSuccessHandler(res => {
       if (res.success) {
@@ -358,20 +396,37 @@ function assignStaff(courseId, event) {
 
 // --- Calendar Sync Tab (New Card Layout) ---
 
-let mstSyncData = []; // Store the preview data globally
+let mstSyncData = [];
 
 function loadMstCalendarTab() {
   const container = document.getElementById('mst-calendar');
-  if (container.childElementCount > 0) return;
-
-  if (!g.writableCalendars || g.writableCalendars.error) {
-    container.innerHTML = `<div class="error-message">Could not load Calendar Sync. Error: ${g.writableCalendars ? g.writableCalendars.error : 'Unknown'}</div>`;
-    return;
+  
+  // 1. Check if calendars are loaded
+  if (!g.writableCalendars) {
+      container.innerHTML = '<div class="loader-container" style="position:relative; height:200px; background:transparent;"><div class="loader-ring"></div></div>';
+      google.script.run
+        .withSuccessHandler(res => {
+            if (res.success) {
+                g.writableCalendars = res.data;
+                renderMstCalendarControls(container);
+            } else {
+                container.innerHTML = `<div class="error-message">Failed to load calendars: ${res.message}</div>`;
+            }
+        })
+        .withFailureHandler(err => {
+            container.innerHTML = `<div class="error-message">System Error: ${err.message}</div>`;
+        })
+        .getWritableCalendars();
+  } else {
+      // 2. Render if already loaded
+      renderMstCalendarControls(container);
   }
-  
+}
+
+function renderMstCalendarControls(container) {
+  if (container.querySelector('.sync-controls')) return; // Already rendered
+
   const calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  
-  // FIX: Changed button to DIV to prevent form submission
   container.innerHTML = `
     <div class="sync-controls">
       <div style="flex-grow:1;">
@@ -395,7 +450,6 @@ function loadMstCalendarTab() {
     <div id="mst-sync-loader" class="loader-container" style="display:none;"><div class="loader-ring"></div></div>
   `;
   
-  // FIX: Using container.querySelector to avoid ID collisions with global document
   container.querySelector('#btn-preview').onclick = function(e) { runMstPreview(e); return false; };
   container.querySelector('#btn-sync-selected').onclick = function(e) { runMstCommit(e); return false; };
   
@@ -406,7 +460,8 @@ function loadMstCalendarTab() {
 }
 
 function runMstPreview(e) {
-    if(e) { e.preventDefault(); e.stopPropagation(); }
+    if(e) { e.preventDefault(); e.stopPropagation();
+    }
     console.log("Starting Preview...");
     
     const calId = document.getElementById('mst-calendar-select').value;
@@ -414,7 +469,6 @@ function runMstPreview(e) {
 
     document.getElementById('mst-sync-area').style.display = 'none';
     document.getElementById('mst-sync-loader').style.display = 'flex';
-    
     google.script.run
         .withSuccessHandler(res => {
             console.log("Preview Success:", res);
@@ -435,14 +489,12 @@ function runMstPreview(e) {
             alert("System Error: " + err.message);
         })
         .api_previewMstCalendarSync(calId);
-        
     return false;
 }
 
 function renderSyncGrid() {
     const grid = document.getElementById('mst-sync-grid');
     grid.innerHTML = '';
-    
     if(mstSyncData.length === 0) {
         grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:20px;">No events found in sheet.</div>';
         return;
@@ -525,7 +577,6 @@ function renderSyncGrid() {
                 <small style="color:#888;">${p.dayStr || 'Single Event'}</small>
             </div>
         `;
-        
         // Attach generic input listener for auto-selection
         card.querySelectorAll('.sync-input').forEach(input => {
             input.addEventListener('input', () => {
@@ -540,7 +591,6 @@ function renderSyncGrid() {
                 }
             });
         });
-
         grid.appendChild(card);
     });
 }
@@ -548,7 +598,6 @@ function renderSyncGrid() {
 function filterSyncGrid(filter, btn) {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    
     document.querySelectorAll('.sync-card').forEach(card => {
         if(filter === 'all' || card.dataset.status === filter) {
             card.style.display = 'flex';
@@ -561,12 +610,10 @@ function filterSyncGrid(filter, btn) {
 function runMstCommit(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
     const btn = e.target;
-    
     // Check if button is disabled (simulated for DIV)
     if(btn.classList.contains('disabled')) return false;
 
     const calId = document.getElementById('mst-calendar-select').value;
-    
     // Gather Data
     const selectedEvents = [];
     document.querySelectorAll('.sync-card').forEach(card => {
@@ -588,21 +635,17 @@ function runMstCommit(e) {
                     // If unchecked, set field to SKIP
                     if (diff.key === 'title') finalPayload.title = "SKIP";
                     if (diff.key === 'location') finalPayload.location = "SKIP";
-                    if (diff.key === 'time') finalPayload.startTime = "SKIP"; // Skip Time Update
+                    if (diff.key === 'time') finalPayload.startTime = "SKIP";
                     if (diff.key === 'guest_add' || diff.key === 'guest_remove') finalPayload.guests = "SKIP";
                 }
             });
-
             // Capture Edits (Only if not skipped)
             if(finalPayload.title !== "SKIP") finalPayload.title = card.querySelector('.field-title').value;
             if(finalPayload.location !== "SKIP") finalPayload.location = card.querySelector('.field-loc').value;
             
-            // Capture Description (Always capture, as it might be auto-updated by Zoom logic)
+            // Capture Description
             finalPayload.description = card.querySelector('.field-desc').value;
 
-            // Note: Zoom Link is no longer captured here for write-back, as it's handled in the Classroom tab.
-            // However, the description (which contains the zoom link) is captured above.
-            
             if(finalPayload.startTime !== "SKIP") {
                 const newStartStr = card.querySelector('.field-start').value;
                 const newEndStr = card.querySelector('.field-end').value;
@@ -631,14 +674,13 @@ function runMstCommit(e) {
     }
 
     if(!confirm(`Sync ${selectedEvents.length} events to Calendar?`)) return false;
-
+    
     // Disable button (Visual)
     btn.classList.add('disabled');
     btn.textContent = 'Syncing...';
     
     document.getElementById('mst-sync-loader').style.display = 'flex';
     document.getElementById('mst-sync-grid').style.opacity = '0.5';
-
     google.script.run
         .withSuccessHandler(res => {
             document.getElementById('mst-sync-loader').style.display = 'none';
@@ -673,18 +715,25 @@ function loadMstSettingsTab() {
     const container = document.getElementById('mst-settings');
     if (container.childElementCount > 0) return;
 
-    if (!g.mstSettings || g.mstSettings.error) {
-        container.innerHTML = `<div class="error-message">Could not load MST Settings. Error: ${g.mstSettings ? g.mstSettings.error : 'Unknown'}</div>`;
-        return;
+    if (!g.mstSettings && !g.mstSettings?.error) {
+        // Fetch if missing (Settings usually come in Phase 1, but safe to check)
+        google.script.run.withSuccessHandler(res => {
+            if(res.success) {
+                g.mstSettings = res.data;
+                renderMstSettingsForm(container, g.mstSettings);
+            } else {
+                container.innerHTML = `<div class="error-message">${res.message}</div>`;
+            }
+        }).api_getMstSettings();
+    } else {
+        renderMstSettingsForm(container, g.mstSettings);
     }
-    renderMstSettingsForm(container, g.mstSettings);
 }
 
 function renderMstSettingsForm(container, data) {
-  const savedTab = data.settings.sourceTabName || '';
-  const sheetNames = data.sheetNames || [];
+  const savedTab = data?.settings?.sourceTabName || '';
+  const sheetNames = data?.sheetNames || [];
   const optionsHtml = sheetNames.map(name => `<option value="${name}" ${name === savedTab ? 'selected' : ''}>${name}</option>`).join('');
-
   container.innerHTML = `
     <div class="form-grid" style="max-width: 800px;">
       <div class="form-field full-width">
@@ -708,10 +757,10 @@ function saveMstSettings(event) {
   if (!sourceTabName) { alert('Please select a Source Sheet Tab.'); return; }
 
   const btn = event.target;
-  btn.disabled = true; btn.textContent = 'Saving...';
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
   const feedbackDiv = document.getElementById('mst-settings-feedback');
   feedbackDiv.innerHTML = '';
-
   google.script.run
     .withSuccessHandler(res => {
       if (res.success) {

@@ -39,10 +39,12 @@
       transition: background 0.2s;
     }
     .course-header:hover { background: #e9ecef; }
-    .course-header::after { content: '▼'; font-size: 0.8em; color: #666; transition: transform 0.3s; }
+    .course-header::after { content: '▼'; font-size: 0.8em; color: #666;
+      transition: transform 0.3s; }
     
     /* --- ACCORDION ANIMATION --- */
-    .course-section.open .course-header::after { transform: rotate(180deg); }
+    .course-section.open .course-header::after { transform: rotate(180deg);
+    }
     
     /* The outer wrapper handles the height transition */
     .course-content { 
@@ -86,8 +88,9 @@
         flex-direction: column;
         background-color: #fff;
         /* NEW: Bold Purple Border */
-        border: 3px solid var(--color-brand-purple); 
-        overflow: hidden; /* Ensures header background doesn't bleed out */
+        border: 3px solid var(--color-accent-purple, #583583); 
+        overflow: hidden;
+        /* Ensures header background doesn't bleed out */
     }
 
     .exam-card-header {
@@ -125,12 +128,16 @@
       justify-content: space-between;
       margin-bottom: 8px;
       padding-bottom: 8px;
-      border-bottom: 1px dashed #ddd; /* Lighter dashed line */
+      border-bottom: 1px dashed #ddd;
+      /* Lighter dashed line */
     }
-    .exam-info-row:last-child { border-bottom: none; margin-bottom: 0; }
+    .exam-info-row:last-child { border-bottom: none; margin-bottom: 0;
+    }
     
-    .exam-label { color: #555; font-weight: 500; }
-    .exam-value { font-weight: 700; color: #222; text-align: right; }
+    .exam-label { color: #555; font-weight: 500;
+    }
+    .exam-value { font-weight: 700; color: #222; text-align: right;
+    }
     
     .password-badge {
       background: #f0f0f0;
@@ -144,7 +151,8 @@
     
     .exam-card-footer {
       padding: 12px 15px;
-      background: #fff; /* Cleaner look than gray */
+      background: #fff;
+      /* Cleaner look than gray */
       border-top: 1px solid #eee;
       display: flex;
       justify-content: space-between;
@@ -152,7 +160,8 @@
       gap: 5px;
     }
     
-    .footer-right { display: flex; gap: 8px; }
+    .footer-right { display: flex; gap: 8px;
+    }
     
     /* --- NEW BUTTON STYLES --- */
     
@@ -168,10 +177,12 @@
       transition: opacity 0.2s, transform 0.1s;
     }
     
-    .btn-sm:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-sm:hover { opacity: 0.9; transform: translateY(-1px);
+    }
     .btn-sm:active { transform: translateY(0); }
 
-    .btn-std { min-width: 70px; text-align: center; }
+    .btn-std { min-width: 70px; text-align: center;
+    }
 
     /* Students Button (Navy) */
     .button-navy {
@@ -187,12 +198,13 @@
 
     /* Inactive Update Button (Light Green) */
     .button-update-inactive {
-        background-color: var(--color-accent-lightgreen); 
+        background-color: var(--color-accent-lightgreen, #EDF7DF);
         color: #555 !important; /* Darker text for readability on light background */
         cursor: not-allowed;
         opacity: 0.8;
     }
-    .button-update-inactive:hover { opacity: 0.8; transform: none; }
+    .button-update-inactive:hover { opacity: 0.8; transform: none;
+    }
 
     /* Create Button (Orange) */
     .button-create {
@@ -211,79 +223,85 @@
 <script>
     // --- Global State for Batching ---
     let batchState = {
-    queue: [],
-    total: 0,
-    processed: 0,
-    action: '', 
-    isRunning: false
+        queue: [],
+        total: 0,
+        processed: 0,
+        action: '', 
+        isRunning: false
     };
 
     function loadNursingPage() {
-    // Ensure the Doc Management tab is active
-    const docTabBtn = document.querySelector('button[onclick*="Nursing-DocManagement"]');
-    if (docTabBtn) openTab({ currentTarget: docTabBtn }, 'Nursing-DocManagement');
+        // Ensure the Doc Management tab is active
+        const docTabBtn = document.querySelector('button[onclick*="Nursing-DocManagement"]');
+        if (docTabBtn) openTab({ currentTarget: docTabBtn }, 'Nursing-DocManagement');
 
-    renderNursingSettings(); // Populate the settings tab form
-    
-    // Check if data exists in cache
-    if (g.nursingData && g.nursingData.success) {
-        renderNursingDocManagement(g.nursingData);
-    } else {
-        // Load if missing
-        const view = document.getElementById('Nursing-DocManagement');
-        view.innerHTML = '<div class="loader-container" style="position:relative; height:200px;"><div class="loader-ring"></div></div>';
-        google.script.run
-        .withSuccessHandler(res => {
-            g.nursingData = res;
-            if(res.success) renderNursingDocManagement(res);
-            else view.innerHTML = `<div class="error-message">${res.message}</div>`;
-        })
-        .api_getNursingData();
-    }
+        renderNursingSettings(); // Populate the settings tab form
+        
+        // LAZY LOADING CHECK
+        if (g.nursingData && g.nursingData.success) {
+            renderNursingDocManagement(g.nursingData);
+        } else {
+            // Load if missing
+            const view = document.getElementById('Nursing-DocManagement');
+            view.innerHTML = '<div class="loader-container" style="position:relative; height:300px; background:transparent;"><div class="loader-ring"></div></div>';
+            
+            google.script.run
+            .withSuccessHandler(res => {
+                g.nursingData = res; // Cache the data
+                if(res.success) {
+                    renderNursingDocManagement(res);
+                } else {
+                    view.innerHTML = `<div class="error-message">${res.message}</div>`;
+                }
+            })
+            .withFailureHandler(err => {
+                view.innerHTML = `<div class="error-message">Failed to load Nursing data: ${err.message}</div>`;
+            })
+            .api_getNursingData();
+        }
     }
 
     function renderNursingDocManagement(response) {
-    const view = document.getElementById('Nursing-DocManagement');
-    view.innerHTML = '';
+        const view = document.getElementById('Nursing-DocManagement');
+        view.innerHTML = '';
 
-    // Header Controls
-    const header = document.createElement('div');
-    header.className = 'proctoring-header';
-    header.innerHTML = `
-        <h2 style="margin:0; color: var(--color-primary-navy);">Nursing Doc Management</h2>
-        <div class="proctoring-actions">
-        <input type="text" id="exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterExams()" style="width:200px">
-        <button id="nursing-create-btn" class="button-primary" onclick="handleBulkAction('create')">Generate All</button>
-        <button id="nursing-update-btn" class="button-secondary" onclick="handleBulkAction('update')">Update All</button>
-        </div>
-    `;
-    view.appendChild(header);
+        // Header Controls
+        const header = document.createElement('div');
+        header.className = 'proctoring-header';
+        header.innerHTML = `
+            <h2 style="margin:0; color: var(--color-primary-navy);">Nursing Doc Management</h2>
+            <div class="proctoring-actions">
+            <input type="text" id="exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterExams()" style="width:200px">
+            <button id="nursing-create-btn" class="button-primary" onclick="handleBulkAction('create')">Generate All</button>
+            <button id="nursing-update-btn" class="button-secondary" onclick="handleBulkAction('update')">Update All</button>
+            </div>
+        `;
+        view.appendChild(header);
 
-    // Group Data by Course Code
-    const courses = {};
-    if (response.data && response.data.sheets) {
-        response.data.sheets.forEach(sheet => {
-            const code = sheet.course.code || "Unknown";
-            if (!courses[code]) {
-                courses[code] = { name: sheet.course.name, exams: [] };
-            }
-            // Add sheetName to exam object for easy access in callbacks
-            sheet.exams.forEach(e => courses[code].exams.push({ ...e, _sheetName: sheet.sheetName }));
-        });
-    }
+        // Group Data by Course Code
+        const courses = {};
+        if (response.data && response.data.sheets) {
+            response.data.sheets.forEach(sheet => {
+                const code = sheet.course.code || "Unknown";
+                if (!courses[code]) {
+                    courses[code] = { name: sheet.course.name, exams: [] };
+                }
+                // Add sheetName to exam object for easy access in callbacks
+                sheet.exams.forEach(e => courses[code].exams.push({ ...e, _sheetName: sheet.sheetName }));
+            });
+        }
 
-    const container = document.createElement('div');
-    container.id = 'course-container';
+        const container = document.createElement('div');
+        container.id = 'course-container';
+        if (Object.keys(courses).length === 0) {
+            container.innerHTML = '<div style="padding:40px; text-align:center; color:#888; background:#f9f9f9; border-radius:8px;">No exams found. Check that your Sheet ID is correct in Settings.</div>';
+        }
 
-    if (Object.keys(courses).length === 0) {
-        container.innerHTML = '<div style="padding:40px; text-align:center; color:#888; background:#f9f9f9; border-radius:8px;">No exams found. Check that your Sheet ID is correct in Settings.</div>';
-    }
-
-    // Build UI Sections
-    for (const [code, data] of Object.entries(courses)) {
-        container.appendChild(buildCourseSection(code, data.name, data.exams));
-    }
-    view.appendChild(container);
+        // Build UI Sections
+        for (const [code, data] of Object.entries(courses)) {
+            container.appendChild(buildCourseSection(code, data.name, data.exams));
+        }
+        view.appendChild(container);
     }
 
     function buildCourseSection(code, name, exams) {
@@ -294,7 +312,7 @@
         header.className = 'course-header';
         header.innerHTML = `<span>${code} - ${name}</span> <span style="font-weight:normal; font-size:0.9em; color:#666;">(${exams.length} exams)</span>`;
         header.onclick = () => section.classList.toggle('open');
-        
+
         // Wrapper 1: The animator (handles the slide)
         const contentWrapper = document.createElement('div');
         contentWrapper.className = 'course-content';
@@ -307,7 +325,7 @@
         grid.className = 'exam-grid';
         
         exams.forEach(exam => grid.appendChild(buildExamCard(exam)));
-        
+
         // Nest the elements: Wrapper -> Inner -> Grid
         contentInner.appendChild(grid);
         contentWrapper.appendChild(contentInner);
@@ -319,21 +337,18 @@
 
     function buildExamCard(exam) {
         const hasDoc = !!exam.docUrl;
-        
         // 1. Determine Header Color Class
         const headerClass = hasDoc ? 'header-created' : 'header-not-created';
         
         const card = document.createElement('div');
-        card.className = 'exam-card'; // Border is now applied to all via CSS
+        card.className = 'exam-card';
+        // Border is now applied to all via CSS
         card.dataset.examName = (exam.name || '').toLowerCase();
-        
         const safeSheet = (exam._sheetName || '').replace(/'/g, "\\'");
         const safeExam = (exam.name || '').replace(/'/g, "\\'");
-        
-        
+
         // 2. Configure Buttons based on new specs
         let updateButton, createOrViewButton;
-        
         if (hasDoc) {
             // Update Active: Navy Blue
             updateButton = `<button class="btn-sm btn-std button-update-active" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
@@ -381,7 +396,7 @@
         const func = action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
         const sheet = g.nursingData.data.sheets.find(s => s.sheetName === sheetName);
         const exam = sheet.exams.find(e => e.name === examName);
-        
+
         // Wrap in expected array structure for bulk function
         const payload = { settings: g.nursingData.data.settings, sheets: [{ ...sheet, exams: [exam] }] };
 
@@ -389,7 +404,12 @@
         .withSuccessHandler(res => {
             if(res.success) {
                 showNotification(res.message, 'success');
-                exam.docUrl = res.docUrl || exam.docUrl; // Optimistic update
+                // Optimistic update
+                if(res.createdUrls && res.createdUrls[examName]) {
+                    exam.docUrl = res.createdUrls[examName]; 
+                } else if(res.docUrl) {
+                    exam.docUrl = res.docUrl;
+                }
                 
                 // Re-render card to update buttons state
                 const newCard = buildExamCard({ ...exam, _sheetName: sheetName });
@@ -412,16 +432,18 @@
 
     function handleBulkAction(action) {
         if (!g.nursingData || !g.nursingData.data) return;
+
         const allExams = [];
         g.nursingData.data.sheets.forEach(sheet => {
             sheet.exams.forEach(exam => {
                 allExams.push({ sheetName: sheet.sheetName, course: sheet.course, exam: exam });
             });
         });
+
         if (allExams.length === 0) { showNotification("No exams found.", "error"); return; }
         
         batchState = { queue: allExams, total: allExams.length, processed: 0, action: action, isRunning: true };
-        
+
         // Visual feedback
         document.getElementById('nursing-create-btn').disabled = true;
         document.getElementById('nursing-update-btn').disabled = true;
@@ -436,6 +458,7 @@
         if (batchState.processed >= batchState.total) { finishBatchProcess(); return; }
         
         const chunk = batchState.queue.slice(batchState.processed, batchState.processed + BATCH_SIZE);
+        
         const tempSheetsMap = {};
         chunk.forEach(item => {
             if (!tempSheetsMap[item.sheetName]) {
@@ -443,14 +466,28 @@
             }
             tempSheetsMap[item.sheetName].exams.push(item.exam);
         });
-        
+
         const payload = { settings: g.nursingData.data.settings, sheets: Object.values(tempSheetsMap) };
         const func = batchState.action === 'create' ? 'createNursingProctoringDocuments' : 'updateAllNursingDocuments';
-        
+
         updateProgressUI(batchState.processed, batchState.total, `Processing items ${batchState.processed + 1} - ${Math.min(batchState.processed + BATCH_SIZE, batchState.total)}...`);
         
         google.script.run.withSuccessHandler(res => {
-                if (res.success) { batchState.processed += chunk.length; processNextBatch(); } 
+                if (res.success) { 
+                    // Update URLs locally if returned
+                    if(res.createdUrls) {
+                        for(const [eName, eUrl] of Object.entries(res.createdUrls)) {
+                            // Find the exam in global data and update URL
+                            // This is a rough look up, but effective for batch
+                            g.nursingData.data.sheets.forEach(s => {
+                                const found = s.exams.find(e => e.name === eName);
+                                if(found) found.docUrl = eUrl;
+                            });
+                        }
+                    }
+                    batchState.processed += chunk.length; 
+                    processNextBatch(); 
+                } 
                 else { showNotification("Batch failed: " + res.message, "error"); finishBatchProcess(false); }
             }).withFailureHandler(err => { showNotification("Server error: " + err.message, "error"); finishBatchProcess(false); })
             [func](payload);
@@ -462,8 +499,8 @@
         document.getElementById('nursing-update-btn').disabled = false;
         if (success) {
             showNotification("Complete!", "success");
-            g.nursingData = null; // Clear cache
-            loadNursingPage(); // Refresh to update button states (Create -> Update)
+            // Re-render the view to show new green buttons
+            renderNursingDocManagement(g.nursingData); 
         }
     }
 
@@ -535,10 +572,16 @@
         google.script.run.withSuccessHandler(res => {
             btn.textContent = 'Save Settings';
             if(res.success) { 
+                // Update global cache
                 g.allSettings.nursing_settings = settings; 
-                g.nursingData = null; // Clear cache so main view reloads with new IDs
+                g.nursingData = null; // Clear cache so main view reloads with new IDs next time
                 showNotification('Saved', 'success'); 
+            } else {
+                showNotification("Error: " + res.message, "error");
             }
+        }).withFailureHandler(e => {
+            btn.textContent = 'Save Settings';
+            showNotification(e.message, "error");
         }).api_saveSettings('nursing_settings', settings);
     }
 </script>

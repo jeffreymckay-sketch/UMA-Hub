@@ -1,5 +1,6 @@
 <script>
   // --- Global Data Cache ---
+  // These will be populated lazily when specific tabs are opened
   const g = {
     userInfo: null,
     dashboardData: null,
@@ -50,8 +51,11 @@
 
   document.addEventListener('DOMContentLoaded', function() {
     console.log("App Started: DOMContentLoaded");
+    
+    // We initially build the menu; user info will update it shortly
     buildMenu(); 
 
+    // Fetch the lightweight initial data (User Info, Settings)
     google.script.run
       .withSuccessHandler(handleInitialDataSuccess)
       .withFailureHandler(handleInitialError)
@@ -67,21 +71,28 @@
   function handleInitialDataSuccess(response) {
     console.log("Initial Data Received:", response);
     if (response && response.success) {
+      // 1. Critical Data (Loaded Immediately)
       g.userInfo = response.data.userInfo;
-      g.mstData = response.data.mstData;
-      g.mltData = response.data.mltData;
       g.allSettings = response.data.settings || {};
-      g.writableCalendars = response.data.writableCalendars;
-      g.allCalendars = response.data.allCalendars;
-      g.nursingData = response.data.nursingData;
 
+      // 2. Lazy Data (Initialized as null)
+      // The server now returns these as null or empty arrays. 
+      // We rely on specific page loaders (e.g., loadNursingPage) to check for null and fetch if needed.
+      g.mstData = response.data.mstData || null;
+      g.mltData = response.data.mltData || null;
+      g.writableCalendars = response.data.writableCalendars || null;
+      g.allCalendars = response.data.allCalendars || null;
+      g.nursingData = response.data.nursingData || null;
+
+      // 3. Update UI
       populateUserInfo(); 
-      buildMenu(); 
+      buildMenu(); // Rebuild menu now that we have user roles
 
-      // UPDATED: Default to Availability
+      // 4. Default Routing
       const initialPage = window.location.hash.substring(1) || 'Availability';
       navigateToPage(initialPage, true);
-
+      
+      // Hide the initial full-screen loader
       document.getElementById('loader').style.display = 'none';
     } else {
       handleInitialError(response);
@@ -177,7 +188,6 @@
 
   function navigateToPage(pageId, isInitialLoad = false) {
     console.log("Navigating to:", pageId);
-    
     // Hide all pages
     document.querySelectorAll('.page-view').forEach(page => page.style.display = 'none');
     
@@ -197,8 +207,10 @@
 
     updateActiveMenu(pageId, isInitialLoad);
 
+    // Call the specific loader function for the page
+    // These functions (in other files) must now check if data exists in 'g' 
+    // and fetch it if it's null (Lazy Loading).
     try {
-      // UPDATED ROUTING
       if (pageId === 'Availability') { if(typeof loadAvailabilityPage === 'function') loadAvailabilityPage(); }
       else if (pageId === 'UserGuide') { if(typeof loadUserGuidePage === 'function') loadUserGuidePage(); }
       else if (pageId === 'MST') { if(typeof loadMstPage === 'function') loadMstPage(); }
