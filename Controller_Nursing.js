@@ -1,31 +1,17 @@
-/**
- * -------------------------------------------------------------------
- * NURSING PROCTORING CONTROLLER
- * Handles: Data Fetching, Document Generation, Calendar Sync, and Logging
- * Features: Deep-Search Folder Logic, Fuzzy Matching, Roster Management
- * -------------------------------------------------------------------
- */
-
-/**
- * HELPER: Centralized Settings Parser
- */
 function _getNursingSettings() {
   const allProps = getSettings();
   let raw = allProps.nursing_settings;
   let settings = {};
-
   if (raw && typeof raw === 'string') {
     try { settings = JSON.parse(raw); } catch (e) { console.error("JSON Parse Error", e); }
   } else if (typeof raw === 'object') {
     settings = raw;
   }
-
   const extractId = (input) => {
     if (!input) return null;
     const match = input.match(/[-\w]{25,}/); 
     return match ? match[0] : input;
   };
-
   return {
     sheetId: extractId(settings.nursingSheetId),
     folderId: extractId(settings.nursingFolderId),
@@ -34,189 +20,103 @@ function _getNursingSettings() {
   };
 }
 
-/**
- * HELPER: Normalizes strings for fuzzy comparison
- * Removes special characters and converts to lowercase.
- */
 function _normalizeStr(str) {
   if (!str) return "";
   return str.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * HELPER: Parses Cell A1 to extract Folder Name and Full Title prefix
- * Input: "NUR 220 Concepts: Professor Erin Voisine" or "NUR 220 Concepts - Professor Erin Voisine"
- * Returns: { folderKey: "NUR 220 Concepts", fullTitlePrefix: "NUR 220 Concepts Professor Erin Voisine" }
- */
 function _parseCellA1(cellValue) {
   if (!cellValue) return { folderKey: "Unknown", fullTitlePrefix: "Unknown" };
-  
   const str = String(cellValue).trim();
-  
-  // Try to split by colon first (most common), then hyphen
   let separator = ':';
   let parts = str.split(':');
-  
   if (parts.length === 1) {
-    // No colon found, try hyphen
     separator = '-';
     parts = str.split('-');
   }
-  
   if (parts.length > 1) {
-    const courseInfo = parts[0].trim(); // "NUR 220 Concepts"
-    const facultyInfo = parts.slice(1).join(separator).trim(); // "Professor Erin Voisine"
-    
-    // Build title prefix matching the old document naming convention (space separator, no colon/hyphen)
+    const courseInfo = parts[0].trim();
+    const facultyInfo = parts.slice(1).join(separator).trim();
     const fullTitlePrefix = `${courseInfo} ${facultyInfo}`;
-    
-    return {
-      folderKey: courseInfo,
-      fullTitlePrefix: fullTitlePrefix
-    };
+    return { folderKey: courseInfo, fullTitlePrefix: fullTitlePrefix };
   }
-  
-  // Fallback if no separator found
   return { folderKey: str, fullTitlePrefix: str };
 }
 
-/**
- * HELPER: Recursively finds a subfolder by fuzzy name match
- */
 function _findSubFolder(parentFolder, targetName) {
   const targetNorm = _normalizeStr(targetName);
   const folders = parentFolder.getFolders();
   while (folders.hasNext()) {
     const folder = folders.next();
-    if (_normalizeStr(folder.getName()) === targetNorm) {
-      return folder;
-    }
+    if (_normalizeStr(folder.getName()) === targetNorm) return folder;
   }
   return null;
 }
 
-/**
- * Main API called by the frontend.
- * Fetches sheet data and resolves existing document URLs using deep search.
- */
+function formatDateToPlainLanguage(input) {
+  if (!input) return "";
+  let dateObj;
+  if (input instanceof Date) {
+    dateObj = input;
+  } else {
+    let str = String(input).replace(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|st|nd|rd|th),?/gi, "").trim();
+    dateObj = new Date(str);
+  }
+  if (isNaN(dateObj.getTime())) return String(input); 
+  return Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "MMMM d, yyyy");
+}
+
 function api_getNursingData() {
   try {
     const config = _getNursingSettings();
     if (!config.sheetId || !config.folderId) {
       return { success: false, message: "Nursing settings missing. Please save Sheet/Folder IDs in Settings." };
     }
-
     const ss = SpreadsheetApp.openById(config.sheetId);
     const sheets = ss.getSheets();
     const rootFolder = DriveApp.getFolderById(config.folderId);
-    
-    // Cache Accommodations DB
     const dbMap = getAccommodationsDBMap();
-
     const courseData = [];
 
     sheets.forEach(sheet => {
       const sheetName = sheet.getName();
       if (sheetName.startsWith("_")) return; 
-
       const parsed = parseNursingSheet(sheet, dbMap);
       if (!parsed) return;
-
-      // --- DEEP SEARCH LOGIC ---
-      // 1. Determine expected folder name from A1
       const meta = _parseCellA1(parsed.rawA1);
-      
-      console.log("=== Processing Sheet:", sheetName, "===");
-      console.log("📋 Raw A1 cell:", parsed.rawA1);
-      console.log("📁 Extracted folder key:", meta.folderKey);
-      console.log("📄 Full title prefix:", meta.fullTitlePrefix);
-      
-      // 2. Try to find the specific sub-folder for this class
       let targetFolder = _findSubFolder(rootFolder, meta.folderKey);
-      
-      // 3. Scan files in that folder (if it exists)
       const existingFiles = [];
       if (targetFolder) {
-        console.log("📁 Found target folder:", targetFolder.getName());
         const files = targetFolder.getFiles();
         while (files.hasNext()) {
           const f = files.next();
-          existingFiles.push({
-            name: f.getName(),
-            nameNorm: _normalizeStr(f.getName()),
-            url: f.getUrl()
-          });
+          existingFiles.push({ name: f.getName(), nameNorm: _normalizeStr(f.getName()), url: f.getUrl() });
         }
-        console.log("📄 Files in folder:", existingFiles.length);
-        existingFiles.forEach(f => console.log("  -", f.name, "→", f.nameNorm));
-      } else {
-        console.log("⚠️ Target folder NOT FOUND:", meta.folderKey);
       }
-
-      // 4. Attach Doc URLs based on improved fuzzy match
       parsed.exams.forEach(exam => {
         const examNameNorm = _normalizeStr(exam.name);
-        
-        // Build the expected full document title
         const expectedTitle = `${meta.fullTitlePrefix} - ${exam.name}`;
         const expectedTitleNorm = _normalizeStr(expectedTitle);
-        
-        console.log("🔍 Looking for exam:", exam.name);
-        console.log("   Expected title:", expectedTitle);
-        console.log("   Normalized:", expectedTitleNorm);
-        
-        // Priority 1: Try exact match on full expected title
         let match = existingFiles.find(f => f.nameNorm === expectedTitleNorm);
-        
-        // Priority 2: Fallback to partial match (file contains exam name)
-        if (!match) {
-          match = existingFiles.find(f => f.nameNorm.includes(examNameNorm));
-          if (match) {
-            console.log("   ✓ Found via partial match:", match.name);
-          }
-        } else {
-          console.log("   ✓ Found via exact match:", match.name);
-        }
-        
-        if (!match) {
-          console.log("   ✗ No match found for:", exam.name);
-        }
-        
+        if (!match) match = existingFiles.find(f => f.nameNorm.includes(examNameNorm));
         exam.docUrl = match ? match.url : null;
       });
-
       if (parsed.exams.length > 0) {
-        courseData.push({
-          sheetName: sheetName,
-          course: parsed.course,
-          exams: parsed.exams,
-          // Pass metadata for creation/updates
-          _meta: meta 
-        });
+        courseData.push({ sheetName: sheetName, course: parsed.course, exams: parsed.exams, _meta: meta });
       }
     });
-
     return { success: true, data: { sheets: courseData, settings: config } };
-
   } catch (e) {
-    console.error("ERROR in api_getNursingData:", e.message, e.stack);
-    return { success: false, message: e.message + " (Stack: " + e.stack + ")" };
+    return { success: false, message: e.message };
   }
 }
 
-/**
- * CORE PARSER: Handles the "Augusta Anchor" and 2-row skip
- * UPDATED: Captures ALL location headers, even if empty.
- */
 function parseNursingSheet(sheet, dbMap) {
   const range = sheet.getDataRange();
   const data = range.getValues();
   const fontColors = range.getFontColors();
   const fontLines = range.getFontLines();
-  
   if (data.length < 5) return null; 
-
-  // 1. Course Info
   const a1 = String(data[0][0]).trim(); 
   let courseCode = "Unknown";
   let courseName = a1;
@@ -225,8 +125,6 @@ function parseNursingSheet(sheet, dbMap) {
       courseCode = splitMatch[1].trim();
       courseName = splitMatch[2].trim();
   }
-
-  // 2. Find Exam Header Row
   let headerRowIndex = -1;
   for (let i = 0; i < 15; i++) { 
       if (!data[i]) continue;
@@ -237,8 +135,6 @@ function parseNursingSheet(sheet, dbMap) {
       }
   }
   if (headerRowIndex === -1) return null;
-
-  // 3. Find Roster Anchor ("Augusta")
   let rosterHeaderIdx = -1;
   for(let i = headerRowIndex + 1; i < data.length; i++) {
       if (String(data[i][0]).trim().toLowerCase() === 'augusta') {
@@ -246,28 +142,19 @@ function parseNursingSheet(sheet, dbMap) {
           break;
       }
   }
-
-  // 4. Parse Rosters (Bottom Section)
   const sheetRoster = {}; 
   if (rosterHeaderIdx !== -1) {
       const locHeaders = data[rosterHeaderIdx];
-      
-      // PRE-FILL all locations found in the header row (so empty locations appear later)
       locHeaders.forEach(h => {
           const locName = String(h).trim();
-          if (locName && !sheetRoster[locName]) {
-              sheetRoster[locName] = [];
-          }
+          if (locName && !sheetRoster[locName]) sheetRoster[locName] = [];
       });
-
-      const rosterStartRow = rosterHeaderIdx + 3; // Skip 2 rows
-      
+      const rosterStartRow = rosterHeaderIdx + 3; 
       for (let r = rosterStartRow; r < data.length; r++) {
           for (let c = 0; c < locHeaders.length; c++) {
               const loc = String(locHeaders[c]).trim();
               const name = String(data[r][c]).trim();
               const color = fontColors[r][c];
-              
               if (loc && name) {
                   if (!sheetRoster[loc]) sheetRoster[loc] = [];
                   sheetRoster[loc].push({ name: name, color: color });
@@ -275,11 +162,8 @@ function parseNursingSheet(sheet, dbMap) {
           }
       }
   }
-
-  // 5. Parse Exams
   const scanEnd = (rosterHeaderIdx !== -1) ? rosterHeaderIdx : data.length;
   const headers = data[headerRowIndex].map(h => String(h).trim().toLowerCase());
-  
   const colMap = {
       name: headers.findIndex(h => h.includes('exam')),
       date: headers.findIndex(h => h === 'date'), 
@@ -290,32 +174,26 @@ function parseNursingSheet(sheet, dbMap) {
       password: headers.findIndex(h => h.includes('password')),
       accommodations: headers.findIndex(h => h.includes('accommodations'))
   };
-
   if (colMap.name === -1 || colMap.date === -1) return null;
-
   const exams = [];
   for (let i = headerRowIndex + 1; i < scanEnd; i++) {
       const row = data[i];
       const examName = row[colMap.name];
-
       if (!examName || String(examName).trim() === '') continue;
       if (String(examName).toLowerCase().includes('total')) continue;
-      
-      // Check Strikethrough
       if (fontLines[i][colMap.date] === 'line-through' || fontLines[i][colMap.name] === 'line-through') continue;
+      
+      const dateVal = formatDateToPlainLanguage(row[colMap.date]);
+      const siteTime = normalizeTime(row[colMap.timeSite]);
+      const zoomTime = normalizeTime(row[colMap.timeZoom]);
 
-      const dateVal = parseFlexibleDate(row[colMap.date]);
-      const safeNormalize = (typeof normalizeTime === 'function') ? normalizeTime : String;
-
-      // DB Lookup
       const dbKey = `${courseCode}|${String(examName).trim()}`; 
       const dbEntry = dbMap[dbKey] || { generalNotes: "", studentTags: {} };
-
       exams.push({
           name: String(examName).trim(),
           date: dateVal, 
-          siteTime: safeNormalize(row[colMap.timeSite]), 
-          zoomTime: safeNormalize(row[colMap.timeZoom]), 
+          siteTime: siteTime, 
+          zoomTime: zoomTime, 
           duration: colMap.duration > -1 ? row[colMap.duration] : '',
           room: colMap.room > -1 ? row[colMap.room] : '',
           password: colMap.password > -1 ? row[colMap.password] : '',
@@ -324,286 +202,416 @@ function parseNursingSheet(sheet, dbMap) {
           rosters: sheetRoster 
       });
   }
-
-  return {
-      rawA1: a1,
-      course: { code: courseCode, name: courseName },
-      exams: exams
-  };
+  return { rawA1: a1, course: { code: courseCode, name: courseName }, exams: exams };
 }
 
-/**
- * Creates Google Docs for selected exams using intelligent folder management.
- * UPDATED: Returns URLs even if file exists (fixes grey button issue).
- */
 function createNursingProctoringDocuments(payload) {
   try {
     const config = _getNursingSettings();
-    if (!config.folderId) return { success: false, message: "Folder ID missing." };
-    
     const rootFolder = DriveApp.getFolderById(config.folderId);
     let createdCount = 0;
-    const createdUrls = {}; // Track URLs for response
-
+    const createdUrls = {}; 
     payload.sheets.forEach(sheetData => {
-      // 1. Resolve Target Folder (Create if missing)
-      const meta = sheetData._meta || _parseCellA1(sheetData.course.name); // Fallback
-      
+      const meta = sheetData._meta || _parseCellA1(sheetData.course.name); 
       let targetFolder = _findSubFolder(rootFolder, meta.folderKey);
-      if (!targetFolder) {
-        targetFolder = rootFolder.createFolder(meta.folderKey);
-        console.log("📁 Created new folder:", meta.folderKey);
-      }
-
-      // 2. Create Docs in Target Folder
+      if (!targetFolder) targetFolder = rootFolder.createFolder(meta.folderKey);
       sheetData.exams.forEach(exam => {
-        // Build Title: [Course Info] [Faculty] - [Exam Name]
         const docTitle = `${meta.fullTitlePrefix} - ${exam.name}`;
-        
-        // Double check existence inside target folder to prevent duplicates
         const existing = targetFolder.getFilesByName(docTitle);
         if (existing.hasNext()) {
-          console.log("⚠️ Doc already exists, skipping creation:", docTitle);
-          // FIX: Add existing URL to response so frontend button activates
           createdUrls[exam.name] = existing.next().getUrl();
           return;
         }
-
         const doc = DocumentApp.create(docTitle);
         _populateNursingDoc(doc, docTitle, exam, config.customNotes);
-
         const file = DriveApp.getFileById(doc.getId());
         targetFolder.addFile(file);
         DriveApp.getRootFolder().removeFile(file);
-        
-        // Track the new URL
-        const newUrl = file.getUrl();
-        createdUrls[exam.name] = newUrl;
-        
-        console.log("✓ Created doc:", docTitle);
-        
+        createdUrls[exam.name] = file.getUrl();
         if (typeof logSystemAction === 'function') logSystemAction("Nursing", "Created Doc", docTitle, doc.getId(), `Date: ${exam.date}`);
         createdCount++;
       });
     });
-
     return { success: true, message: `Created ${createdCount} documents.`, createdUrls: createdUrls };
-  } catch (e) { 
-    console.error("ERROR in createNursingProctoringDocuments:", e.message, e.stack);
-    return { success: false, message: e.message }; 
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * Updates existing Google Docs.
- */
 function updateAllNursingDocuments(payload) {
   try {
     const config = _getNursingSettings();
-    if (!config.folderId) return { success: false, message: "Folder ID missing." };
-
     const rootFolder = DriveApp.getFolderById(config.folderId);
     let updatedCount = 0;
-
     payload.sheets.forEach(sheetData => {
-      // 1. Resolve Target Folder
       const meta = sheetData._meta || _parseCellA1(sheetData.course.name);
       const targetFolder = _findSubFolder(rootFolder, meta.folderKey);
-      
-      if (!targetFolder) {
-        console.log("⚠️ Cannot update - folder not found:", meta.folderKey);
-        return; // Cannot update if folder doesn't exist
-      }
-
+      if (!targetFolder) return; 
       sheetData.exams.forEach(exam => {
-        // 2. Find File using improved fuzzy match
         const examNameNorm = _normalizeStr(exam.name);
         const expectedTitle = `${meta.fullTitlePrefix} - ${exam.name}`;
         const expectedTitleNorm = _normalizeStr(expectedTitle);
-        
         let targetFile = null;
-
-        // Priority 1: Exact URL match (if provided by frontend)
         if (exam.docUrl) {
-          try { 
-            targetFile = DriveApp.getFileByUrl(exam.docUrl);
-            console.log("✓ Found via URL:", exam.docUrl);
-          } catch(e) {
-            console.log("⚠️ URL lookup failed:", e.message);
-          }
+          try { targetFile = DriveApp.getFileByUrl(exam.docUrl); } catch(e) {}
         }
-
-        // Priority 2: Exact title match
         if (!targetFile) {
           const files = targetFolder.getFiles();
           while (files.hasNext()) {
             const f = files.next();
-            if (_normalizeStr(f.getName()) === expectedTitleNorm) {
-              targetFile = f;
-              console.log("✓ Found via exact title match:", f.getName());
-              break;
-            }
+            if (_normalizeStr(f.getName()) === expectedTitleNorm) { targetFile = f; break; }
           }
         }
-
-        // Priority 3: Partial match (contains exam name)
-        if (!targetFile) {
-          const files = targetFolder.getFiles();
-          while (files.hasNext()) {
-            const f = files.next();
-            if (_normalizeStr(f.getName()).includes(examNameNorm)) {
-              targetFile = f;
-              console.log("✓ Found via partial match:", f.getName());
-              break;
-            }
-          }
-        }
-        
         if (targetFile) {
           const doc = DocumentApp.openById(targetFile.getId());
-          doc.getBody().clear();
-          // Use current file name to preserve any manual renaming user might have done
           _populateNursingDoc(doc, targetFile.getName(), exam, config.customNotes);
-          
-          console.log("✓ Updated doc:", targetFile.getName());
-          
           if (typeof logSystemAction === 'function') logSystemAction("Nursing", "Updated Doc", targetFile.getName(), targetFile.getId(), `Date: ${exam.date}`);
           updatedCount++;
-        } else {
-          console.log("✗ No doc found to update for exam:", exam.name);
         }
       });
     });
-
     return { success: true, message: `Updated ${updatedCount} documents.` };
-  } catch (e) { 
-    console.error("ERROR in updateAllNursingDocuments:", e.message, e.stack);
-    return { success: false, message: e.message }; 
-  }
+  } catch (e) { return { success: false, message: e.message }; }
 }
 
-/**
- * SHARED DOC POPULATOR (The Magic Happens Here)
- * UPDATED: Removes Table, Uses ListItems, Adds Both Links
- */
+// === SURGICAL UPDATE FUNCTIONS ===
+
 function _populateNursingDoc(doc, title, exam, customNotes) {
     const body = doc.getBody();
     
-    // Title
-    body.appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.TITLE);
+    // === SURGICAL UPDATE: Only change what's different ===
     
-    // --- EXAM DETAILS (Numbered List) ---
-    body.appendParagraph("Exam Details").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    // 1. UPDATE TITLE (if different)
+    const existingTitle = body.getChild(0);
+    if (existingTitle.getType() === DocumentApp.ElementType.PARAGRAPH) {
+        const titlePara = existingTitle.asParagraph();
+        if (titlePara.getText() !== title) {
+            titlePara.setText(title);
+            titlePara.setHeading(DocumentApp.ParagraphHeading.TITLE);
+        }
+    }
     
-    // Extract Faculty/Course info from title (Everything before " - Exam Name")
-    const facultyInfo = title.split(' - ')[0] || title;
-
-    body.appendListItem(`Faculty: ${facultyInfo}`);
-    body.appendListItem(`Date: ${exam.date}`);
-    body.appendListItem(`Start Time (On Site): ${exam.siteTime || "N/A"}`);
-    body.appendListItem(`Start Time (Zoom): ${exam.zoomTime || "N/A"}`);
-    body.appendListItem(`Duration: ${exam.duration || "-"}`);
-    body.appendListItem(`Password: ${exam.password || "-"}`);
-
-    // --- IMPORTANT LINKS ---
-    body.appendParagraph("Important Links").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    // 2. FIND OR CREATE EXAM DETAILS SECTION
+    const examDetailsMap = {
+        'Faculty': title.split(' - ')[0] || title,
+        'Date': exam.date,
+        'Start Time (On Site)': exam.siteTime || "N/A",
+        'Start Time (Zoom)': exam.zoomTime || "N/A",
+        'Duration': exam.duration || "-",
+        'Password': exam.password || "-"
+    };
+    _updateKeyValueSection(body, "Exam Details", examDetailsMap, DocumentApp.ParagraphHeading.HEADING1);
     
-    // Link 1: Red Flag Form
-    body.appendParagraph("Red Flag Reporting Form")
-        .setLinkUrl("https://docs.google.com/forms/d/e/1FAIpQLSfORKCKol8SsRldNKfvsDy3ILNs9HcFv3gKb8TuxrNrlqxijw/viewform")
-        .setBold(true)
-        .setForegroundColor("#1155cc")
-        .setUnderline(true);
-
-    // Link 2: Nursing Protocol
-    body.appendParagraph("Nursing Protocol")
-        .setLinkUrl("https://docs.google.com/document/d/1TgKtmoDFqXLK0lBFPNirOAz_TW4S3E_BFhS934VcjOo/edit")
-        .setBold(true)
-        .setForegroundColor("#1155cc")
-        .setUnderline(true);
-
-    // --- CUSTOM NOTES (General Instructions) ---
+    // 3. UPDATE IMPORTANT LINKS (leave as-is, they rarely change)
+    // Skip for now to avoid unnecessary updates
+    
+    // 4. UPDATE GENERAL INSTRUCTIONS
     if (customNotes) {
-        body.appendParagraph("General Instructions").setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        body.appendParagraph(customNotes).setItalic(true);
+        _updateOrCreateTextSection(body, "General Instructions", customNotes, true);
     }
-
-    // --- ACCOMMODATIONS (Green Box) ---
+    
+    // 5. UPDATE ACCOMMODATIONS
     if (exam.generalNotes) {
-        body.appendParagraph("Exam Accommodations").setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        const p = body.appendParagraph(exam.generalNotes);
-        p.setBackgroundColor('#e8f5e9'); // Green background
-        p.setPaddingTop(5).setPaddingBottom(5).setPaddingLeft(10).setPaddingRight(10);
+        _updateOrCreateHighlightedSection(body, "Exam Accommodations", exam.generalNotes);
+    } else {
+        _removeSectionIfExists(body, "Exam Accommodations");
     }
+    
+    // 6. SURGICAL ROSTER UPDATE (the complex part)
+    _updateLocationRosters(body, exam);
+    
+    doc.saveAndClose();
+}
 
-    // --- ROSTERS (All Locations) ---
-    if (exam.rosters && Object.keys(exam.rosters).length > 0) {
-        body.appendParagraph("Location Rosters").setHeading(DocumentApp.ParagraphHeading.HEADING1);
-        
-        // Iterate through ALL locations found in the sheet
-        for (const [location, students] of Object.entries(exam.rosters)) {
-            body.appendParagraph(location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+// === HELPER FUNCTIONS FOR SURGICAL UPDATES ===
 
-            // Filter students (remove excluded)
-            const activeStudents = students.filter(s => {
-                const tagData = (exam.studentTags && exam.studentTags[s.name]) ? exam.studentTags[s.name] : null;
-                if (tagData && typeof tagData === 'object' && tagData.excluded) return false;
-                return true;
-            });
-
-            if (activeStudents.length === 0) {
-                // Empty Location
-                body.appendParagraph("(No students assigned)");
-            } else {
-                // List Students
-                activeStudents.forEach(studentObj => {
-                    const li = body.appendListItem(studentObj.name);
-                    
-                    // Get Saved Data
-                    let note = "";
-                    let isHighlighted = false;
-                    let isLocked = false;
-
-                    if (exam.studentTags && exam.studentTags[studentObj.name]) {
-                        const tag = exam.studentTags[studentObj.name];
-                        if (typeof tag === 'object') {
-                            note = tag.note || "";
-                            isHighlighted = tag.highlighted || false;
-                            isLocked = tag.locked || false;
-                        } else {
-                            note = tag; // Backward compatibility
-                        }
-                    }
-
-                    // Apply Color
-                    if (isLocked) {
-                        li.setForegroundColor('#000000'); 
-                    } else if (studentObj.color && studentObj.color !== '#000000') {
-                        li.setForegroundColor(studentObj.color);
-                    }
-
-                    // Append Note
-                    if (note) {
-                        const tagText = ` [${note}]`;
-                        const text = li.appendText(tagText);
-                        text.setBold(true);
-                        text.setForegroundColor('#000000'); 
-                        
-                        if (isHighlighted) {
-                            text.setBackgroundColor('#ffff00'); 
-                        } else {
-                            text.setBackgroundColor('#fff59d'); 
-                        }
-                    }
-                });
+function _findHeadingIndex(body, headingText) {
+    const numChildren = body.getNumChildren();
+    for (let i = 0; i < numChildren; i++) {
+        const child = body.getChild(i);
+        if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+            const para = child.asParagraph();
+            if (para.getText().trim() === headingText) {
+                return i;
             }
         }
     }
+    return -1;
+}
 
-    body.appendHorizontalRule();
-    body.appendParagraph("Generated by Staff Hub").setAlignment(DocumentApp.HorizontalAlignment.CENTER).setForegroundColor('#888888').setFontSize(8);
+function _updateKeyValueSection(body, sectionTitle, dataMap, headingLevel) {
+    let sectionIndex = _findHeadingIndex(body, sectionTitle);
     
-    doc.saveAndClose();
+    // If section doesn't exist, create it at the end (before rosters)
+    if (sectionIndex === -1) {
+        const rostersIndex = _findHeadingIndex(body, "Location Rosters");
+        const insertAt = rostersIndex > -1 ? rostersIndex : body.getNumChildren();
+        body.insertParagraph(insertAt, sectionTitle).setHeading(headingLevel);
+        sectionIndex = insertAt;
+    }
+    
+    // Update or create each list item
+    let currentIndex = sectionIndex + 1;
+    
+    for (const [key, value] of Object.entries(dataMap)) {
+        const expectedText = `${key}: ${value}`;
+        let found = false;
+        
+        // Look ahead a few items to find this key
+        for (let i = currentIndex; i < Math.min(currentIndex + 10, body.getNumChildren()); i++) {
+            const child = body.getChild(i);
+            
+            // Stop if we hit another heading
+            if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+                const para = child.asParagraph();
+                const heading = para.getHeading();
+                if (heading !== DocumentApp.ParagraphHeading.NORMAL) break;
+            }
+            
+            // Check if this is our item
+            if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
+                const listItem = child.asListItem();
+                const text = listItem.getText();
+                
+                if (text.startsWith(key + ':')) {
+                    // Update if different
+                    if (text !== expectedText) {
+                        listItem.setText(expectedText);
+                    }
+                    found = true;
+                    currentIndex = i + 1;
+                    break;
+                }
+            }
+        }
+        
+        // If not found, insert it
+        if (!found) {
+            body.insertListItem(currentIndex, expectedText);
+            currentIndex++;
+        }
+    }
+}
+
+function _updateOrCreateTextSection(body, sectionTitle, content, isItalic) {
+    let sectionIndex = _findHeadingIndex(body, sectionTitle);
+    
+    if (sectionIndex === -1) {
+        // Create section before Location Rosters
+        const rostersIndex = _findHeadingIndex(body, "Location Rosters");
+        const insertAt = rostersIndex > -1 ? rostersIndex : body.getNumChildren();
+        body.insertParagraph(insertAt, sectionTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        const para = body.insertParagraph(insertAt + 1, content);
+        if (isItalic) para.setItalic(true);
+    } else {
+        // Update existing content
+        const nextChild = body.getChild(sectionIndex + 1);
+        if (nextChild && nextChild.getType() === DocumentApp.ElementType.PARAGRAPH) {
+            const para = nextChild.asParagraph();
+            if (para.getText() !== content) {
+                para.setText(content);
+                if (isItalic) para.setItalic(true);
+            }
+        }
+    }
+}
+
+function _updateOrCreateHighlightedSection(body, sectionTitle, content) {
+    let sectionIndex = _findHeadingIndex(body, sectionTitle);
+    
+    if (sectionIndex === -1) {
+        const rostersIndex = _findHeadingIndex(body, "Location Rosters");
+        const insertAt = rostersIndex > -1 ? rostersIndex : body.getNumChildren();
+        body.insertParagraph(insertAt, sectionTitle).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        const p = body.insertParagraph(insertAt + 1, content);
+        p.setBackgroundColor('#e8f5e9');
+        p.setPaddingTop(5).setPaddingBottom(5).setPaddingLeft(10).setPaddingRight(10);
+    } else {
+        const nextChild = body.getChild(sectionIndex + 1);
+        if (nextChild && nextChild.getType() === DocumentApp.ElementType.PARAGRAPH) {
+            const para = nextChild.asParagraph();
+            if (para.getText() !== content) {
+                para.setText(content);
+                para.setBackgroundColor('#e8f5e9');
+                para.setPaddingTop(5).setPaddingBottom(5).setPaddingLeft(10).setPaddingRight(10);
+            }
+        }
+    }
+}
+
+function _removeSectionIfExists(body, sectionTitle) {
+    const sectionIndex = _findHeadingIndex(body, sectionTitle);
+    if (sectionIndex > -1) {
+        // Remove heading and next paragraph
+        body.removeChild(body.getChild(sectionIndex));
+        if (sectionIndex < body.getNumChildren()) {
+            const nextChild = body.getChild(sectionIndex);
+            if (nextChild.getType() === DocumentApp.ElementType.PARAGRAPH) {
+                body.removeChild(nextChild);
+            }
+        }
+    }
+}
+
+function _updateLocationRosters(body, exam) {
+    if (!exam.rosters || Object.keys(exam.rosters).length === 0) {
+        _removeSectionIfExists(body, "Location Rosters");
+        return;
+    }
+    
+    let rostersIndex = _findHeadingIndex(body, "Location Rosters");
+    
+    // Create section if it doesn't exist
+    if (rostersIndex === -1) {
+        rostersIndex = body.getNumChildren();
+        body.insertParagraph(rostersIndex, "Location Rosters").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    }
+    
+    // UMAAL FIRST, then alphabetical
+    const sortedLocations = Object.keys(exam.rosters).sort((a, b) => {
+        if (a === 'UMAAL') return -1;
+        if (b === 'UMAAL') return 1;
+        return a.localeCompare(b);
+    });
+    
+    let currentIndex = rostersIndex + 1;
+    
+    sortedLocations.forEach(location => {
+        const students = exam.rosters[location];
+        
+        // Filter active students (respecting sidebar exclusions)
+        const activeStudents = students.filter(s => {
+            const tagData = (exam.studentTags && exam.studentTags[s.name]) ? exam.studentTags[s.name] : null;
+            return !(tagData && typeof tagData === 'object' && tagData.excluded);
+        });
+        
+        // Find or create location heading
+        let locationIndex = -1;
+        for (let i = currentIndex; i < body.getNumChildren(); i++) {
+            const child = body.getChild(i);
+            if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+                const para = child.asParagraph();
+                if (para.getHeading() === DocumentApp.ParagraphHeading.HEADING2 && para.getText() === location) {
+                    locationIndex = i;
+                    break;
+                }
+                // Stop if we hit another H1
+                if (para.getHeading() === DocumentApp.ParagraphHeading.HEADING1) break;
+            }
+        }
+        
+        if (locationIndex === -1) {
+            // Create new location section
+            body.insertParagraph(currentIndex, location).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+            locationIndex = currentIndex;
+            currentIndex++;
+        } else {
+            currentIndex = locationIndex + 1;
+        }
+        
+        // Build target student list
+        const targetStudents = new Map();
+        if (activeStudents.length === 0) {
+            targetStudents.set('(No students assigned)', { color: null, note: null });
+        } else {
+            activeStudents.forEach(studentObj => {
+                let note = "";
+                let isHighlighted = false;
+                let isLocked = false;
+                let color = studentObj.color;
+                
+                if (exam.studentTags && exam.studentTags[studentObj.name]) {
+                    const tag = exam.studentTags[studentObj.name];
+                    if (typeof tag === 'object') {
+                        note = tag.note || "";
+                        isHighlighted = tag.highlighted || false;
+                        isLocked = tag.locked || false;
+                    }
+                }
+                
+                if (isLocked) color = '#000000';
+                else if (!color || color === '#000000') color = null;
+                
+                targetStudents.set(studentObj.name, { color, note, isHighlighted });
+            });
+        }
+        
+        // Get existing students in this location
+        const existingStudents = new Map();
+        let scanIndex = currentIndex;
+        while (scanIndex < body.getNumChildren()) {
+            const child = body.getChild(scanIndex);
+            
+            // Stop at next heading
+            if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+                const para = child.asParagraph();
+                if (para.getHeading() !== DocumentApp.ParagraphHeading.NORMAL) break;
+            }
+            
+            if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
+                const listItem = child.asListItem();
+                const fullText = listItem.getText();
+                const nameMatch = fullText.match(/^([^\[]+)/);
+                const studentName = nameMatch ? nameMatch[1].trim() : fullText;
+                existingStudents.set(studentName, scanIndex);
+            }
+            
+            scanIndex++;
+        }
+        
+        // Remove students that are no longer in target
+        existingStudents.forEach((index, studentName) => {
+            if (!targetStudents.has(studentName)) {
+                body.removeChild(body.getChild(index));
+                // Adjust indices
+                existingStudents.forEach((idx, name) => {
+                    if (idx > index) existingStudents.set(name, idx - 1);
+                });
+            }
+        });
+        
+        // Add or update students
+        let insertPosition = currentIndex;
+        targetStudents.forEach((data, studentName) => {
+            const existingIndex = existingStudents.get(studentName);
+            
+            if (existingIndex !== undefined) {
+                // Update existing student
+                const listItem = body.getChild(existingIndex).asListItem();
+                const expectedText = data.note ? `${studentName} [${data.note}]` : studentName;
+                
+                if (listItem.getText() !== expectedText) {
+                    listItem.clear();
+                    listItem.setText(studentName);
+                    
+                    if (data.color) listItem.setForegroundColor(data.color);
+                    
+                    if (data.note) {
+                        const text = listItem.appendText(` [${data.note}]`);
+                        text.setBold(true).setForegroundColor('#000000');
+                        if (data.isHighlighted) text.setBackgroundColor('#ffff00');
+                        else text.setBackgroundColor('#fff59d');
+                    }
+                }
+                
+                insertPosition = Math.max(insertPosition, existingIndex + 1);
+            } else {
+                // Add new student
+                const li = body.insertListItem(insertPosition, studentName);
+                
+                if (data.color) li.setForegroundColor(data.color);
+                
+                if (data.note) {
+                    const text = li.appendText(` [${data.note}]`);
+                    text.setBold(true).setForegroundColor('#000000');
+                    if (data.isHighlighted) text.setBackgroundColor('#ffff00');
+                    else text.setBackgroundColor('#fff59d');
+                }
+                
+                insertPosition++;
+            }
+        });
+        
+        currentIndex = insertPosition;
+    });
 }
 
 function api_syncNursingCalendar(payload) {
@@ -612,26 +620,22 @@ function api_syncNursingCalendar(payload) {
     if (!config.calendarId) return { success: false, message: "No Calendar ID." };
     const cal = CalendarApp.getCalendarById(config.calendarId);
     if (!cal) return { success: false, message: "Calendar not found." };
-
     let count = 0;
     const sheetsToProcess = Array.isArray(payload.sheets) ? payload.sheets : [payload.sheets];
-
     sheetsToProcess.forEach(sheetData => {
       sheetData.exams.forEach(exam => {
         if (!exam.date) return;
-        const parts = exam.date.split('/');
-        if (parts.length !== 3) return;
-        const start = new Date(parts[2], parts[0]-1, parts[1], 8, 0, 0); 
+        
+        let dateObj = new Date(exam.date.replace(/(st|nd|rd|th)/gi, ""));
+        if (isNaN(dateObj.getTime())) return;
+
+        const start = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 8, 0, 0); 
         const end = new Date(start);
         end.setHours(17, 0, 0); 
-
-        // Use meta full title if available for better calendar naming
         const titlePrefix = sheetData._meta ? sheetData._meta.fullTitlePrefix : sheetData.sheetName;
         const title = `Proctor: ${titlePrefix} - ${exam.name}`;
-        
         const events = cal.getEvents(start, end);
         const exists = events.some(e => e.getTitle() === title);
-        
         if (!exists) {
           cal.createEvent(title, start, end, {
             description: `Password: ${exam.password}\nZoom: ${exam.zoomTime}\nSite: ${exam.siteTime}\nNotes: ${exam.generalNotes || ''}`
@@ -640,13 +644,10 @@ function api_syncNursingCalendar(payload) {
         }
       });
     });
-    
     if (typeof logSystemAction === 'function') logSystemAction("Nursing", "Calendar Sync", "Batch", config.calendarId, `Synced ${count}`);
     return { success: true, message: `Synced ${count} events.` };
   } catch (e) { return { success: false, message: e.message }; }
 }
-
-// --- DATABASE HELPERS ---
 
 function getAccommodationsDBMap() {
     const map = {};
@@ -654,7 +655,6 @@ function getAccommodationsDBMap() {
         const ss = getMasterDataHub();
         const sheet = ss.getSheetByName("_DB_ACCOMMODATIONS");
         if (!sheet) return map; 
-
         const data = sheet.getDataRange().getValues();
         for (let i = 1; i < data.length; i++) {
             const row = data[i];
@@ -685,23 +685,6 @@ function api_saveNursingAccommodations(payload) {
     }
     if (rowIndex > -1) sheet.getRange(rowIndex, 4, 1, 2).setValues([[payload.generalNotes, studentJson]]);
     else sheet.appendRow([uniqueId, payload.courseCode, payload.examName, payload.generalNotes, studentJson]);
-    
     return { success: true, message: 'Saved to Database!' };
   } catch (e) { return { success: false, message: e.message }; }
-}
-
-function parseFlexibleDate(input) {
-    if (!input) return null;
-    if (input instanceof Date) return Utilities.formatDate(input, Session.getScriptTimeZone(), "yyyy-MM-dd");
-    let str = String(input).trim();
-    str = str.replace(/(\d+)(st|nd|rd|th)/ig, "$1");
-    const d = new Date(str);
-    if (isNaN(d.getTime())) return null;
-    return Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
-}
-
-function extractIdFromUrl(url) {
-    if (!url) return null;
-    const match = url.match(/[-\w]{25,}/);
-    return match ? match[0] : url;
 }
