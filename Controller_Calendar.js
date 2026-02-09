@@ -27,6 +27,8 @@ function getWritableCalendars() {
           calendars.sort((a, b) => a.name.localeCompare(b.name));
           return { success: true, data: calendars };
         }
+
+      console.log("Found calendars: " + JSON.stringify(calendars))
       }
   
       // Fallback to basic app class if Advanced Service fails
