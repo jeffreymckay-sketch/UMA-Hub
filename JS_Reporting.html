@@ -12,6 +12,7 @@
       // 1. Initial Render (if empty)
       if (reportingView.innerHTML.trim() === '') {
           renderReportingLayout(reportingView);
+          
           // Load Google Charts Library dynamically
           if (!chartsLoaded) {
               const script = document.createElement('script');
@@ -26,19 +27,36 @@
           // Fetch Event Types (Fast)
           fetchEventTypes(); 
           
-          // Set default dates
+          // Set default dates (Current Week: Monday to Sunday)
           const today = new Date();
-          const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-          const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
-          document.getElementById('inspector-start-date').value = firstDayOfMonth;
-          document.getElementById('inspector-end-date').value = lastDayOfMonth;
+          const day = today.getDay(); // 0 is Sunday
+          // Calculate Monday (if Sunday (0), subtract 6; else subtract day-1)
+          const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+          
+          const monday = new Date(today);
+          monday.setDate(diff);
+          
+          const sunday = new Date(monday);
+          sunday.setDate(monday.getDate() + 6);
+          
+          // Format as YYYY-MM-DD for input fields
+          const fmt = d => d.toISOString().split('T')[0];
+          
+          document.getElementById('inspector-start-date').value = fmt(monday);
+          document.getElementById('inspector-end-date').value = fmt(sunday);
       }
   
-      // 2. Lazy Load Calendars (The Fix)
+      // 2. Lazy Load Calendars (FIXED LOGIC)
       const calSelect = document.getElementById('inspector-calendar-select');
       if (calSelect) {
-          if (!g.allCalendars) {
+          // We check if data is null OR if it's empty but we are still in "Initializing" state.
+          // This fixes the bug where Core.js initialized it as [] preventing the fetch.
+          const isInitializing = calSelect.innerHTML.includes('Initializing');
+          
+          if (!g.allCalendars || (g.allCalendars.length === 0 && isInitializing)) {
+              
               calSelect.innerHTML = '<option>Loading calendars...</option>';
+              
               google.script.run
                   .withSuccessHandler(res => {
                       if (res.success) {
@@ -49,11 +67,12 @@
                       }
                   })
                   .withFailureHandler(err => {
-                      calSelect.innerHTML = `<option disabled>System Error</option>`;
+                      calSelect.innerHTML = `<option disabled>System Error: ${err.message}</option>`;
                   })
                   .api_getAllCalendars();
+                  
           } else {
-              // Already loaded, just ensure they are rendered
+              // Already loaded, just ensure they are rendered if the select is empty
               if (calSelect.children.length <= 1) populateCalendarSelector();
           }
       }
