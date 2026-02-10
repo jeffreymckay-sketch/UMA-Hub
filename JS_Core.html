@@ -1,6 +1,5 @@
 <script>
   // --- Global Data Cache ---
-  // These will be populated lazily when specific tabs are opened
   const g = {
     userInfo: null,
     dashboardData: null,
@@ -14,7 +13,6 @@
 
   /**
    * MENU CONFIGURATION
-   * 'roles' determines who can see the item.
    */
   const menuItems = [
     { 
@@ -41,7 +39,9 @@
       roles: ['Proctor', 'Admin'],
       children: [
         { id: 'Nursing', title: 'Nursing', roles: ['Proctor', 'Admin'] },
-        { id: 'MLT', title: 'MLT', roles: ['Proctor', 'Admin'] }
+        { id: 'MLT', title: 'MLT', roles: ['Proctor', 'Admin'] },
+        // NEW MENU ITEM
+        { id: 'ProctorSchedule', title: 'Master Schedule', roles: ['Proctor', 'Admin'] }
       ]
     },
     { id: 'Reporting', title: 'Stats & Reports', roles: ['Admin', 'Lead'] },
@@ -52,17 +52,14 @@
   document.addEventListener('DOMContentLoaded', function() {
     console.log("App Started: DOMContentLoaded");
     
-    // We initially build the menu; user info will update it shortly
     buildMenu(); 
 
-    // Fetch the lightweight initial data (User Info, Settings)
     google.script.run
       .withSuccessHandler(handleInitialDataSuccess)
       .withFailureHandler(handleInitialError)
       .api_getInitialAppData();
 
     window.addEventListener('popstate', function(e) {
-      // Default to Availability if hash is empty
       const pageId = window.location.hash.substring(1) || 'Availability';
       navigateToPage(pageId);
     });
@@ -71,28 +68,21 @@
   function handleInitialDataSuccess(response) {
     console.log("Initial Data Received:", response);
     if (response && response.success) {
-      // 1. Critical Data (Loaded Immediately)
       g.userInfo = response.data.userInfo;
       g.allSettings = response.data.settings || {};
 
-      // 2. Lazy Data (Initialized as null)
-      // The server now returns these as null or empty arrays. 
-      // We rely on specific page loaders (e.g., loadNursingPage) to check for null and fetch if needed.
       g.mstData = response.data.mstData || null;
       g.mltData = response.data.mltData || null;
       g.writableCalendars = response.data.writableCalendars || null;
       g.allCalendars = response.data.allCalendars || null;
       g.nursingData = response.data.nursingData || null;
 
-      // 3. Update UI
       populateUserInfo(); 
-      buildMenu(); // Rebuild menu now that we have user roles
+      buildMenu();
 
-      // 4. Default Routing
       const initialPage = window.location.hash.substring(1) || 'Availability';
       navigateToPage(initialPage, true);
       
-      // Hide the initial full-screen loader
       document.getElementById('loader').style.display = 'none';
     } else {
       handleInitialError(response);
@@ -161,14 +151,12 @@
       }
     });
 
-    // Global Menu Click Handler
     menu.onclick = function(e) {
       const target = e.target.closest('.nav-item');
       if (!target) return;
       
       e.preventDefault();
-      console.log("Menu Clicked:", target.dataset.pageId || target.id);
-
+      
       if (target.classList.contains('has-submenu')) {
         toggleSubmenu(target.id.replace('nav-toggle-', ''));
       } else if (target.dataset.pageId) {
@@ -188,7 +176,6 @@
 
   function navigateToPage(pageId, isInitialLoad = false) {
     console.log("Navigating to:", pageId);
-    // Hide all pages
     document.querySelectorAll('.page-view').forEach(page => page.style.display = 'none');
     
     const targetPage = document.getElementById('page-' + pageId);
@@ -200,22 +187,21 @@
       pageId = 'Availability';
     }
 
-    // Update URL hash without triggering a reload
     if (window.location.hash.substring(1) !== pageId) {
       window.history.pushState({ pageId }, '', '#' + pageId);
     }
 
     updateActiveMenu(pageId, isInitialLoad);
 
-    // Call the specific loader function for the page
-    // These functions (in other files) must now check if data exists in 'g' 
-    // and fetch it if it's null (Lazy Loading).
+    // --- LAZY LOADERS ROUTING ---
     try {
       if (pageId === 'Availability') { if(typeof loadAvailabilityPage === 'function') loadAvailabilityPage(); }
       else if (pageId === 'UserGuide') { if(typeof loadUserGuidePage === 'function') loadUserGuidePage(); }
       else if (pageId === 'MST') { if(typeof loadMstPage === 'function') loadMstPage(); }
       else if (pageId === 'Nursing') { if(typeof loadNursingPage === 'function') loadNursingPage(); }
       else if (pageId === 'MLT') { if(typeof loadMLTPage === 'function') loadMLTPage(); }
+      // NEW ROUTE
+      else if (pageId === 'ProctorSchedule') { if(typeof loadProctorSchedulePage === 'function') loadProctorSchedulePage(); }
       else if (pageId === 'Reporting') { if(typeof loadReportingPage === 'function') loadReportingPage(); }
       else if (pageId === 'TechHub') { if(typeof loadTechHubPage === 'function') loadTechHubPage(); }
       else if (pageId === 'Settings') { if(typeof loadSettingsPage === 'function') loadSettingsPage(); }
