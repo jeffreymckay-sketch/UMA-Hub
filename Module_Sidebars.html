@@ -1,43 +1,61 @@
 <style>
   /* --- Shared Sidebar Styling --- */
   .app-sidebar-panel {
-    position: fixed; top: 0; right: -500px; width: 500px; max-width: 95%; height: 100%;
+    position: fixed;
+    top: 0; right: -500px; width: 500px; max-width: 95%; height: 100%;
     background-color: #ffffff; box-shadow: -5px 0 15px rgba(0,0,0,0.1); z-index: 10000;
     transition: right 0.3s ease-in-out; display: flex; flex-direction: column;
   }
-  .app-sidebar-panel.open { right: 0; }
+  .app-sidebar-panel.open { right: 0;
+  }
   .sidebar-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.4); z-index: 9999; display: none; opacity: 0; transition: opacity 0.3s;
+    background-color: rgba(0,0,0,0.4);
+    z-index: 9999; display: none; opacity: 0; transition: opacity 0.3s;
   }
-  .sidebar-overlay.open { display: block; opacity: 1; }
-  .sidebar-header { padding: 20px; background: var(--color-primary-navy); color: white; display: flex; justify-content: space-between; align-items: center; }
+  .sidebar-overlay.open { display: block; opacity: 1;
+  }
+  .sidebar-header { padding: 20px; background: var(--color-primary-navy); color: white; display: flex; justify-content: space-between; align-items: center;
+  }
   .sidebar-header h3 { margin: 0; font-size: 1.2em; }
-  .sidebar-close-x { cursor: pointer; font-size: 1.5em; line-height: 1; }
+  .sidebar-close-x { cursor: pointer; font-size: 1.5em; line-height: 1;
+  }
   .sidebar-content { flex-grow: 1; overflow-y: auto; padding: 20px; }
-  .sidebar-footer { padding: 15px 20px; background: #f9f9f9; border-top: 1px solid #eee; text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
-  .sidebar-field { margin-bottom: 20px; }
+  .sidebar-footer { padding: 15px 20px; background: #f9f9f9;
+    border-top: 1px solid #eee; text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
+  .sidebar-field { margin-bottom: 20px;
+  }
   .sidebar-field label { display: block; font-weight: bold; margin-bottom: 8px; color: #444; }
-  .sidebar-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-  .location-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; }
-  .location-group summary { padding: 12px 15px; background: #f5f5f5; cursor: pointer; font-weight: 600; color: var(--color-primary-navy); user-select: none; }
+  .sidebar-input { width: 100%;
+    padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  .location-group { margin-bottom: 15px; border: 1px solid #e0e0e0;
+    border-radius: 6px; overflow: hidden; }
+  .location-group summary { padding: 12px 15px; background: #f5f5f5; cursor: pointer; font-weight: 600; color: var(--color-primary-navy);
+    user-select: none; }
   .student-list { padding: 10px; }
-  .student-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; border-bottom: 1px solid #f0f0f0; }
-  .student-row.excluded { opacity: 0.5; background: #f9f9f9; }
+  .student-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    padding: 8px; border-bottom: 1px solid #f0f0f0; }
+  .student-row.excluded { opacity: 0.5; background: #f9f9f9;
+  }
   .student-row.excluded .student-name { text-decoration: line-through; color: #999 !important; }
-  .student-controls { display: flex; align-items: center; gap: 6px; }
+  .student-controls { display: flex; align-items: center; gap: 6px;
+  }
   .student-checkbox { width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; }
-  .student-lock { width: 20px; height: 20px; cursor: pointer; opacity: 0.3; font-size: 16px; }
-  .student-lock.locked { opacity: 1; color: var(--color-primary-orange); }
+  .student-lock { width: 20px; height: 20px;
+    cursor: pointer; opacity: 0.3; font-size: 16px; }
+  .student-lock.locked { opacity: 1; color: var(--color-primary-orange);
+  }
   .student-name { flex: 0 0 140px; font-weight: 500; color: #333; }
-  .student-input { flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; }
-  .role-pill { display: inline-block; padding: 5px 10px; background: #eee; border-radius: 20px; margin: 3px; cursor: pointer; font-size: 0.85em; }
-  .role-pill.selected { background: var(--color-primary-navy); color: white; }
+  .student-input { flex: 1;
+    padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; }
+  .role-pill { display: inline-block; padding: 5px 10px;
+    background: #eee; border-radius: 20px; margin: 3px; cursor: pointer; font-size: 0.85em; }
+  .role-pill.selected { background: var(--color-primary-navy); color: white;
+  }
 </style>
 
 <div id="global-sidebar-overlay" class="sidebar-overlay" onclick="closeAllSidebars()"></div>
 
-<!-- STAFF SIDEBAR -->
 <div id="sidebar-add-staff" class="app-sidebar-panel">
   <div class="sidebar-header">
     <h3>Add New Staff Member</h3>
@@ -60,7 +78,6 @@
   </div>
 </div>
 
-<!-- ACCOMMODATIONS SIDEBAR -->
 <div id="sidebar-accommodations" class="app-sidebar-panel">
   <div class="sidebar-header">
     <h3 id="acc-title">Students & Accommodations</h3>
@@ -75,8 +92,9 @@
     <div id="roster-dynamic-list"></div>
   </div>
   <div class="sidebar-footer">
-    <button class="button-secondary" onclick="closeAllSidebars()">Cancel</button>
-    <button id="accommodations-save-btn" class="button-primary" onclick="saveAccommodations()">Save Changes</button>
+    <div style="flex-grow:1;"></div>
+    <button id="accommodations-save-db-btn" class="button-primary" onclick="saveAccommodations(false)">Save to App</button>
+    <button id="accommodations-publish-btn" class="button-success" onclick="saveAccommodations(true)">Update Google Doc</button>
   </div>
 </div>
 
@@ -107,10 +125,12 @@
   function submitNewStaff() {
     const name = document.getElementById('new-staff-name').value;
     const email = document.getElementById('new-staff-email').value;
-    if (!name || !email) { showNotification("Name and Email required", "error"); return; }
+    if (!name || !email) { showNotification("Name and Email required", "error"); return;
+    }
     const roles = Array.from(document.querySelectorAll('#sidebar-role-list input:checked')).map(i => i.value).join(', ');
     const btn = document.getElementById('btn-submit-new-staff');
-    btn.disabled = true; btn.textContent = "Creating...";
+    btn.disabled = true;
+    btn.textContent = "Creating...";
     google.script.run.withSuccessHandler(res => {
       btn.disabled = false; btn.textContent = "Create Staff Member";
       if (res.success) { showNotification(res.message, "success"); closeAllSidebars(); if(typeof fetchFullStaffList === 'function') fetchFullStaffList(); }
@@ -129,7 +149,18 @@
     const examData = sheetData ? sheetData.exams.find(e => e.name === examName) : null;
     if (!examData) return;
 
-    // FIXED IDs
+    // Reset Buttons
+    const pubBtn = document.getElementById('accommodations-publish-btn');
+    if (!examData.docUrl) {
+        pubBtn.disabled = true;
+        pubBtn.title = "Document must be created first";
+        pubBtn.style.opacity = "0.6";
+    } else {
+        pubBtn.disabled = false;
+        pubBtn.title = "";
+        pubBtn.style.opacity = "1";
+    }
+
     document.getElementById('acc-title').textContent = examName;
     document.getElementById('acc-subtitle').textContent = sheetData.course.code + ' - ' + sheetData.course.name;
     document.getElementById('accommodations-general').value = examData.generalNotes || '';
@@ -138,10 +169,8 @@
     container.innerHTML = '';
     const roster = examData.rosters || {};
     const tags = examData.studentTags || {};
-    
     // UMAAL FIRST
     const locs = ['UMAAL', 'Augusta', 'UMF Testing Ctr', 'Bangor', 'Brunswick', 'East Millinocket', 'Ellsworth', 'Lewiston', 'Rockland', 'Rumford', 'Saco', 'Unassigned'];
-    
     locs.forEach(loc => {
         const students = roster[loc] || [];
         if (students.length === 0) return;
@@ -162,11 +191,14 @@
             row.className = 'student-row' + (isEx ? ' excluded' : '');
             row.innerHTML = `
               <div class="student-controls">
-                <input type="checkbox" class="student-checkbox" data-student="${sName}" ${isEx ? '' : 'checked'} onchange="toggleStudentExclusion(this)">
-                <span class="student-lock ${tag.locked ? 'locked' : ''}" onclick="toggleStudentLock(this)">${tag.locked ? '🔒' : '🔓'}</span>
+                <input type="checkbox" class="student-checkbox" data-student="${sName}" ${isEx ?
+                '' : 'checked'} onchange="toggleStudentExclusion(this)">
+                <span class="student-lock ${tag.locked ? 'locked' : ''}" onclick="toggleStudentLock(this)">${tag.locked ?
+                '🔒' : '🔓'}</span>
               </div>
               <span class="student-name" style="color:${isEx ? '#999' : (sObj.color || '#000')}">${sName}</span>
-              <input type="text" class="student-input" data-student="${sName}" value="${tag.note || ''}" ${isEx ? 'disabled' : ''}>
+              <input type="text" class="student-input" data-student="${sName}" value="${tag.note || ''}" ${isEx ?
+              'disabled' : ''}>
             `;
             listDiv.appendChild(row);
         });
@@ -194,12 +226,24 @@
     el.textContent = isL ? '🔒' : '🔓';
   }
 
-  function saveAccommodations() {
+  /**
+   * Saves accommodation data.
+   * @param {boolean} isPublish - If true, triggers Google Doc update after DB save.
+   */
+  function saveAccommodations(isPublish) {
     const sidebar = document.getElementById('sidebar-accommodations');
-    const btn = document.getElementById('accommodations-save-btn');
+    const dbBtn = document.getElementById('accommodations-save-db-btn');
+    const pubBtn = document.getElementById('accommodations-publish-btn');
+    
     const sheetName = sidebar.dataset.sheetName;
     const examName = sidebar.dataset.examName;
-    btn.disabled = true; btn.textContent = 'Saving...';
+    
+    // Disable both to prevent conflict
+    dbBtn.disabled = true;
+    pubBtn.disabled = true;
+    
+    if (isPublish) pubBtn.textContent = 'Saving & Updating...';
+    else dbBtn.textContent = 'Saving...';
 
     const tags = {};
     document.querySelectorAll('.student-input').forEach(input => {
@@ -210,26 +254,55 @@
             locked: row.querySelector('.student-lock').classList.contains('locked')
         };
     });
-    
+
     const rootData = g.nursingData.data ? g.nursingData.data : g.nursingData;
     const sheetObj = rootData.sheets.find(s => s.sheetName === sheetName);
-    const payload = { courseCode: sheetObj.course.code, examName: examName, generalNotes: document.getElementById('accommodations-general').value, studentTags: tags };
+    const payload = { 
+        courseCode: sheetObj.course.code, 
+        examName: examName, 
+        generalNotes: document.getElementById('accommodations-general').value, 
+        studentTags: tags 
+    };
 
+    // 1. SAVE TO DATABASE (Always happens first)
     google.script.run.withSuccessHandler(res => {
         if (res.success) {
+            // Update local cache
             const examObj = sheetObj.exams.find(e => e.name === examName);
-            examObj.generalNotes = payload.generalNotes; examObj.studentTags = tags;
-            if (examObj.docUrl) {
-                btn.textContent = 'Updating Doc...';
+            examObj.generalNotes = payload.generalNotes; 
+            examObj.studentTags = tags;
+
+            // 2. CHECK IF PUBLISH REQUESTED
+            if (isPublish && examObj.docUrl) {
+                // Call Doc Update
                 google.script.run.withSuccessHandler(() => {
-                    btn.disabled = false; btn.textContent = 'Save Changes';
-                    closeAllSidebars(); showNotification("Saved & Updated Doc!", "success");
+                    resetButtons();
+                    closeAllSidebars(); 
+                    showNotification("Saved & Updated Doc!", "success");
+                }).withFailureHandler(e => {
+                    resetButtons();
+                    showNotification("Saved to DB, but Doc update failed: " + e.message, "error");
                 }).updateAllNursingDocuments({ settings: rootData.settings, sheets: [{ ...sheetObj, exams: [examObj] }] });
             } else {
-                btn.disabled = false; btn.textContent = 'Save Changes';
-                closeAllSidebars(); showNotification("Saved to DB!", "success");
+                // Just DB Save
+                resetButtons();
+                showNotification("Saved to App!", "success");
+                // We do NOT close sidebar for 'Save to App', allowing continued editing
             }
-        } else { btn.disabled = false; btn.textContent = 'Save Changes'; showNotification("Failed: " + res.message, "error"); }
+        } else { 
+            resetButtons();
+            showNotification("Failed: " + res.message, "error"); 
+        }
+    }).withFailureHandler(e => {
+        resetButtons();
+        showNotification("Server Error: " + e.message, "error");
     }).api_saveNursingAccommodations(payload);
+
+    function resetButtons() {
+        dbBtn.disabled = false;
+        dbBtn.textContent = 'Save to App';
+        pubBtn.disabled = false;
+        pubBtn.textContent = 'Update Google Doc';
+    }
   }
 </script>

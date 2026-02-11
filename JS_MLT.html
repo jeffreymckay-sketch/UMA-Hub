@@ -13,11 +13,9 @@
        action: '', 
        isRunning: false
     };
-
     // --- CONTEXT STATE ---
     // Tracks if the currently open sidebar belongs to MLT
     let isMltSidebarOpen = false;
-
     // --- 1. SIDEBAR OPENER PATCH ---
     // Overrides global function to support MLT data
     const originalSidebarFn = window.openAccommodationsSidebar;
@@ -57,8 +55,10 @@
     // --- 2. SIDEBAR SAVER PATCH ---
     // Intercepts the Save action to inject MLT data if needed
     const originalSaveFn = window.saveAccommodations;
-    window.saveAccommodations = function() {
-        console.log("Intercepted Save. Is MLT?", isMltSidebarOpen);
+    
+    // UPDATED: Now accepts the isPublish argument
+    window.saveAccommodations = function(isPublish) {
+        console.log("Intercepted Save. Is MLT?", isMltSidebarOpen, "Publish?", isPublish);
         // If we are in MLT mode, we must swap the data again just for this save operation
         if (isMltSidebarOpen) {
             const tempHold = g.nursingData;
@@ -66,7 +66,7 @@
             
             try {
                 // Call original saver (now it sees the correct data)
-                if (originalSaveFn) originalSaveFn();
+                if (originalSaveFn) originalSaveFn(isPublish);
             } catch (e) {
                 console.error("MLT Save Error:", e);
                 showNotification("Save Error: " + e.message, "error");
@@ -76,7 +76,7 @@
             }
         } else {
             // Standard Nursing behavior
-            if (originalSaveFn) originalSaveFn();
+            if (originalSaveFn) originalSaveFn(isPublish);
         }
     };
 
@@ -102,7 +102,8 @@
                if(res.success) renderMLTDocManagement(res);
                else view.innerHTML = `<div class="error-message">${res.message}</div>`;
            })
-           .withFailureHandler(err => {
+           .withFailureHandler(err => 
+           {
                view.innerHTML = `<div class="error-message">Failed to load MLT data: ${err.message}</div>`;
            })
            .api_getMLTData();
@@ -121,6 +122,7 @@
                <input type="text" id="mlt-exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterMLTExams()" style="width:200px">
                <button id="mlt-create-btn" class="button-primary" onclick="handleMLTBulkAction('create')">Generate All</button>
                <button id="mlt-update-btn" class="button-secondary" onclick="handleMLTBulkAction('update')">Update All</button>
+          
            </div>
        `;
        view.appendChild(header);
@@ -128,7 +130,8 @@
        const container = document.createElement('div');
        container.id = 'mlt-course-container';
        if (!response.data || !response.data.sheets || response.data.sheets.length === 0) {
-           container.innerHTML = '<div style="padding:40px; text-align:center;">No exams found. Check Settings.</div>';
+           container.innerHTML = '<div style="padding:40px; text-align:center;">No exams found.
+           Check Settings.</div>';
        } else {
            response.data.sheets.forEach(sheet => {
                container.appendChild(buildMLTCourseSection(sheet.fullTitle, sheet.sheetName, sheet.exams));
@@ -151,14 +154,12 @@
         
         const contentInner = document.createElement('div');
         contentInner.className = 'course-content-inner';
-
         const grid = document.createElement('div');
         grid.className = 'exam-grid';
         
         exams.forEach(exam => {
             grid.appendChild(buildMLTExamCard({ ...exam, _sheetName: sheetName, _fullTitle: fullTitle }));
         });
-
         contentInner.appendChild(grid);
         contentWrapper.appendChild(contentInner);
         section.appendChild(header);
@@ -190,9 +191,12 @@
         card.innerHTML = `
             <div class="exam-card-header ${headerClass}"><h4>${exam.name}</h4></div>
             <div class="exam-card-body">
-                <div class="exam-info-row"><span class="exam-label">Date:</span> <span class="exam-value">${exam.date || '-'}</span></div>
-                <div class="exam-info-row"><span class="exam-label">Time:</span> <span class="exam-value">${exam.siteTime || '-'}</span></div>
-                <div class="exam-info-row"><span class="exam-label">Room:</span> <span class="exam-value">${exam.room || '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Date:</span> <span class="exam-value">${exam.date ||
+                '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Time:</span> <span class="exam-value">${exam.siteTime ||
+                '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Room:</span> <span class="exam-value">${exam.room ||
+                '-'}</span></div>
             </div>
             <div class="exam-card-footer">
                 <button class="btn-sm button-navy" onclick="openAccommodationsSidebar('${safeSheet}', '${safeExam}', 'mlt')">Students</button>
@@ -210,7 +214,6 @@
         const func = action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
         const sheetObj = g.mltData.data.sheets.find(s => s.sheetName === sheetName);
         const examObj = sheetObj.exams.find(e => e.name === examName);
-
         const payload = { 
             sheets: [{ 
                 fullTitle: sheetObj.fullTitle, 
@@ -218,20 +221,21 @@
                 exams: [examObj] 
             }] 
         };
-
         google.script.run.withSuccessHandler(res => {
             if(res.success) {
                 showNotification(res.message, 'success');
                 if(res.createdUrls && res.createdUrls[examName]) examObj.docUrl = res.createdUrls[examName];
                 else if(res.docUrl) examObj.docUrl = res.docUrl; // Try generic
 
-                const newCard = buildMLTExamCard({ ...examObj, _sheetName: sheetName, _fullTitle: sheetObj.fullTitle });
+                const newCard = buildMLTExamCard({ ...examObj, _sheetName: sheetName, _fullTitle: 
+                sheetObj.fullTitle });
                 btn.closest('.exam-card').replaceWith(newCard);
             } else {
                 showNotification(res.message, 'error');
                 btn.disabled = false;
                 btn.textContent = (action==='create'?'Create':'Update');
             }
+    
         }).withFailureHandler(e => {
             showNotification(e.message,'error');
             btn.disabled = false;
@@ -241,18 +245,17 @@
 
     function handleMLTBulkAction(action) {
         if (!g.mltData || !g.mltData.data) return;
-
         const allItems = [];
         g.mltData.data.sheets.forEach(sheet => {
             sheet.exams.forEach(exam => {
                 allItems.push({ 
                     sheetName: sheet.sheetName, 
                     fullTitle: sheet.fullTitle, 
+                   
                     exams: exam 
                 });
             });
         });
-
         if (allItems.length === 0) return;
 
         mltBatchState = { queue: allItems, total: allItems.length, processed: 0, action: action };
@@ -277,27 +280,28 @@
             if(!tempMap[item.sheetName]) tempMap[item.sheetName] = { fullTitle: item.fullTitle, exams: [] };
             tempMap[item.sheetName].exams.push(item.exams);
         });
-
         const payload = { sheets: Object.values(tempMap) };
         const func = mltBatchState.action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
 
         updateProgressUI(mltBatchState.processed, mltBatchState.total, "Processing...");
-        
         google.script.run.withSuccessHandler(res => {
             if(res.success) {
                 // Update local URLs
                 if(res.createdUrls) {
                     for(const [eName, eUrl] of Object.entries(res.createdUrls)) {
+                        
                         g.mltData.data.sheets.forEach(s => {
                             const found = s.exams.find(e => e.name === eName);
                             if(found) found.docUrl = eUrl;
                         });
+        
                     }
                 }
                 mltBatchState.processed += chunk.length;
                 processNextMLTBatch();
             } else {
                 showNotification("Error: " + res.message, "error");
+    
                 showProgressModal(false);
             }
         }).withFailureHandler(err => {
@@ -307,9 +311,9 @@
     }
 
     function renderMLTSettings() {
-        const s = (g.allSettings.mlt_settings_new) ? g.allSettings.mlt_settings_new : (g.allSettings.MLT || {}); 
+        const s = (g.allSettings.mlt_settings_new) ?
+        g.allSettings.mlt_settings_new : (g.allSettings.MLT || {}); 
         const existingVal = (g.mltData && g.mltData.data && g.mltData.data.settings) ? g.mltData.data.settings : {};
-
         const sheetUrl = existingVal.sheetId || s.spreadsheetUrl || '';
         const folderUrl = existingVal.folderId || s.targetFolderId || '';
         const notes = existingVal.customNotes || s.customNotes || '';
@@ -321,6 +325,7 @@
                <div class="form-group"><label>Sheet URL (or ID)</label><input id="mlt-sheet-url" class="form-input" value="${sheetUrl}"></div>
                <div class="form-group"><label>Folder URL (or ID)</label><input id="mlt-folder-url" class="form-input" value="${folderUrl}"></div>
                <div class="form-group"><label>Custom Notes</label><textarea id="mlt-notes" class="form-input">${notes}</textarea></div>
+          
                <button class="button-primary" onclick="saveMLTSettingsInternal(this)">Save</button>
            </div>
         `;
@@ -340,6 +345,7 @@
             
             // Update global settings
             if(!g.allSettings.mlt_settings_new) g.allSettings.mlt_settings_new = {};
+      
             g.allSettings.mlt_settings_new = val;
 
         }).mlt_saveSettings(val);
@@ -353,6 +359,7 @@
                  if(card.dataset.examName.includes(term)) {
                      card.style.display = 'flex'; visible++;
                  } else { card.style.display = 'none'; }
+ 
              });
              section.style.display = visible ? 'block' : 'none';
              if(term && visible) section.classList.add('open');
