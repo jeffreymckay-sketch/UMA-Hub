@@ -6,6 +6,38 @@
  */
 
 /**
+ * Utility: Extract Google Sheet ID from URL
+ * Supports both full URLs and direct IDs
+ */
+function extractFileIdFromUrl(input) {
+  if (!input) return null;
+  
+  const trimmed = input.trim();
+  
+  // If it's already just an ID (no slashes), return it
+  if (!trimmed.includes('/') && !trimmed.includes('http')) {
+    return trimmed;
+  }
+  
+  // Extract from URL patterns
+  const patterns = [
+    /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/,  // Standard Sheets URL
+    /\/folders\/([a-zA-Z0-9-_]+)/,           // Folder URL
+    /id=([a-zA-Z0-9-_]+)/,                   // Query parameter
+    /^([a-zA-Z0-9-_]+)$/                     // Direct ID
+  ];
+  
+  for (let pattern of patterns) {
+    const match = trimmed.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Helper: Resolves the Target Sheet
  * STRICT MODE: Requires a valid URL.
  */
@@ -121,13 +153,40 @@ function api_bulkUpdateSheet(customUrl, customTab, updates) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
+/**
+ * EXPORT: Create new sheet with filtered data
+ */
 function exportToSheet(headers, rows) {
   try {
-    if (!rows || rows.length === 0) throw new Error("No data.");
-    const ss = SpreadsheetApp.create(`Export ${new Date().toLocaleDateString()}`);
+    if (!rows || rows.length === 0) throw new Error("No data to export.");
+    
+    const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+    const ss = SpreadsheetApp.create(`Proofing Export - ${timestamp}`);
     const sheet = ss.getActiveSheet();
+    
+    // Prepare data
     const dataToSave = [headers, ...rows];
+    
+    // Write to sheet
     sheet.getRange(1, 1, dataToSave.length, headers.length).setValues(dataToSave);
+    
+    // Format header row
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setFontWeight("bold")
+               .setBackground("#003057")
+               .setFontColor("#ffffff");
+    
+    // Freeze header row
+    sheet.setFrozenRows(1);
+    
+    // Auto-resize columns
+    for (let i = 1; i <= headers.length; i++) {
+      sheet.autoResizeColumn(i);
+    }
+    
     return { success: true, url: ss.getUrl() };
-  } catch (e) { return { success: false, error: e.message }; }
+    
+  } catch (e) { 
+    return { success: false, error: e.message }; 
+  }
 }

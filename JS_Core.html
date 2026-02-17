@@ -40,11 +40,18 @@
       children: [
         { id: 'Nursing', title: 'Nursing', roles: ['Proctor', 'Admin'] },
         { id: 'MLT', title: 'MLT', roles: ['Proctor', 'Admin'] },
-        // NEW MENU ITEM
         { id: 'ProctorSchedule', title: 'Master Schedule', roles: ['Proctor', 'Admin'] }
       ]
     },
-    { id: 'Reporting', title: 'Stats & Reports', roles: ['Admin', 'Lead'] },
+    { 
+      id: 'Reporting', 
+      title: 'Stats & Reports', 
+      roles: ['Admin', 'Lead'],
+      children: [
+        { id: 'Reporting', title: 'Calendar Stats', roles: ['Admin', 'Lead'] },
+        { id: 'ProofingTools', title: 'Proofing Tools', roles: ['Admin', 'Lead'] }
+      ]
+    },
     { id: 'Zoom', title: 'Zoom', roles: ['Admin'] },
     { id: 'Settings', title: 'Settings', roles: ['Staff', 'Lead', 'Admin'] }
   ];
@@ -105,61 +112,51 @@
     const menu = document.getElementById('main-menu');
     if (!menu) return;
     menu.innerHTML = '';
-    const userRoles = g.userInfo ? g.userInfo.role : "";
+    const userRoles = g.userInfo ? g.userInfo.role.split(',').map(r => r.trim()) : [];
 
     menuItems.forEach(item => {
-      const hasPermission = item.roles.some(r => userRoles.includes(r));
-      if (!hasPermission && g.userInfo) return; 
+      const hasAccess = item.roles.some(role => userRoles.includes(role));
+      if (!hasAccess) return;
 
-      const link = document.createElement('a');
-      link.className = 'nav-item';
-      link.href = '#' + item.id;
-      link.dataset.pageId = item.id;
+      if (item.children) {
+        const parentLi = document.createElement('li');
+        parentLi.className = 'nav-item has-submenu';
+        parentLi.id = `nav-toggle-${item.id}`;
+        parentLi.innerHTML = `
+          <span>${item.title}</span>
+          <span class="submenu-arrow">▶</span>
+        `;
+        parentLi.onclick = () => toggleSubmenu(item.id);
 
-      if (item.children && item.children.length > 0) {
-        link.classList.add('has-submenu');
-        link.id = `nav-toggle-${item.id}`;
-        link.innerHTML = `${item.title} <span class="submenu-arrow">&#9654;</span>`;
-        link.href = '#'; 
+        const subUl = document.createElement('ul');
+        subUl.className = 'sub-menu';
+        subUl.id = `submenu-${item.id}`;
 
-        const subMenu = document.createElement('div');
-        subMenu.className = 'sub-menu';
-        subMenu.id = `submenu-${item.id}`;
-        
         item.children.forEach(child => {
-          const hasChildPermission = child.roles.some(r => userRoles.includes(r));
-          if (!hasChildPermission && g.userInfo) return;
+          const childHasAccess = child.roles.some(role => userRoles.includes(role));
+          if (!childHasAccess) return;
 
-          const childLink = document.createElement('a');
-          childLink.href = '#' + child.id;
-          childLink.className = 'nav-item';
-          childLink.dataset.pageId = child.id;
-          childLink.textContent = child.title;
-          subMenu.appendChild(childLink);
+          const childLi = document.createElement('li');
+          childLi.className = 'nav-item';
+          childLi.dataset.pageId = child.id;
+          childLi.textContent = child.title;
+          subUl.appendChild(childLi);
         });
 
-        if (subMenu.childElementCount > 0) {
-            const menuContainer = document.createElement('div');
-            menuContainer.className = 'submenu-container';
-            menuContainer.appendChild(link);
-            menuContainer.appendChild(subMenu);
-            menu.appendChild(menuContainer);
-        }
+        menu.appendChild(parentLi);
+        menu.appendChild(subUl);
       } else {
-        link.textContent = item.title;
-        menu.appendChild(link);
+        const li = document.createElement('li');
+        li.className = 'nav-item';
+        li.dataset.pageId = item.id;
+        li.textContent = item.title;
+        menu.appendChild(li);
       }
     });
 
     menu.onclick = function(e) {
       const target = e.target.closest('.nav-item');
-      if (!target) return;
-      
-      e.preventDefault();
-      
-      if (target.classList.contains('has-submenu')) {
-        toggleSubmenu(target.id.replace('nav-toggle-', ''));
-      } else if (target.dataset.pageId) {
+      if (target && target.dataset.pageId) {
         navigateToPage(target.dataset.pageId);
       }
     };
@@ -200,9 +197,9 @@
       else if (pageId === 'MST') { if(typeof loadMstPage === 'function') loadMstPage(); }
       else if (pageId === 'Nursing') { if(typeof loadNursingPage === 'function') loadNursingPage(); }
       else if (pageId === 'MLT') { if(typeof loadMLTPage === 'function') loadMLTPage(); }
-      // NEW ROUTE
       else if (pageId === 'ProctorSchedule') { if(typeof loadProctorSchedulePage === 'function') loadProctorSchedulePage(); }
       else if (pageId === 'Reporting') { if(typeof loadReportingPage === 'function') loadReportingPage(); }
+      else if (pageId === 'ProofingTools') { if(typeof loadProofingToolsPage === 'function') loadProofingToolsPage(); }
       else if (pageId === 'TechHub') { if(typeof loadTechHubPage === 'function') loadTechHubPage(); }
       else if (pageId === 'Settings') { if(typeof loadSettingsPage === 'function') loadSettingsPage(); }
     } catch (err) {

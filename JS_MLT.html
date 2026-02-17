@@ -39,9 +39,11 @@
       transition: background 0.2s;
     }
     .course-header:hover { background: #e9ecef; }
-    .course-header::after { content: '▼'; font-size: 0.8em; color: #666; transition: transform 0.3s; }
+    .course-header::after { content: '▼'; font-size: 0.8em; color: #666;
+      transition: transform 0.3s; }
     
-    .course-section.open .course-header::after { transform: rotate(180deg); }
+    .course-section.open .course-header::after { transform: rotate(180deg);
+    }
     
     /* Content Animation */
     .course-content { 
@@ -50,7 +52,8 @@
       transition: grid-template-rows 0.35s ease-out;
       background: #fff;
     }
-    .course-section.open .course-content { grid-template-rows: 1fr; }
+    .course-section.open .course-content { grid-template-rows: 1fr;
+    }
 
     .course-content-inner {
       overflow: hidden;
@@ -97,7 +100,8 @@
         letter-spacing: 0.5px;
     }
 
-    .header-created { background-color: var(--color-primary-green); }
+    .header-created { background-color: var(--color-primary-green);
+    }
     .header-not-created { background-color: var(--color-primary-orange); }
     
     .exam-card-body {
@@ -113,10 +117,13 @@
       padding-bottom: 8px;
       border-bottom: 1px dashed #ddd;
     }
-    .exam-info-row:last-child { border-bottom: none; margin-bottom: 0; }
+    .exam-info-row:last-child { border-bottom: none; margin-bottom: 0;
+    }
     
-    .exam-label { color: #555; font-weight: 500; }
-    .exam-value { font-weight: 700; color: #222; text-align: right; }
+    .exam-label { color: #555; font-weight: 500;
+    }
+    .exam-value { font-weight: 700; color: #222; text-align: right;
+    }
     
     .exam-card-footer {
       padding: 12px 15px;
@@ -128,7 +135,8 @@
       gap: 5px;
     }
     
-    .footer-right { display: flex; gap: 8px; }
+    .footer-right { display: flex; gap: 8px;
+    }
     
     /* Buttons */
     .btn-sm {
@@ -143,18 +151,23 @@
       transition: opacity 0.2s, transform 0.1s;
     }
     .btn-sm:hover { opacity: 0.9; transform: translateY(-1px); }
-    .btn-sm:active { transform: translateY(0); }
+    .btn-sm:active { transform: translateY(0);
+    }
     .btn-std { min-width: 70px; text-align: center; }
 
-    .button-navy { background-color: var(--color-primary-navy); color: white !important; }
-    .button-update-active { background-color: var(--color-primary-navy); color: white !important; }
+    .button-navy { background-color: var(--color-primary-navy);
+      color: white !important; }
+    .button-update-active { background-color: var(--color-primary-navy); color: white !important;
+    }
     .button-update-inactive { 
         background-color: var(--color-accent-lightgreen, #EDF7DF); 
-        color: #555 !important; 
+        color: #555 !important;
         cursor: not-allowed; opacity: 0.8; 
     }
-    .button-create { background-color: var(--color-primary-orange) !important; color: white !important; }
-    .button-view { background-color: var(--color-primary-orange) !important; color: white !important; }
+    .button-create { background-color: var(--color-primary-orange) !important; color: white !important;
+    }
+    .button-view { background-color: var(--color-primary-orange) !important; color: white !important;
+    }
 
 </style>
 
@@ -171,7 +184,7 @@
     // --- CONTEXT SWITCHING & SIDEBAR PATCH ---
     // Tracks if we are currently working in the MLT tab
     let isMltMode = false;
-    
+
     // Save original global functions
     if (!window._originalOpenSidebar) window._originalOpenSidebar = window.openAccommodationsSidebar;
     if (!window._originalSaveAccommodations) window._originalSaveAccommodations = window.saveAccommodations;
@@ -202,6 +215,15 @@
 
     // PATCH: Intercept Save
     window.saveAccommodations = function(isPublish) {
+        // Safety Check: Verify visibility state one last time before saving
+        const mltPage = document.getElementById('page-MLT');
+        const actuallyVisible = (mltPage && mltPage.style.display !== 'none');
+        
+        // If our flag says we are in MLT mode, but the page isn't visible, we shouldn't use MLT save logic.
+        if (isMltMode && !actuallyVisible) {
+            isMltMode = false; 
+        }
+
         // Check our context flag
         if (isMltMode) {
             console.log("MLT Context: Intercepting Save");
@@ -215,7 +237,7 @@
                 // Custom MLT Publish Logic
                 saveMLTCustom(true);
             } else {
-                // DB Save is safe to use shared function
+                // DB Save is safe to use shared function, BUT passing false for publish
                 if (window._originalSaveAccommodations) window._originalSaveAccommodations(false);
             }
 
@@ -333,7 +355,6 @@
 
        const container = document.createElement('div');
        container.id = 'mlt-course-container';
-       
        if (!response.data || !response.data.sheets || response.data.sheets.length === 0) {
            container.innerHTML = '<div style="padding:40px; text-align:center;">No exams found. Check Settings.</div>';
        } else {
@@ -359,7 +380,6 @@
         
         const contentInner = document.createElement('div');
         contentInner.className = 'course-content-inner';
-
         const grid = document.createElement('div');
         grid.className = 'exam-grid';
         
@@ -367,7 +387,6 @@
             // Pass fullTitle down so card can use it
             grid.appendChild(buildMLTExamCard({ ...exam, _sheetName: sheetName, _fullTitle: fullTitle }));
         });
-        
         contentInner.appendChild(grid);
         contentWrapper.appendChild(contentInner);
         section.appendChild(header);
@@ -382,7 +401,6 @@
         const card = document.createElement('div');
         card.className = 'exam-card';
         card.dataset.examName = (exam.name || '').toLowerCase();
-        
         const safeSheet = (exam._sheetName || '').replace(/'/g, "\\'");
         const safeExam = (exam.name || '').replace(/'/g, "\\'");
 
@@ -421,7 +439,6 @@
         const func = action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
         const sheetObj = g.mltData.data.sheets.find(s => s.sheetName === sheetName);
         const examObj = sheetObj.exams.find(e => e.name === examName);
-        
         const payload = { 
             sheets: [{ 
                 fullTitle: sheetObj.fullTitle, 
@@ -432,7 +449,6 @@
                 exams: [examObj] 
             }] 
         };
-        
         google.script.run.withSuccessHandler(res => {
             if(res.success) {
                 showNotification(res.message, 'success');
@@ -469,7 +485,6 @@
                 });
             });
         });
-        
         if (allItems.length === 0) return;
 
         mltBatchState = { queue: allItems, total: allItems.length, processed: 0, action: action };
@@ -502,12 +517,10 @@
             }
             tempMap[item.sheetName].exams.push(item.exams);
         });
-        
         const payload = { sheets: Object.values(tempMap) };
         const func = mltBatchState.action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
 
         updateProgressUI(mltBatchState.processed, mltBatchState.total, "Processing...");
-        
         google.script.run.withSuccessHandler(res => {
             if(res.success) {
                 // Update local URLs
@@ -540,7 +553,6 @@
         const sheetUrl = existingVal.sheetId || s.spreadsheetUrl || '';
         const folderUrl = existingVal.folderId || s.targetFolderId || '';
         const notes = existingVal.customNotes || s.customNotes || '';
-
         const view = document.getElementById('MLT-Settings');
         view.innerHTML = `
            <h2>MLT Settings</h2>

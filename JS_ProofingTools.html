@@ -1,0 +1,799 @@
+<script>
+    /**
+     * ------------------------------------------------------------------
+     * PROOFING TOOLS: Advanced Sheet Lookup & Bulk Editor
+     * ------------------------------------------------------------------
+     */
+    
+    const proofingToolsState = {
+      sheetUrl: '',
+      tabName: '',
+      headers: [],
+      rawData: [],
+      filteredData: [],
+      filters: {},
+      groupByColumn: null,
+      editMode: false,
+      pendingEdits: [],
+      selectedHeaders: [] // Track which headers are visible
+    };
+    
+    function loadProofingToolsPage() {
+      const container = document.getElementById('page-ProofingTools');
+      
+      if (container.childElementCount === 0) {
+        container.innerHTML = `
+          <style>
+            .proofing-accordion {
+              margin-bottom: 8px;
+              border: 1px solid #ddd;
+              border-radius: 6px;
+              overflow: hidden;
+              background: white;
+            }
+            
+            .proofing-accordion-header {
+              padding: 12px 16px;
+              background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+              cursor: pointer;
+              user-select: none;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-weight: 600;
+              color: var(--color-primary-green
+              transition: background 0.2s;
+            }
+            
+            .proofing-accordion-header:hover {
+              background: linear-gradient(to bottom, #e9ecef, #dee2e6);
+            }
+            
+            .proofing-accordion-header.active {
+              background: var(--color-primary-navy);
+              color: white;
+            }
+            
+            .proofing-accordion-arrow {
+              transition: transform 0.3s ease;
+              font-size: 0.8em;
+            }
+            
+            .proofing-accordion-header.active .proofing-accordion-arrow {
+              transform: rotate(90deg);
+            }
+            
+            .proofing-accordion-body {
+              max-height: 0;
+              overflow: hidden;
+              transition: max-height 0.3s ease-out;
+            }
+            
+            .proofing-accordion-body.open {
+              max-height: 200px;
+              padding: 12px 16px;
+              border-top: 1px solid #ddd;
+            }
+            
+            .proofing-badge {
+              display: inline-block;
+              padding: 2px 8px;
+              background: var(--color-primary-orange);
+              color: white;
+              border-radius: 12px;
+              font-size: 0.75em;
+              font-weight: 600;
+              margin-left: 8px;
+            }
+            
+            .proofing-section {
+              background: white;
+              border-radius: 8px;
+              padding: 20px;
+              margin-bottom: 20px;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+              border-left: 4px solid var(--color-primary-orange);
+            }
+            
+            .proofing-section h3 {
+              margin-top: 0;
+              color: var(--color-primary-navy);
+              font-size: 1.1em;
+            }
+            
+            .proofing-grouped-header {
+              background: linear-gradient(135deg, var(--color-primary-navy) 0%, #1976d2 100%);
+              color: white;
+              padding: 14px 16px;
+              font-weight: 600;
+              border-radius: 6px 6px 0 0;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .proofing-grouped-row {
+              background: #f8f9fa;
+              border-left: 3px solid var(--color-primary-orange);
+            }
+            
+            .proofing-grouped-row:hover {
+              background: #e9ecef;
+            }
+            
+            .proofing-header-checkbox {
+              display: inline-flex;
+              align-items: center;
+              padding: 8px 12px;
+              margin: 4px;
+              background: white;
+              border: 2px solid #ddd;
+              border-radius: 6px;
+              cursor: pointer;
+              transition: all 0.2s;
+              user-select: none;
+            }
+            
+            .proofing-header-checkbox:hover {
+              border-color: var(--color-primary-orange);
+              background: #fff9f0;
+            }
+            
+            .proofing-header-checkbox input[type="checkbox"] {
+              margin-right: 8px;
+              cursor: pointer;
+              width: 18px;
+              height: 18px;
+            }
+            
+            .proofing-header-checkbox input[type="checkbox"]:checked {
+              accent-color: var(--color-primary-orange);
+            }
+            
+            .proofing-header-checkbox.checked {
+              background: #fff9f0;
+              border-color: var(--color-primary-orange);
+              font-weight: 600;
+            }
+          </style>
+          
+          <div class="widget">
+            <h2 style="margin:0 0 10px 0; color:var(--color-primary-navy);">
+              <span style="color:var(--color-primary-orange);">■</span> Proofing Tools
+            </h2>
+            <p style="color:#666; margin-bottom:25px;">Load any Google Sheet to filter, cross-reference, and bulk edit data.</p>
+            
+            <div class="proofing-section">
+              <h3>📋 Step 1: Load Your Sheet</h3>
+              
+              <div style="display:grid; grid-template-columns: 2fr 1fr auto; gap:15px; align-items:end;">
+                <div>
+                  <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Google Sheet URL</label>
+                  <input type="text" id="proofing-sheet-url" class="form-input" 
+                    placeholder="Paste full URL here..." 
+                    style="width:100%;">
+                </div>
+                
+                <div>
+                  <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Tab Name (Optional)</label>
+                  <input type="text" id="proofing-tab-name" class="form-input" 
+                    placeholder="Leave blank for Sheet1" 
+                    style="width:100%;">
+                </div>
+                
+                <div>
+                  <button id="btn-load-proofing-data" class="button-primary" 
+                    onclick="handleLoadProofingSheetData()" 
+                    style="padding:10px 24px;">
+                    Load Data
+                  </button>
+                </div>
+              </div>
+              
+              <div id="proofing-load-feedback" style="margin-top:15px; min-height:20px;"></div>
+            </div>
+            
+            <div id="proofing-header-selection" style="display:none;" class="proofing-section">
+              <h3>📑 Step 2: Select Columns to Display</h3>
+              <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
+                Choose which columns you want to see and filter. Uncheck columns to hide them.
+              </p>
+              
+              <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <button class="button-secondary" onclick="handleSelectAllHeaders()">Select All</button>
+                <button class="button-secondary" onclick="handleDeselectAllHeaders()">Deselect All</button>
+              </div>
+              
+              <div id="proofing-header-checkboxes" style="display:flex; flex-wrap:wrap; gap:8px; padding:15px; background:#f9f9f9; border-radius:6px; border:1px solid #ddd;"></div>
+              
+              <div style="margin-top:15px; padding-top:15px; border-top:2px solid var(--color-accent-gray);">
+                <span style="color:var(--color-primary-navy); font-weight:600;">
+                  <span id="proofing-selected-count" style="color:var(--color-primary-orange);">0</span> of 
+                  <span id="proofing-total-count">0</span> columns selected
+                </span>
+              </div>
+            </div>
+            
+            <div id="proofing-filter-section" style="display:none;" class="proofing-section">
+              <h3>🔍 Step 3: Filter Your Data</h3>
+              <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
+                Click any header below to expand and select filter values. Hold Ctrl/Cmd to select multiple.
+              </p>
+              
+              <div id="proofing-filters-container"></div>
+              
+              <div style="display:flex; gap:10px; justify-content:space-between; align-items:center; padding-top:15px; border-top:2px solid var(--color-accent-gray); margin-top:15px;">
+                <button class="button-secondary" onclick="handleClearProofingFilters()">Clear All Filters</button>
+                <div style="color:var(--color-primary-navy); font-weight:600; font-size:1em;">
+                  <span id="proofing-row-count" style="color:var(--color-primary-orange);">0</span> rows shown
+                </div>
+              </div>
+            </div>
+            
+            <div id="proofing-grouping-section" style="display:none;" class="proofing-section" style="border-left-color: #ffc107;">
+              <h3>📊 Step 4: Group By Column (Optional)</h3>
+              <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
+                Group rows that share the same value in a specific column (e.g., Section ID to see all modalities together).
+              </p>
+              
+              <div style="display:grid; grid-template-columns: 1fr auto; gap:15px; align-items:end;">
+                <div>
+                  <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Group By Column</label>
+                  <select id="proofing-group-by-select" class="form-input" onchange="handleGroupByChange()" style="width:100%;">
+                    <option value="">-- No Grouping --</option>
+                  </select>
+                </div>
+                <button class="button-secondary" onclick="handleClearGrouping()">Clear Grouping</button>
+              </div>
+            </div>
+            
+            <div id="proofing-data-section" style="display:none;">
+              <div class="proofing-section" style="margin-bottom:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                  <h3 style="margin:0;">✏️ Step 5: View & Edit</h3>
+                  <div style="display:flex; gap:10px;">
+                    <button id="btn-toggle-proofing-edit" class="button-secondary" onclick="handleToggleProofingEdit()">Enable Edit Mode</button>
+                    <button id="btn-export-proofing" class="button-primary" onclick="handleExportProofing()">Export Filtered Data</button>
+                  </div>
+                </div>
+                
+                <div id="proofing-edit-controls" style="display:none; background:#fff3cd; padding:15px; border-radius:6px; margin-bottom:15px; border:2px solid #ffc107;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                      <strong style="color:var(--color-primary-navy);">✏️ Edit Mode Active</strong> 
+                      <span style="color:#666;">- Click any cell to edit. Changes are highlighted in yellow.</span>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                      <button class="button-secondary" onclick="handleCancelProofingEdits()">Cancel</button>
+                      <button id="btn-save-proofing-edits" class="button-success" onclick="handleSaveProofingEdits()">Save All Changes</button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div style="overflow-x:auto; max-height:600px; overflow-y:auto; border:2px solid var(--color-primary-navy); border-radius:8px;">
+                  <table id="proofing-data-table" class="data-table" style="width:100%; border-collapse:collapse;">
+                    <thead id="proofing-table-head"></thead>
+                    <tbody id="proofing-table-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        loadSavedSheetInfo();
+      }
+    }
+    
+    function loadSavedSheetInfo() {
+      try {
+        const savedUrl = localStorage.getItem('proofing-sheet-url');
+        const savedTab = localStorage.getItem('proofing-tab-name');
+        
+        if (savedUrl) {
+          document.getElementById('proofing-sheet-url').value = savedUrl;
+        }
+        if (savedTab) {
+          document.getElementById('proofing-tab-name').value = savedTab;
+        }
+      } catch (e) {
+        console.warn('Could not load saved sheet info:', e);
+      }
+    }
+    
+    function saveSheetInfo(url, tab) {
+      try {
+        localStorage.setItem('proofing-sheet-url', url);
+        localStorage.setItem('proofing-tab-name', tab);
+      } catch (e) {
+        console.warn('Could not save sheet info:', e);
+      }
+    }
+    
+    function handleLoadProofingSheetData() {
+      const urlInput = document.getElementById('proofing-sheet-url');
+      const tabInput = document.getElementById('proofing-tab-name');
+      const btn = document.getElementById('btn-load-proofing-data');
+      const feedback = document.getElementById('proofing-load-feedback');
+      
+      const sheetUrl = urlInput.value.trim();
+      const tabName = tabInput.value.trim() || '';
+      
+      if (!sheetUrl) {
+        feedback.innerHTML = '<div style="color:#dc3545; font-weight:600;">⚠️ Please paste a Google Sheet URL.</div>';
+        return;
+      }
+      
+      proofingToolsState.sheetUrl = sheetUrl;
+      proofingToolsState.tabName = tabName;
+      
+      saveSheetInfo(sheetUrl, tabName);
+      
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+      feedback.innerHTML = '<div style="color:#666;">🔄 Fetching sheet data...</div>';
+      
+      google.script.run
+        .withSuccessHandler(response => {
+          btn.disabled = false;
+          btn.textContent = 'Load Data';
+          
+          if (response.success) {
+            proofingToolsState.headers = response.headers;
+            proofingToolsState.rawData = response.rows;
+            proofingToolsState.filteredData = response.rows;
+            proofingToolsState.filters = {};
+            proofingToolsState.groupByColumn = null;
+            proofingToolsState.selectedHeaders = response.headers.map((h, i) => i); // Select all by default
+            
+            feedback.innerHTML = `<div style="color:#28a745; font-weight:600;">✅ Loaded ${response.rows.length} rows with ${response.headers.length} columns.</div>`;
+            
+            document.getElementById('proofing-header-selection').style.display = 'block';
+            document.getElementById('proofing-filter-section').style.display = 'block';
+            document.getElementById('proofing-grouping-section').style.display = 'block';
+            document.getElementById('proofing-data-section').style.display = 'block';
+            
+            renderHeaderCheckboxes();
+            renderProofingFilters();
+            renderGroupByDropdown();
+            renderProofingDataTable();
+          } else {
+            feedback.innerHTML = `<div style="color:#dc3545; font-weight:600;">❌ Error: ${response.message}</div>`;
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = 'Load Data';
+          feedback.innerHTML = `<div style="color:#dc3545; font-weight:600;">❌ Server Error: ${err.message}</div>`;
+        })
+        .api_lookup_getData(sheetUrl, tabName);
+    }
+    
+    function renderHeaderCheckboxes() {
+      const container = document.getElementById('proofing-header-checkboxes');
+      container.innerHTML = '';
+      
+      proofingToolsState.headers.forEach((header, index) => {
+        const isChecked = proofingToolsState.selectedHeaders.includes(index);
+        
+        const label = document.createElement('label');
+        label.className = `proofing-header-checkbox ${isChecked ? 'checked' : ''}`;
+        label.innerHTML = `
+          <input type="checkbox" 
+            ${isChecked ? 'checked' : ''} 
+            onchange="handleHeaderToggle(${index}, this.checked)">
+          <span>${escapeProofingHtml(header)}</span>
+        `;
+        container.appendChild(label);
+      });
+      
+      updateHeaderCount();
+    }
+    
+    function handleHeaderToggle(index, isChecked) {
+      if (isChecked) {
+        if (!proofingToolsState.selectedHeaders.includes(index)) {
+          proofingToolsState.selectedHeaders.push(index);
+        }
+      } else {
+        proofingToolsState.selectedHeaders = proofingToolsState.selectedHeaders.filter(i => i !== index);
+      }
+      
+      // Update checkbox styling
+      const checkboxes = document.querySelectorAll('.proofing-header-checkbox');
+      checkboxes[index].classList.toggle('checked', isChecked);
+      
+      updateHeaderCount();
+      renderProofingFilters();
+      renderGroupByDropdown();
+      renderProofingDataTable();
+    }
+    
+    function handleSelectAllHeaders() {
+      proofingToolsState.selectedHeaders = proofingToolsState.headers.map((h, i) => i);
+      renderHeaderCheckboxes();
+      renderProofingFilters();
+      renderGroupByDropdown();
+      renderProofingDataTable();
+    }
+    
+    function handleDeselectAllHeaders() {
+      proofingToolsState.selectedHeaders = [];
+      renderHeaderCheckboxes();
+      renderProofingFilters();
+      renderGroupByDropdown();
+      renderProofingDataTable();
+    }
+    
+    function updateHeaderCount() {
+      document.getElementById('proofing-selected-count').textContent = proofingToolsState.selectedHeaders.length;
+      document.getElementById('proofing-total-count').textContent = proofingToolsState.headers.length;
+    }
+    
+    function renderProofingFilters() {
+      const container = document.getElementById('proofing-filters-container');
+      container.innerHTML = '';
+      
+      // Only show filters for selected headers
+      proofingToolsState.selectedHeaders.forEach(colIndex => {
+        const header = proofingToolsState.headers[colIndex];
+        const uniqueValues = [...new Set(proofingToolsState.rawData.map(row => row[colIndex]))].sort();
+        
+        const accordionDiv = document.createElement('div');
+        accordionDiv.className = 'proofing-accordion';
+        accordionDiv.innerHTML = `
+          <div class="proofing-accordion-header" onclick="toggleProofingAccordion(${colIndex})">
+            <span>${escapeProofingHtml(header)}</span>
+            <span>
+              <span class="proofing-badge" id="proofing-badge-${colIndex}">0</span>
+              <span class="proofing-accordion-arrow">▶</span>
+            </span>
+          </div>
+          <div class="proofing-accordion-body" id="proofing-accordion-${colIndex}">
+            <select class="form-input" id="proofing-filter-${colIndex}" multiple 
+              onchange="handleProofingFilterChange(${colIndex})" 
+              style="width:100%; height:140px; border:2px solid var(--color-primary-navy);">
+              ${uniqueValues.map(val => `<option value="${escapeProofingHtml(val)}">${escapeProofingHtml(val)}</option>`).join('')}
+            </select>
+          </div>
+        `;
+        container.appendChild(accordionDiv);
+      });
+      
+      if (proofingToolsState.selectedHeaders.length === 0) {
+        container.innerHTML = '<div style="padding:20px; text-align:center; color:#888; background:#f9f9f9; border-radius:6px;">No columns selected. Please select at least one column above.</div>';
+      }
+    }
+    
+    function toggleProofingAccordion(colIndex) {
+      const header = document.querySelector(`#proofing-accordion-${colIndex}`).previousElementSibling;
+      const body = document.getElementById(`proofing-accordion-${colIndex}`);
+      
+      header.classList.toggle('active');
+      body.classList.toggle('open');
+    }
+    
+    function renderGroupByDropdown() {
+      const select = document.getElementById('proofing-group-by-select');
+      select.innerHTML = '<option value="">-- No Grouping --</option>';
+      
+      // Only show selected headers in group by dropdown
+      proofingToolsState.selectedHeaders.forEach(index => {
+        const header = proofingToolsState.headers[index];
+        select.innerHTML += `<option value="${index}">${escapeProofingHtml(header)}</option>`;
+      });
+    }
+    
+    function handleProofingFilterChange(colIndex) {
+      const selectElement = document.getElementById(`proofing-filter-${colIndex}`);
+      const selectedValues = Array.from(selectElement.selectedOptions).map(opt => opt.value);
+      
+      const badge = document.getElementById(`proofing-badge-${colIndex}`);
+      badge.textContent = selectedValues.length;
+      
+      if (selectedValues.length === 0) {
+        delete proofingToolsState.filters[colIndex];
+      } else {
+        proofingToolsState.filters[colIndex] = selectedValues;
+      }
+      
+      applyProofingFilters();
+      renderProofingDataTable();
+    }
+    
+    function applyProofingFilters() {
+      proofingToolsState.filteredData = proofingToolsState.rawData.filter(row => {
+        for (let colIndex in proofingToolsState.filters) {
+          const allowedValues = proofingToolsState.filters[colIndex];
+          if (!allowedValues.includes(row[colIndex])) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+    
+    function handleClearProofingFilters() {
+      proofingToolsState.filters = {};
+      proofingToolsState.filteredData = proofingToolsState.rawData;
+      
+      proofingToolsState.headers.forEach((header, index) => {
+        const selectEl = document.getElementById(`proofing-filter-${index}`);
+        if (selectEl) {
+          Array.from(selectEl.options).forEach(opt => opt.selected = false);
+        }
+        
+        const badge = document.getElementById(`proofing-badge-${index}`);
+        if (badge) badge.textContent = '0';
+        
+        const accordion = document.getElementById(`proofing-accordion-${index}`);
+        const accordionHeader = accordion ? accordion.previousElementSibling : null;
+        if (accordion) accordion.classList.remove('open');
+        if (accordionHeader) accordionHeader.classList.remove('active');
+      });
+      
+      renderProofingDataTable();
+    }
+    
+    function handleGroupByChange() {
+      const select = document.getElementById('proofing-group-by-select');
+      const value = select.value;
+      
+      if (value === '') {
+        proofingToolsState.groupByColumn = null;
+      } else {
+        proofingToolsState.groupByColumn = parseInt(value);
+      }
+      
+      renderProofingDataTable();
+    }
+    
+    function handleClearGrouping() {
+      proofingToolsState.groupByColumn = null;
+      document.getElementById('proofing-group-by-select').value = '';
+      renderProofingDataTable();
+    }
+    
+    function renderProofingDataTable() {
+      const thead = document.getElementById('proofing-table-head');
+      const tbody = document.getElementById('proofing-table-body');
+      const rowCount = document.getElementById('proofing-row-count');
+      
+      rowCount.textContent = proofingToolsState.filteredData.length;
+      
+      // Only show selected headers
+      const selectedHeadersData = proofingToolsState.selectedHeaders.map(i => proofingToolsState.headers[i]);
+      
+      thead.innerHTML = `
+        <tr>
+          ${selectedHeadersData.map(h => `<th style="background:var(--color-primary-navy); color:white; padding:12px; text-align:left; position:sticky; top:0; z-index:10; border-right:1px solid rgba(255,255,255,0.1);">${escapeProofingHtml(h)}</th>`).join('')}
+        </tr>
+      `;
+      
+      if (proofingToolsState.filteredData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="100" style="padding:40px; text-align:center; color:#888;">📭 No data matches your filters.</td></tr>';
+        return;
+      }
+      
+      if (proofingToolsState.selectedHeaders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="100" style="padding:40px; text-align:center; color:#888;">📭 No columns selected. Please select columns in Step 2.</td></tr>';
+        return;
+      }
+      
+      if (proofingToolsState.groupByColumn !== null) {
+        renderGroupedData(tbody);
+      } else {
+        renderUngroupedData(tbody);
+      }
+      
+      if (proofingToolsState.editMode) {
+        enableProofingCellEditing();
+      }
+    }
+    
+    function renderUngroupedData(tbody) {
+      tbody.innerHTML = proofingToolsState.filteredData.map((row, rowIdx) => {
+        return `
+          <tr style="border-bottom:1px solid #eee;">
+            ${proofingToolsState.selectedHeaders.map(colIdx => {
+              const cellId = `proofing-cell-${rowIdx}-${colIdx}`;
+              return `<td id="${cellId}" style="padding:10px; border-right:1px solid #f0f0f0;">${escapeProofingHtml(row[colIdx])}</td>`;
+            }).join('')}
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    function renderGroupedData(tbody) {
+      const groupCol = proofingToolsState.groupByColumn;
+      const groupedData = {};
+      
+      proofingToolsState.filteredData.forEach(row => {
+        const groupKey = row[groupCol];
+        if (!groupedData[groupKey]) {
+          groupedData[groupKey] = [];
+        }
+        groupedData[groupKey].push(row);
+      });
+      
+      let html = '';
+      let globalRowIdx = 0;
+      
+      Object.keys(groupedData).sort().forEach(groupKey => {
+        const rows = groupedData[groupKey];
+        const groupHeaderName = proofingToolsState.headers[groupCol];
+        
+        html += `
+          <tr>
+            <td colspan="${proofingToolsState.selectedHeaders.length}" class="proofing-grouped-header">
+              📌 ${escapeProofingHtml(groupHeaderName)}: <strong>${escapeProofingHtml(groupKey)}</strong>
+              <span style="opacity:0.8; font-weight:normal; margin-left:10px;">(${rows.length} row${rows.length !== 1 ? 's' : ''})</span>
+            </td>
+          </tr>
+        `;
+        
+        rows.forEach(row => {
+          html += `
+            <tr class="proofing-grouped-row">
+              ${proofingToolsState.selectedHeaders.map(colIdx => {
+                const cellId = `proofing-cell-${globalRowIdx}-${colIdx}`;
+                return `<td id="${cellId}" style="padding:10px; border-right:1px solid #e0e0e0;">${escapeProofingHtml(row[colIdx])}</td>`;
+              }).join('')}
+            </tr>
+          `;
+          globalRowIdx++;
+        });
+      });
+      
+      tbody.innerHTML = html;
+    }
+    
+    function handleToggleProofingEdit() {
+      proofingToolsState.editMode = !proofingToolsState.editMode;
+      const btn = document.getElementById('btn-toggle-proofing-edit');
+      const controls = document.getElementById('proofing-edit-controls');
+      
+      if (proofingToolsState.editMode) {
+        btn.textContent = 'Disable Edit Mode';
+        btn.classList.remove('button-secondary');
+        btn.classList.add('button-warning');
+        controls.style.display = 'block';
+        enableProofingCellEditing();
+      } else {
+        btn.textContent = 'Enable Edit Mode';
+        btn.classList.remove('button-warning');
+        btn.classList.add('button-secondary');
+        controls.style.display = 'none';
+        proofingToolsState.pendingEdits = [];
+        renderProofingDataTable();
+      }
+    }
+    
+    function enableProofingCellEditing() {
+      proofingToolsState.filteredData.forEach((row, rowIdx) => {
+        proofingToolsState.selectedHeaders.forEach(colIdx => {
+          const cellEl = document.getElementById(`proofing-cell-${rowIdx}-${colIdx}`);
+          if (cellEl) {
+            cellEl.contentEditable = true;
+            cellEl.style.cursor = 'text';
+            cellEl.style.minWidth = '100px';
+            
+            cellEl.addEventListener('blur', function() {
+              const newValue = this.textContent.trim();
+              const oldValue = row[colIdx];
+              
+              if (newValue !== oldValue) {
+                this.style.backgroundColor = '#fff3cd';
+                this.style.borderLeft = '3px solid var(--color-primary-orange)';
+                
+                const editIndex = proofingToolsState.pendingEdits.findIndex(e => e.rowIdx === rowIdx && e.colIdx === colIdx);
+                if (editIndex > -1) {
+                  proofingToolsState.pendingEdits[editIndex].newValue = newValue;
+                } else {
+                  proofingToolsState.pendingEdits.push({ rowIdx, colIdx, oldValue, newValue });
+                }
+              }
+            });
+          }
+        });
+      });
+    }
+    
+    function handleCancelProofingEdits() {
+      if (proofingToolsState.pendingEdits.length > 0) {
+        if (!confirm(`Discard ${proofingToolsState.pendingEdits.length} unsaved changes?`)) {
+          return;
+        }
+      }
+      
+      proofingToolsState.pendingEdits = [];
+      proofingToolsState.editMode = false;
+      document.getElementById('btn-toggle-proofing-edit').textContent = 'Enable Edit Mode';
+      document.getElementById('btn-toggle-proofing-edit').classList.remove('button-warning');
+      document.getElementById('btn-toggle-proofing-edit').classList.add('button-secondary');
+      document.getElementById('proofing-edit-controls').style.display = 'none';
+      renderProofingDataTable();
+    }
+    
+    function handleSaveProofingEdits() {
+      if (proofingToolsState.pendingEdits.length === 0) {
+        alert('No changes to save.');
+        return;
+      }
+      
+      if (!confirm(`Save ${proofingToolsState.pendingEdits.length} changes to the Google Sheet?`)) {
+        return;
+      }
+      
+      const btn = document.getElementById('btn-save-proofing-edits');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      
+      const updates = proofingToolsState.pendingEdits.map(edit => ({
+        rowIndex: edit.rowIdx + 2,
+        colIndex: edit.colIdx,
+        value: edit.newValue
+      }));
+      
+      google.script.run
+        .withSuccessHandler(response => {
+          btn.disabled = false;
+          btn.textContent = 'Save All Changes';
+          
+          if (response.success) {
+            showNotification(`✓ Saved ${proofingToolsState.pendingEdits.length} changes`, 'success');
+            proofingToolsState.pendingEdits = [];
+            handleLoadProofingSheetData();
+          } else {
+            showNotification('Error: ' + response.message, 'error');
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = 'Save All Changes';
+          showNotification('Server error: ' + err.message, 'error');
+        })
+        .api_bulkUpdateSheet(proofingToolsState.sheetUrl, proofingToolsState.tabName, updates);
+    }
+    
+    function handleExportProofing() {
+      if (proofingToolsState.filteredData.length === 0) {
+        alert('No data to export.');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-export-proofing');
+      btn.disabled = true;
+      btn.textContent = 'Exporting...';
+      
+      // Only export selected columns
+      const selectedHeadersData = proofingToolsState.selectedHeaders.map(i => proofingToolsState.headers[i]);
+      const filteredRows = proofingToolsState.filteredData.map(row => 
+        proofingToolsState.selectedHeaders.map(i => row[i])
+      );
+      
+      google.script.run
+        .withSuccessHandler(response => {
+          btn.disabled = false;
+          btn.textContent = 'Export Filtered Data';
+          
+          if (response.success) {
+            showNotification('✓ Export complete!', 'success');
+            window.open(response.url, '_blank');
+          } else {
+            showNotification('Export failed: ' + response.error, 'error');
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = 'Export Filtered Data';
+          showNotification('Server error: ' + err.message, 'error');
+        })
+        .exportToSheet(selectedHeadersData, filteredRows);
+    }
+    
+    function escapeProofingHtml(text) {
+      if (text === null || text === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
+    </script>
