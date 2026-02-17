@@ -1,7 +1,161 @@
 <style>
-    /* Styling inherits from JS_Nursing.html mostly */
-    #mlt-course-container { margin-top: 15px;
+    /* --- MLT TOOL SPECIFIC STYLES (Inherited from Nursing Design) --- */
+    
+    /* Header & Actions */
+    .proctoring-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #ddd;
     }
+    
+    .proctoring-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    
+    /* Course Accordion Sections */
+    .course-section {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .course-header {
+      padding: 15px 20px;
+      background: #f8f9fa;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--color-primary-navy);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s;
+    }
+    .course-header:hover { background: #e9ecef; }
+    .course-header::after { content: '▼'; font-size: 0.8em; color: #666; transition: transform 0.3s; }
+    
+    .course-section.open .course-header::after { transform: rotate(180deg); }
+    
+    /* Content Animation */
+    .course-content { 
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.35s ease-out;
+      background: #fff;
+    }
+    .course-section.open .course-content { grid-template-rows: 1fr; }
+
+    .course-content-inner {
+      overflow: hidden;
+      padding: 0 20px;
+      opacity: 0;
+      transition: opacity 0.3s ease-out, padding 0.3s ease;
+    }
+    .course-section.open .course-content-inner {
+      padding-top: 20px;
+      padding-bottom: 20px;
+      opacity: 1;
+    }
+    
+    /* Exam Grid */
+    .exam-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 25px; 
+    }
+    
+    /* Exam Card Design */
+    .exam-card {
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: flex;
+        flex-direction: column;
+        background-color: #fff;
+        border: 3px solid var(--color-accent-purple, #583583); 
+        overflow: hidden;
+    }
+
+    .exam-card-header {
+        padding: 12px 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #fff;
+    }
+    
+    .exam-card-header h4 {
+        margin: 0;
+        font-size: 1.15em;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .header-created { background-color: var(--color-primary-green); }
+    .header-not-created { background-color: var(--color-primary-orange); }
+    
+    .exam-card-body {
+      padding: 15px;
+      flex-grow: 1;
+      font-size: 0.95em;
+    }
+    
+    .exam-info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #ddd;
+    }
+    .exam-info-row:last-child { border-bottom: none; margin-bottom: 0; }
+    
+    .exam-label { color: #555; font-weight: 500; }
+    .exam-value { font-weight: 700; color: #222; text-align: right; }
+    
+    .exam-card-footer {
+      padding: 12px 15px;
+      background: #fff;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .footer-right { display: flex; gap: 8px; }
+    
+    /* Buttons */
+    .btn-sm {
+      padding: 6px 14px;
+      font-size: 0.9em;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 600;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn-sm:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-sm:active { transform: translateY(0); }
+    .btn-std { min-width: 70px; text-align: center; }
+
+    .button-navy { background-color: var(--color-primary-navy); color: white !important; }
+    .button-update-active { background-color: var(--color-primary-navy); color: white !important; }
+    .button-update-inactive { 
+        background-color: var(--color-accent-lightgreen, #EDF7DF); 
+        color: #555 !important; 
+        cursor: not-allowed; opacity: 0.8; 
+    }
+    .button-create { background-color: var(--color-primary-orange) !important; color: white !important; }
+    .button-view { background-color: var(--color-primary-orange) !important; color: white !important; }
+
 </style>
 
 <script>
@@ -13,72 +167,121 @@
        action: '', 
        isRunning: false
     };
-    // --- CONTEXT STATE ---
-    // Tracks if the currently open sidebar belongs to MLT
-    let isMltSidebarOpen = false;
-    // --- 1. SIDEBAR OPENER PATCH ---
-    // Overrides global function to support MLT data
-    const originalSidebarFn = window.openAccommodationsSidebar;
-    window.openAccommodationsSidebar = function(sheetName, examName, type) {
-        console.log("Opening Sidebar for:", sheetName, examName, type);
-        let targetDataSource = null;
 
-        if (type === 'mlt') {
-            targetDataSource = g.mltData;
-            isMltSidebarOpen = true; // SET FLAG
-        } else {
-            targetDataSource = g.nursingData;
-            isMltSidebarOpen = false; // RESET FLAG
+    // --- CONTEXT SWITCHING & SIDEBAR PATCH ---
+    // Tracks if we are currently working in the MLT tab
+    let isMltMode = false;
+    
+    // Save original global functions
+    if (!window._originalOpenSidebar) window._originalOpenSidebar = window.openAccommodationsSidebar;
+    if (!window._originalSaveAccommodations) window._originalSaveAccommodations = window.saveAccommodations;
+
+    // PATCH: Intercept Sidebar Open
+    window.openAccommodationsSidebar = function(sheetName, examName) {
+        // Determine context based on visible page
+        const mltPage = document.getElementById('page-MLT');
+        isMltMode = (mltPage && mltPage.style.display !== 'none');
+
+        if (isMltMode) {
+            console.log("MLT Context: Swapping Data Source");
+            // Swap global data pointer so shared sidebar sees MLT data
+            window._tempNursingData = g.nursingData;
+            g.nursingData = g.mltData; 
         }
 
-        if (!targetDataSource || !targetDataSource.data || !targetDataSource.data.sheets) {
-            showNotification("Error: Data source not loaded.", "error");
-            return;
-        }
-
-        // HACK: Temporarily swap nursingData so the old function finds the exam
-        // The shared sidebar relies on 'g.nursingData' being the source of truth.
-        const tempHold = g.nursingData;
-        g.nursingData = targetDataSource; 
-             
         try {
-            if (originalSidebarFn) originalSidebarFn(sheetName, examName);
-        } catch(e) {
-            console.error("Sidebar open failed:", e);
-            showNotification("Sidebar Error: " + e.message, "error");
-        } finally {
-            // Restore immediately so we don't break other parts of the app
-            g.nursingData = tempHold;
+            if (window._originalOpenSidebar) window._originalOpenSidebar(sheetName, examName);
+        } catch (e) {
+            console.error("Sidebar Error:", e);
+            // Restore on error
+            if (isMltMode) g.nursingData = window._tempNursingData;
         }
+        // Note: We DO NOT restore data here immediately, because the sidebar needs it while open.
+        // We restore it when the sidebar closes or saves.
     };
 
-    // --- 2. SIDEBAR SAVER PATCH ---
-    // Intercepts the Save action to inject MLT data if needed
-    const originalSaveFn = window.saveAccommodations;
-    
-    // UPDATED: Now accepts the isPublish argument
+    // PATCH: Intercept Save
     window.saveAccommodations = function(isPublish) {
-        console.log("Intercepted Save. Is MLT?", isMltSidebarOpen, "Publish?", isPublish);
-        // If we are in MLT mode, we must swap the data again just for this save operation
-        if (isMltSidebarOpen) {
-            const tempHold = g.nursingData;
-            g.nursingData = g.mltData; // Swap to MLT
-            
-            try {
-                // Call original saver (now it sees the correct data)
-                if (originalSaveFn) originalSaveFn(isPublish);
-            } catch (e) {
-                console.error("MLT Save Error:", e);
-                showNotification("Save Error: " + e.message, "error");
-            } finally {
-                // Always restore
-                g.nursingData = tempHold;
+        // Check our context flag
+        if (isMltMode) {
+            console.log("MLT Context: Intercepting Save");
+            // Ensure g.nursingData is pointing to MLT data (it should be, but safety first)
+            if (g.nursingData !== g.mltData) {
+                window._tempNursingData = g.nursingData;
+                g.nursingData = g.mltData;
             }
+            
+            if (isPublish) {
+                // Custom MLT Publish Logic
+                saveMLTCustom(true);
+            } else {
+                // DB Save is safe to use shared function
+                if (window._originalSaveAccommodations) window._originalSaveAccommodations(false);
+            }
+
         } else {
             // Standard Nursing behavior
-            if (originalSaveFn) originalSaveFn(isPublish);
+            if (window._originalSaveAccommodations) window._originalSaveAccommodations(isPublish);
         }
     };
+
+    // Custom Save Handler for MLT to ensure correct controller functions are called
+    function saveMLTCustom(isPublish) {
+        const sidebar = document.getElementById('sidebar-accommodations');
+        const dbBtn = document.getElementById('accommodations-save-db-btn');
+        const pubBtn = document.getElementById('accommodations-publish-btn');
+        const sheetName = sidebar.dataset.sheetName;
+        const examName = sidebar.dataset.examName;
+        
+        dbBtn.disabled = true;
+        pubBtn.disabled = true;
+        pubBtn.textContent = 'Saving & Updating...';
+
+        // Scrape Data (Replicating logic from shared sidebar to ensure we get the tags)
+        const tags = {};
+        document.querySelectorAll('.student-input').forEach(input => {
+            const row = input.closest('.student-row');
+            tags[input.dataset.student] = {
+                note: input.value.trim(),
+                excluded: !row.querySelector('.student-checkbox').checked,
+                locked: row.querySelector('.student-lock').classList.contains('locked')
+            };
+        });
+
+        const sheetObj = g.mltData.data.sheets.find(s => s.sheetName === sheetName);
+        const payload = { 
+            courseCode: sheetObj.course.code, 
+            examName: examName, 
+            generalNotes: document.getElementById('accommodations-general').value, 
+            studentTags: tags 
+        };
+
+        // 1. Save to DB (Using MLT specific endpoint we created in Phase 1)
+        google.script.run.withSuccessHandler(res => {
+            if (res.success) {
+                // Update local cache
+                const examObj = sheetObj.exams.find(e => e.name === examName);
+                examObj.generalNotes = payload.generalNotes; 
+                examObj.studentTags = tags;
+
+                // 2. Trigger Doc Update
+                const docPayload = { settings: g.mltData.data.settings, sheets: [{ ...sheetObj, exams: [examObj] }] };
+                
+                google.script.run.withSuccessHandler(() => {
+                    dbBtn.disabled = false; dbBtn.textContent = 'Save to App';
+                    pubBtn.disabled = false; pubBtn.textContent = 'Update Google Doc';
+                    closeAllSidebars();
+                    // Restore Data Pointer
+                    if (window._tempNursingData) g.nursingData = window._tempNursingData;
+                    showNotification("Saved & Updated MLT Doc!", "success");
+                }).updateAllMLTDocuments(docPayload);
+
+            } else {
+                showNotification("DB Save Failed: " + res.message, "error");
+                dbBtn.disabled = false; pubBtn.disabled = false;
+            }
+        }).api_saveMLTAccommodations(payload);
+    }
 
 
     // --- MLT PAGE LOGIC ---
@@ -98,12 +301,14 @@
            
            google.script.run
            .withSuccessHandler(res => {
-               g.mltData = res; // Cache result
-               if(res.success) renderMLTDocManagement(res);
-               else view.innerHTML = `<div class="error-message">${res.message}</div>`;
+               g.mltData = res; 
+               if(res.success) {
+                   renderMLTDocManagement(res);
+               } else {
+                   view.innerHTML = `<div class="error-message">${res.message}</div>`;
+               }
            })
-           .withFailureHandler(err => 
-           {
+           .withFailureHandler(err => {
                view.innerHTML = `<div class="error-message">Failed to load MLT data: ${err.message}</div>`;
            })
            .api_getMLTData();
@@ -122,18 +327,18 @@
                <input type="text" id="mlt-exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterMLTExams()" style="width:200px">
                <button id="mlt-create-btn" class="button-primary" onclick="handleMLTBulkAction('create')">Generate All</button>
                <button id="mlt-update-btn" class="button-secondary" onclick="handleMLTBulkAction('update')">Update All</button>
-          
            </div>
        `;
        view.appendChild(header);
 
        const container = document.createElement('div');
        container.id = 'mlt-course-container';
+       
        if (!response.data || !response.data.sheets || response.data.sheets.length === 0) {
-           container.innerHTML = '<div style="padding:40px; text-align:center;">No exams found.
-           Check Settings.</div>';
+           container.innerHTML = '<div style="padding:40px; text-align:center;">No exams found. Check Settings.</div>';
        } else {
            response.data.sheets.forEach(sheet => {
+               // sheet.fullTitle comes from the parser (the raw string in D1 or A1)
                container.appendChild(buildMLTCourseSection(sheet.fullTitle, sheet.sheetName, sheet.exams));
            });
        }
@@ -154,12 +359,15 @@
         
         const contentInner = document.createElement('div');
         contentInner.className = 'course-content-inner';
+
         const grid = document.createElement('div');
         grid.className = 'exam-grid';
         
         exams.forEach(exam => {
+            // Pass fullTitle down so card can use it
             grid.appendChild(buildMLTExamCard({ ...exam, _sheetName: sheetName, _fullTitle: fullTitle }));
         });
+        
         contentInner.appendChild(grid);
         contentWrapper.appendChild(contentInner);
         section.appendChild(header);
@@ -174,6 +382,7 @@
         const card = document.createElement('div');
         card.className = 'exam-card';
         card.dataset.examName = (exam.name || '').toLowerCase();
+        
         const safeSheet = (exam._sheetName || '').replace(/'/g, "\\'");
         const safeExam = (exam.name || '').replace(/'/g, "\\'");
 
@@ -191,15 +400,12 @@
         card.innerHTML = `
             <div class="exam-card-header ${headerClass}"><h4>${exam.name}</h4></div>
             <div class="exam-card-body">
-                <div class="exam-info-row"><span class="exam-label">Date:</span> <span class="exam-value">${exam.date ||
-                '-'}</span></div>
-                <div class="exam-info-row"><span class="exam-label">Time:</span> <span class="exam-value">${exam.siteTime ||
-                '-'}</span></div>
-                <div class="exam-info-row"><span class="exam-label">Room:</span> <span class="exam-value">${exam.room ||
-                '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Date:</span> <span class="exam-value">${exam.date || '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Time:</span> <span class="exam-value">${exam.siteTime || '-'}</span></div>
+                <div class="exam-info-row"><span class="exam-label">Room:</span> <span class="exam-value">${exam.room || '-'}</span></div>
             </div>
             <div class="exam-card-footer">
-                <button class="btn-sm button-navy" onclick="openAccommodationsSidebar('${safeSheet}', '${safeExam}', 'mlt')">Students</button>
+                <button class="btn-sm button-navy" onclick="openAccommodationsSidebar('${safeSheet}', '${safeExam}')">Students</button>
                 <div class="footer-right">${btns}</div>
             </div>
         `;
@@ -207,6 +413,7 @@
     }
 
     // --- Handlers ---
+    
     function handleMLTSingle(btn, action, sheetName, examName) {
         btn.disabled = true;
         btn.textContent = '...';
@@ -214,28 +421,31 @@
         const func = action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
         const sheetObj = g.mltData.data.sheets.find(s => s.sheetName === sheetName);
         const examObj = sheetObj.exams.find(e => e.name === examName);
+        
         const payload = { 
             sheets: [{ 
                 fullTitle: sheetObj.fullTitle, 
                 course: sheetObj.course,
+                // CRITICAL FIX: Pass new properties for title generation
+                courseDisplay: sheetObj.courseDisplay, 
+                faculty: sheetObj.faculty,
                 exams: [examObj] 
             }] 
         };
+        
         google.script.run.withSuccessHandler(res => {
             if(res.success) {
                 showNotification(res.message, 'success');
                 if(res.createdUrls && res.createdUrls[examName]) examObj.docUrl = res.createdUrls[examName];
-                else if(res.docUrl) examObj.docUrl = res.docUrl; // Try generic
+                else if(res.docUrl) examObj.docUrl = res.docUrl;
 
-                const newCard = buildMLTExamCard({ ...examObj, _sheetName: sheetName, _fullTitle: 
-                sheetObj.fullTitle });
+                const newCard = buildMLTExamCard({ ...examObj, _sheetName: sheetName, _fullTitle: sheetObj.fullTitle });
                 btn.closest('.exam-card').replaceWith(newCard);
             } else {
                 showNotification(res.message, 'error');
                 btn.disabled = false;
                 btn.textContent = (action==='create'?'Create':'Update');
             }
-    
         }).withFailureHandler(e => {
             showNotification(e.message,'error');
             btn.disabled = false;
@@ -250,12 +460,16 @@
             sheet.exams.forEach(exam => {
                 allItems.push({ 
                     sheetName: sheet.sheetName, 
-                    fullTitle: sheet.fullTitle, 
-                   
+                    fullTitle: sheet.fullTitle,
+                    // CRITICAL FIX: Copy these properties to the queue item
+                    course: sheet.course,
+                    courseDisplay: sheet.courseDisplay,
+                    faculty: sheet.faculty,
                     exams: exam 
                 });
             });
         });
+        
         if (allItems.length === 0) return;
 
         mltBatchState = { queue: allItems, total: allItems.length, processed: 0, action: action };
@@ -267,7 +481,6 @@
         if (mltBatchState.processed >= mltBatchState.total) {
             showProgressModal(false);
             showNotification("Batch Complete", "success");
-            
             // Re-render to reflect new buttons
             renderMLTDocManagement(g.mltData);
             return;
@@ -277,31 +490,39 @@
         
         const tempMap = {};
         chunk.forEach(item => {
-            if(!tempMap[item.sheetName]) tempMap[item.sheetName] = { fullTitle: item.fullTitle, exams: [] };
+            if(!tempMap[item.sheetName]) {
+                tempMap[item.sheetName] = { 
+                    fullTitle: item.fullTitle,
+                    // CRITICAL FIX: Pass these through to the payload builder
+                    course: item.course,
+                    courseDisplay: item.courseDisplay,
+                    faculty: item.faculty,
+                    exams: [] 
+                };
+            }
             tempMap[item.sheetName].exams.push(item.exams);
         });
+        
         const payload = { sheets: Object.values(tempMap) };
         const func = mltBatchState.action === 'create' ? 'createMLTProctoringDocuments' : 'updateAllMLTDocuments';
 
         updateProgressUI(mltBatchState.processed, mltBatchState.total, "Processing...");
+        
         google.script.run.withSuccessHandler(res => {
             if(res.success) {
                 // Update local URLs
                 if(res.createdUrls) {
                     for(const [eName, eUrl] of Object.entries(res.createdUrls)) {
-                        
                         g.mltData.data.sheets.forEach(s => {
                             const found = s.exams.find(e => e.name === eName);
                             if(found) found.docUrl = eUrl;
                         });
-        
                     }
                 }
                 mltBatchState.processed += chunk.length;
                 processNextMLTBatch();
             } else {
                 showNotification("Error: " + res.message, "error");
-    
                 showProgressModal(false);
             }
         }).withFailureHandler(err => {
@@ -310,10 +531,12 @@
         })[func](payload);
     }
 
+    // --- Settings Logic ---
+
     function renderMLTSettings() {
-        const s = (g.allSettings.mlt_settings_new) ?
-        g.allSettings.mlt_settings_new : (g.allSettings.MLT || {}); 
+        const s = g.allSettings.mlt_settings || {}; 
         const existingVal = (g.mltData && g.mltData.data && g.mltData.data.settings) ? g.mltData.data.settings : {};
+        
         const sheetUrl = existingVal.sheetId || s.spreadsheetUrl || '';
         const folderUrl = existingVal.folderId || s.targetFolderId || '';
         const notes = existingVal.customNotes || s.customNotes || '';
@@ -325,7 +548,6 @@
                <div class="form-group"><label>Sheet URL (or ID)</label><input id="mlt-sheet-url" class="form-input" value="${sheetUrl}"></div>
                <div class="form-group"><label>Folder URL (or ID)</label><input id="mlt-folder-url" class="form-input" value="${folderUrl}"></div>
                <div class="form-group"><label>Custom Notes</label><textarea id="mlt-notes" class="form-input">${notes}</textarea></div>
-          
                <button class="button-primary" onclick="saveMLTSettingsInternal(this)">Save</button>
            </div>
         `;
@@ -342,12 +564,7 @@
             btn.textContent = 'Save';
             showNotification('Saved', 'success');
             g.mltData = null; // Force reload on next view
-            
-            // Update global settings
-            if(!g.allSettings.mlt_settings_new) g.allSettings.mlt_settings_new = {};
-      
-            g.allSettings.mlt_settings_new = val;
-
+            g.allSettings.mlt_settings = val;
         }).mlt_saveSettings(val);
     }
 
@@ -359,7 +576,6 @@
                  if(card.dataset.examName.includes(term)) {
                      card.style.display = 'flex'; visible++;
                  } else { card.style.display = 'none'; }
- 
              });
              section.style.display = visible ? 'block' : 'none';
              if(term && visible) section.classList.add('open');
