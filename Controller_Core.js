@@ -12,6 +12,7 @@
 function api_getInitialAppData() {
     var userInfo = { success: false, message: "Not loaded" };
     var allSettings = { success: false, message: "Not loaded" };
+    var permissions = {}; // NEW: Permissions Matrix
     var sheetTabs = {};
 
     try {
@@ -54,6 +55,14 @@ function api_getInitialAppData() {
             allSettings = settingsRes.success ? settingsRes.data : { error: settingsRes.message };
         } catch (e) { allSettings = { error: "Failed to load settings." }; }
 
+        // 3. Permissions Matrix (NEW)
+        try {
+            const permRes = api_getPermissionsMatrix();
+            if (permRes.success) {
+                permissions = permRes.data;
+            }
+        } catch (e) { console.warn("Failed to load permissions matrix: " + e.message); }
+
         // --- LAZY LOAD PLACEHOLDERS ---
         // We return null/empty values here. The client (browser) will check for null
         // and fetch specific data only when the user clicks that tab.
@@ -64,6 +73,7 @@ function api_getInitialAppData() {
                 userInfo: userInfo.data,
                 settings: allSettings,
                 sheetTabs: sheetTabs,
+                permissions: permissions, // Pass to client
                 
                 // Placeholders for Lazy Loading
                 mstData: null,

@@ -6,6 +6,7 @@
     mstData: null,
     mltData: null,
     allSettings: {},
+    permissions: {}, // NEW: Stores the matrix
     writableCalendars: null,
     allCalendars: null, 
     nursingData: null,
@@ -13,54 +14,50 @@
 
   /**
    * MENU CONFIGURATION
+   * Note: 'roles' property removed. Visibility is now determined by g.permissions matrix.
    */
   const menuItems = [
     { 
       id: 'Dashboard', 
       title: 'Dashboard', 
-      roles: ['Staff', 'Lead', 'Admin'],
       children: [
-        { id: 'Availability', title: 'Availability', roles: ['Staff', 'Lead', 'Admin'] },
-        { id: 'UserGuide', title: 'User Guide', roles: ['Staff', 'Lead', 'Admin'] }
+        { id: 'Availability', title: 'Availability' },
+        { id: 'UserGuide', title: 'User Guide' }
       ]
     },
     {
       id: 'Logistics',
       title: 'Logistics',
-      roles: ['MST', 'Tech Hub', 'Admin'],
       children: [
-        { id: 'MST', title: 'MST', roles: ['MST', 'Admin'] },
-        { id: 'TechHub', title: 'Tech Hub', roles: ['Tech Hub', 'Admin'] }
+        { id: 'MST', title: 'MST' },
+        { id: 'TechHub', title: 'Tech Hub' }
       ]
     },
     {
       id: 'Proctoring',
       title: 'Proctoring',
-      roles: ['Proctor', 'Admin'],
       children: [
-        { id: 'Nursing', title: 'Nursing', roles: ['Proctor', 'Admin'] },
-        { id: 'MLT', title: 'MLT', roles: ['Proctor', 'Admin'] },
-        { id: 'ProctorSchedule', title: 'Master Schedule', roles: ['Proctor', 'Admin'] }
+        { id: 'Nursing', title: 'Nursing' },
+        { id: 'MLT', title: 'MLT' },
+        { id: 'ProctorSchedule', title: 'Master Schedule' }
       ]
     },
     { 
       id: 'Reporting', 
       title: 'Stats & Reports', 
-      roles: ['Admin', 'Lead'],
       children: [
-        { id: 'Reporting', title: 'Calendar Stats', roles: ['Admin', 'Lead'] },
-        { id: 'ProofingTools', title: 'Proofing Tools', roles: ['Admin', 'Lead'] }
+        { id: 'Reporting', title: 'Calendar Stats' },
+        { id: 'ProofingTools', title: 'Proofing Tools' }
       ]
     },
-    { id: 'Zoom', title: 'Zoom', roles: ['Admin'] },
-    { id: 'Settings', title: 'Settings', roles: ['Staff', 'Lead', 'Admin'] }
+    { id: 'Zoom', title: 'Zoom' },
+    { id: 'Settings', title: 'Settings' }
   ];
 
   document.addEventListener('DOMContentLoaded', function() {
     console.log("App Started: DOMContentLoaded");
     
-    buildMenu(); 
-
+    // Initial load - menu will be empty until data arrives
     google.script.run
       .withSuccessHandler(handleInitialDataSuccess)
       .withFailureHandler(handleInitialError)
@@ -77,6 +74,7 @@
     if (response && response.success) {
       g.userInfo = response.data.userInfo;
       g.allSettings = response.data.settings || {};
+      g.permissions = response.data.permissions || {}; // Load Matrix
 
       g.mstData = response.data.mstData || null;
       g.mltData = response.data.mltData || null;
@@ -108,15 +106,45 @@
     }
   }
 
+  /**
+   * Checks if the current user has access to a specific PageID
+   */
+  function checkAccess(pageId) {
+      if (!g.userInfo) return false;
+      
+      // Get user's roles (Array)
+      const userRoles = g.userInfo.role.split(',').map(r => r.trim());
+      
+      // Admin always has access (Fail-safe client side)
+      if (userRoles.includes('Admin')) return true;
+
+      // Check Matrix
+      if (g.permissions && g.permissions[pageId]) {
+          // Check if ANY of the user's roles are set to TRUE for this page
+          return userRoles.some(role => g.permissions[pageId][role] === true);
+      }
+      
+      // Default to false if not in matrix
+      return false;
+  }
+
   function buildMenu() {
     const menu = document.getElementById('main-menu');
     if (!menu) return;
     menu.innerHTML = '';
-    const userRoles = g.userInfo ? g.userInfo.role.split(',').map(r => r.trim()) : [];
 
     menuItems.forEach(item => {
-      const hasAccess = item.roles.some(role => userRoles.includes(role));
-      if (!hasAccess) return;
+      // Check Parent Access
+      const hasParentAccess = checkAccess(item.id);
+      
+      // If it has children, check if user has access to AT LEAST ONE child
+      let hasChildAccess = false;
+      if (item.children) {
+          hasChildAccess = item.children.some(child => checkAccess(child.id));
+      }
+
+      // Show if parent is allowed OR if it's a container with allowed children
+      if (!hasParentAccess && !hasChildAccess) return;
 
       if (item.children) {
         const parentLi = document.createElement('li');
@@ -133,14 +161,13 @@
         subUl.id = `submenu-${item.id}`;
 
         item.children.forEach(child => {
-          const childHasAccess = child.roles.some(role => userRoles.includes(role));
-          if (!childHasAccess) return;
-
-          const childLi = document.createElement('li');
-          childLi.className = 'nav-item';
-          childLi.dataset.pageId = child.id;
-          childLi.textContent = child.title;
-          subUl.appendChild(childLi);
+          if (checkAccess(child.id)) {
+              const childLi = document.createElement('li');
+              childLi.className = 'nav-item';
+              childLi.dataset.pageId = child.id;
+              childLi.textContent = child.title;
+              subUl.appendChild(childLi);
+          }
         });
 
         menu.appendChild(parentLi);
@@ -173,6 +200,14 @@
 
   function navigateToPage(pageId, isInitialLoad = false) {
     console.log("Navigating to:", pageId);
+    
+    // Security Check: Prevent navigation via URL hash if permission denied
+    if (!checkAccess(pageId) && pageId !== 'Availability') {
+        console.warn("Access Denied to " + pageId);
+        // Redirect to default
+        pageId = 'Availability';
+    }
+
     document.querySelectorAll('.page-view').forEach(page => page.style.display = 'none');
     
     const targetPage = document.getElementById('page-' + pageId);

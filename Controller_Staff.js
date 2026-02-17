@@ -10,6 +10,9 @@
  */
 function api_getFullStaffList() {
   try {
+    // Security: Only Admins should see the full list with roles
+    requireRole('Admin'); 
+
     const sheet = getSheet('Staff_List');
     if (!sheet) throw new Error("Staff_List sheet not found.");
 
@@ -38,13 +41,23 @@ function api_getFullStaffList() {
  */
 function api_addStaffMember(staffObj) {
   try {
+    // Security: Only Admins can add staff
+    requireRole('Admin');
+
     const sheet = getSheet('Staff_List');
+    
+    // Sanitize Inputs
+    const fullName = sanitizeInput(staffObj.fullName);
+    const email = sanitizeInput(staffObj.email).trim().toLowerCase();
+    const roles = sanitizeInput(staffObj.roles);
+    const notes = sanitizeInput(staffObj.notes || "Added via Staff Hub");
+
     sheet.appendRow([
-      staffObj.fullName,
-      staffObj.email.trim().toLowerCase(),
-      staffObj.roles,
+      fullName,
+      email,
+      roles,
       "TRUE", 
-      staffObj.notes || "Added via Staff Hub"
+      notes
     ]);
     return { success: true, message: "Staff member added successfully!" };
   } catch (e) {
@@ -57,13 +70,18 @@ function api_addStaffMember(staffObj) {
  */
 function api_updateStaffMember(staffObj) {
   try {
+    // Security: Only Admins can update staff details
+    requireRole('Admin');
+
     const sheet = getSheet('Staff_List');
     const data = sheet.getDataRange().getValues();
     const headers = getColumnMap(data[0]);
     
+    const targetEmail = sanitizeInput(staffObj.email).toLowerCase();
+
     let rowIndex = -1;
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][headers.staffid]).toLowerCase() === staffObj.email.toLowerCase()) {
+      if (String(data[i][headers.staffid]).toLowerCase() === targetEmail) {
         rowIndex = i + 1;
         break;
       }
@@ -71,8 +89,9 @@ function api_updateStaffMember(staffObj) {
 
     if (rowIndex === -1) throw new Error("Staff member not found.");
 
-    sheet.getRange(rowIndex, headers.fullname + 1).setValue(staffObj.fullName);
-    sheet.getRange(rowIndex, headers.roles + 1).setValue(staffObj.roles);
+    // Sanitize and Update
+    sheet.getRange(rowIndex, headers.fullname + 1).setValue(sanitizeInput(staffObj.fullName));
+    sheet.getRange(rowIndex, headers.roles + 1).setValue(sanitizeInput(staffObj.roles));
     sheet.getRange(rowIndex, headers.isactive + 1).setValue(staffObj.isActive ? "TRUE" : "FALSE");
     
     return { success: true, message: "Staff member updated." };
@@ -87,6 +106,9 @@ function api_updateStaffMember(staffObj) {
 function api_bulkUpdateStaff(staffArray) {
   const lock = LockService.getScriptLock();
   try {
+    // Security: Only Admins can bulk update
+    requireRole('Admin');
+
     lock.waitLock(30000); // Wait up to 30 seconds for other processes to finish
     
     const sheet = getSheet('Staff_List');
@@ -107,8 +129,9 @@ function api_bulkUpdateStaff(staffArray) {
       
       if (updateMap[email]) {
         const update = updateMap[email];
-        row[headers.fullname] = update.fullName;
-        row[headers.roles] = update.roles;
+        // Sanitize all fields before writing
+        row[headers.fullname] = sanitizeInput(update.fullName);
+        row[headers.roles] = sanitizeInput(update.roles);
         row[headers.isactive] = update.isActive ? "TRUE" : "FALSE";
       }
       newData.push(row);

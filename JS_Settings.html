@@ -27,6 +27,12 @@
   }
   
   .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* Permissions Matrix Styles */
+  .matrix-table th { text-align: center; }
+  .matrix-table td { text-align: center; }
+  .matrix-table td:first-child { text-align: left; font-weight: bold; }
+  .matrix-check { width: 18px; height: 18px; cursor: pointer; }
 </style>
 
 <script>
@@ -44,11 +50,15 @@
     const view = document.getElementById('page-Settings');
     if (!view) return;
 
+    // Check if user is Admin to show sensitive tabs
+    const isAdmin = g.userInfo && g.userInfo.role.includes('Admin');
+
     view.innerHTML = `
       <div class="widget">
         <div class="tab-bar">
           <button class="tab-link active" onclick="openSettingsTab(event, 'settings-app')">App Configuration</button>
           <button class="tab-link" id="staff-mgmt-tab-btn" onclick="openSettingsTab(event, 'settings-staff')">Staff Management</button>
+          <button class="tab-link" id="perm-matrix-tab-btn" onclick="openSettingsTab(event, 'settings-permissions')">Permissions Matrix</button>
         </div>
 
         <div id="settings-app" class="tab-content" style="display:block; padding-top:20px;">
@@ -69,17 +79,28 @@
             <div class="loader-ring"></div>
           </div>
         </div>
+
+        <div id="settings-permissions" class="tab-content" style="display:none; padding-top:20px;">
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+             <div>
+                <h3 style="margin:0;">Permissions Matrix</h3>
+                <p style="margin:5px 0; color:#666; font-size:0.9em;">Control which roles can access specific tools and pages.</p>
+             </div>
+             <button class="button-success" onclick="savePermissionsMatrix(this)">Save Permissions</button>
+           </div>
+           <div id="permissions-matrix-container">
+              <div class="loader-ring"></div>
+           </div>
+        </div>
       </div>
     `;
 
-    const userRole = (g.userInfo && g.userInfo.role) ? g.userInfo.role : "";
     const staffTabBtn = document.getElementById('staff-mgmt-tab-btn');
-    if (staffTabBtn) {
-      if (userRole.includes('Admin')) {
-        staffTabBtn.style.display = 'inline-block';
-      } else {
-        staffTabBtn.style.display = 'none';
-      }
+    const permTabBtn = document.getElementById('perm-matrix-tab-btn');
+    
+    if (!isAdmin) {
+        if(staffTabBtn) staffTabBtn.style.display = 'none';
+        if(permTabBtn) permTabBtn.style.display = 'none';
     }
   }
 
@@ -97,7 +118,12 @@
     if (tabName === 'settings-staff') {
       fetchFullStaffList();
     }
+    if (tabName === 'settings-permissions') {
+      fetchPermissionsMatrix();
+    }
   }
+
+  // --- STAFF MANAGEMENT LOGIC ---
 
   function fetchFullStaffList() {
     const container = document.getElementById('staff-list-container');
@@ -169,84 +195,54 @@
     `;
   }
 
-  // Visual helper to change pill color when clicked
   function togglePillClass(checkbox, pillId) {
     const pill = document.getElementById(pillId);
     if (checkbox.checked) pill.classList.add('active');
     else pill.classList.remove('active');
   }
 
-  /**
-   * Saves a single staff member with visual feedback
-   */
   function updateSingleStaff(btn, email, fullName) {
     const safeId = email.replace(/[@.]/g,'');
-    
-    // Scrape roles from checkboxes
     const roleChecks = document.querySelectorAll(`.role-check-${safeId}`);
     const roles = Array.from(roleChecks).filter(c => c.checked).map(c => c.value).join(', ');
     const isActive = document.getElementById(`active-${safeId}`).checked;
 
     const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Saving...";
+    btn.disabled = true; btn.textContent = "Saving...";
 
-    google.script.run
-      .withSuccessHandler(res => {
+    google.script.run.withSuccessHandler(res => {
         if (res.success) {
           btn.textContent = "Saved! ✅";
-          btn.style.backgroundColor = "#28a745";
-          btn.style.color = "white";
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = originalText;
-            btn.style.backgroundColor = "";
-            btn.style.color = "";
-          }, 2000);
+          btn.style.backgroundColor = "#28a745"; btn.style.color = "white";
+          setTimeout(() => { btn.disabled = false; btn.textContent = originalText; btn.style.backgroundColor = ""; btn.style.color = ""; }, 2000);
         } else {
           showNotification(res.message, 'error');
-          btn.disabled = false;
-          btn.textContent = originalText;
+          btn.disabled = false; btn.textContent = originalText;
         }
-      })
-      .api_updateStaffMember({ fullName, email, roles, isActive });
+      }).api_updateStaffMember({ fullName, email, roles, isActive });
   }
 
-  /**
-   * Saves all staff members in the table at once
-   */
   function saveAllStaff(btn) {
     const rows = document.querySelectorAll('.staff-row');
     const updates = [];
-
     rows.forEach(row => {
       const email = row.dataset.email;
       const fullName = row.dataset.name;
       const safeId = email.replace(/[@.]/g,'');
-      
       const roleChecks = row.querySelectorAll(`.role-check-${safeId}`);
       const roles = Array.from(roleChecks).filter(c => c.checked).map(c => c.value).join(', ');
       const isActive = row.querySelector('.active-check').checked;
-
       updates.push({ fullName, email, roles, isActive });
     });
 
     const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Updating All...";
+    btn.disabled = true; btn.textContent = "Updating All...";
 
-    google.script.run
-      .withSuccessHandler(res => {
-        btn.disabled = false;
-        btn.textContent = originalText;
-        if (res.success) {
-          showNotification(res.message, 'success');
-          fetchFullStaffList(); // Refresh table
-        } else {
-          showNotification(res.message, 'error');
-        }
-      })
-      .api_bulkUpdateStaff(updates);
+    google.script.run.withSuccessHandler(res => {
+        btn.disabled = false; btn.textContent = originalText;
+        if (res.success) { showNotification(res.message, 'success'); fetchFullStaffList(); } 
+        else { showNotification(res.message, 'error'); }
+      }).api_bulkUpdateStaff(updates);
   }
 
   function showAddStaffForm() {
@@ -254,20 +250,99 @@
     if (!name) return;
     const email = prompt("Enter Email (StaffID):");
     if (!email) return;
-    
-    // For adding, we'll keep it simple and default to "Staff"
-    google.script.run
-      .withSuccessHandler(res => {
+    google.script.run.withSuccessHandler(res => {
         showNotification(res.message, res.success ? 'success' : 'error');
         fetchFullStaffList();
-      })
-      .api_addStaffMember({ fullName: name, email: email, roles: "Staff" });
+      }).api_addStaffMember({ fullName: name, email: email, roles: "Staff" });
+  }
+
+  // --- PERMISSIONS MATRIX LOGIC ---
+
+  function fetchPermissionsMatrix() {
+      const container = document.getElementById('permissions-matrix-container');
+      container.innerHTML = '<div class="loader-ring"></div>';
+      
+      google.script.run.withSuccessHandler(res => {
+          if(res.success) {
+              renderPermissionsMatrix(res.data, res.roles, res.pages);
+          } else {
+              container.innerHTML = `<div class="error-message">${res.message}</div>`;
+          }
+      }).api_getPermissionsMatrix();
+  }
+
+  function renderPermissionsMatrix(matrix, roles, pages) {
+      const container = document.getElementById('permissions-matrix-container');
+      
+      let headerHtml = `<th>Page / Tool</th>`;
+      roles.forEach(role => {
+          headerHtml += `<th>${role}</th>`;
+      });
+
+      let bodyHtml = '';
+      pages.forEach(page => {
+          let rowHtml = `<td>${page}</td>`;
+          roles.forEach(role => {
+              const isChecked = matrix[page] && matrix[page][role] === true;
+              // Lock Admin Settings to Checked
+              const isLocked = (page === 'Settings' && role === 'Admin');
+              const disabledAttr = isLocked ? 'disabled' : '';
+              const checkedAttr = (isChecked || isLocked) ? 'checked' : '';
+              
+              rowHtml += `
+                <td>
+                    <input type="checkbox" class="matrix-check" 
+                           data-page="${page}" data-role="${role}" 
+                           ${checkedAttr} ${disabledAttr}>
+                </td>`;
+          });
+          bodyHtml += `<tr>${rowHtml}</tr>`;
+      });
+
+      container.innerHTML = `
+        <table class="data-table matrix-table">
+            <thead><tr>${headerHtml}</tr></thead>
+            <tbody>${bodyHtml}</tbody>
+        </table>
+      `;
+  }
+
+  function savePermissionsMatrix(btn) {
+      const updates = {};
+      const checkboxes = document.querySelectorAll('.matrix-check');
+      
+      checkboxes.forEach(cb => {
+          const page = cb.dataset.page;
+          const role = cb.dataset.role;
+          if (!updates[page]) updates[page] = {};
+          updates[page][role] = cb.checked;
+      });
+
+      const originalText = btn.textContent;
+      btn.disabled = true; btn.textContent = "Saving...";
+
+      google.script.run.withSuccessHandler(res => {
+          btn.disabled = false; btn.textContent = originalText;
+          if(res.success) {
+              showNotification("Permissions Updated. Reloading...", "success");
+              // Refresh app after 1s to apply changes
+              setTimeout(() => {
+                  google.script.run.withSuccessHandler(initRes => {
+                      if(initRes.success) {
+                          g.permissions = initRes.data.permissions; // Update local cache
+                          buildMenu(); // Rebuild menu with new permissions
+                          navigateToPage('Settings'); // Stay on settings
+                      }
+                  }).api_getInitialAppData();
+              }, 1000);
+          } else {
+              showNotification(res.message, "error");
+          }
+      }).api_savePermissionsMatrix(updates);
   }
 
   function runAdminMapTabs() {
     if (!confirm("This will refresh the internal list of sheet names. Proceed?")) return;
-    google.script.run
-      .withSuccessHandler(res => showNotification("Mapping Updated", "success"))
-      .admin_mapSheetTabs();
+    google.script.run.withSuccessHandler(res => showNotification("Mapping Updated", "success")).admin_mapSheetTabs();
   }
 </script>

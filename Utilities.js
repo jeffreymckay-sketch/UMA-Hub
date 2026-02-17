@@ -4,6 +4,41 @@
  */
 
 /**
+ * SECURITY: Sanitizes user input to prevent Spreadsheet Formula Injection (CSV Injection).
+ * Prepends a single quote to strings starting with =, +, -, or @.
+ * 
+ * @param {string|number|object} input The raw input.
+ * @returns {string|number|object} The sanitized input.
+ */
+function sanitizeInput(input) {
+  if (typeof input === 'string') {
+    // Trim whitespace
+    input = input.trim();
+    // Check for formula triggers
+    if (input.startsWith('=') || input.startsWith('+') || input.startsWith('-') || input.startsWith('@')) {
+      return "'" + input; 
+    }
+    return input;
+  }
+  return input;
+}
+
+/**
+ * SECURITY: Validates that a string is a legitimate Zoom URL.
+ * Prevents phishing links.
+ * 
+ * @param {string} link The URL to check.
+ * @returns {boolean} True if valid, False otherwise.
+ */
+function isValidZoomLink(link) {
+  if (!link || link.trim() === "") return true; // Allow empty (clearing the link)
+  
+  // Must start with http/https and contain zoom.us
+  const zoomRegex = /^https?:\/\/[a-z0-9-]+\.zoom\.us\//i;
+  return zoomRegex.test(link.trim());
+}
+
+/**
  * Normalizes a header string by converting it to lowercase, trimming whitespace,
  * and removing all non-alphanumeric characters.
  * 
@@ -76,6 +111,7 @@ function normalizeTime(input) {
  */
 function getColumnMap(headerRow) {
     const map = {};
+    if (!headerRow) return map;
     headerRow.forEach((col, index) => {
         if (col) map[String(col).trim().toLowerCase().replace(/\s+/g, '')] = index;
     });

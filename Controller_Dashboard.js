@@ -64,7 +64,11 @@ function api_addAvailability(formData) {
     const lock = LockService.getScriptLock();
     lock.waitLock(15000);
     try {
-        const { day, start, end } = formData;
+        // Sanitize all inputs
+        const day = sanitizeInput(formData.day);
+        const start = sanitizeInput(formData.start);
+        const end = sanitizeInput(formData.end);
+        
         const email = Session.getActiveUser().getEmail();
 
         const sheet = getSheet('Staff_Availability');
@@ -95,7 +99,7 @@ function api_deleteAvailability(recordId) {
         const data = sheet.getDataRange().getDisplayValues();
 
         for (let i = data.length - 1; i >= 1; i--) {
-            // Check that the record belongs to the current user
+            // Security: STRICT check that the record belongs to the current user
             if (data[i][0] === recordId && data[i][1] === email) {
                 sheet.deleteRow(i + 1);
                 return { success: true, message: "Availability slot has been deleted." };
@@ -133,9 +137,11 @@ function api_updateStaffPreferences(preferences) {
         
         // Add back the new preferences, skipping the neutral ones which are default
         for (const timeBlock in preferences) {
-            const preference = preferences[timeBlock];
+            const preference = sanitizeInput(preferences[timeBlock]);
+            const sanitizedBlock = sanitizeInput(timeBlock);
+            
             if (preference !== 'Eh, Sure') {
-                sheet.appendRow([email, timeBlock, preference]);
+                sheet.appendRow([email, sanitizedBlock, preference]);
             }
         }
 

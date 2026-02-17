@@ -281,7 +281,6 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
 
             const assignedInfo = assignmentsMap[shiftId];
             
-            // UPDATED: Use Staff Name in the Title
             const staffDisplayName = assignedInfo ? assignedInfo.name : "Unassigned";
             const title = `Tech Hub: ${desc} (${staffDisplayName})`;
             
@@ -358,6 +357,9 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
 
 function api_commitTechHubSync(targetCalendarId, eventsToSync) {
     try {
+        // Security: Must be Tech Hub Lead or Admin
+        requireRole(['Tech Hub', 'Admin']);
+
         const cal = CalendarApp.getCalendarById(targetCalendarId);
         const stats = { created: 0, updated: 0, errors: 0 };
 
@@ -386,9 +388,10 @@ function api_commitTechHubSync(targetCalendarId, eventsToSync) {
                     stats.created++;
                 }
 
-                const series = cal.createEventSeries(p.title, startDt, endDt, recurrence, {
-                    description: p.description,
-                    location: p.location
+                // Sanitize before creating
+                const series = cal.createEventSeries(sanitizeInput(p.title), startDt, endDt, recurrence, {
+                    description: sanitizeInput(p.description),
+                    location: sanitizeInput(p.location)
                 });
                 series.setTag('TechHub_ShiftID', p.shiftId);
                 
@@ -448,6 +451,9 @@ function getNextDayOccurrence(startDate, dayName) {
 
 function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
     try {
+        // Security: Must be Tech Hub Lead or Admin
+        requireRole(['Tech Hub', 'Admin']);
+
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
             const match = Object.keys(sheetTabs).find(k => k.toLowerCase() === target.toLowerCase());
@@ -477,7 +483,7 @@ function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
 
         if (rowIndex > -1) {
             if (staffId) {
-                sheet.getRange(rowIndex, staffIdIndex + 1).setValue(staffId);
+                sheet.getRange(rowIndex, staffIdIndex + 1).setValue(sanitizeInput(staffId));
                 sheet.getRange(rowIndex, startDateIndex + 1).setValue(new Date(startStr));
                 sheet.getRange(rowIndex, endDateIndex + 1).setValue(new Date(endStr));
             } else {
@@ -487,7 +493,7 @@ function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
             if (staffId) {
                 const newRow = Array(headers.length).fill('');
                 newRow[0] = 'A-' + Utilities.getUuid();
-                newRow[staffIdIndex] = staffId;
+                newRow[staffIdIndex] = sanitizeInput(staffId);
                 newRow[typeIndex] = 'Tech Hub';
                 newRow[refIdIndex] = shiftId;
                 newRow[startDateIndex] = new Date(startStr);
@@ -502,6 +508,9 @@ function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
 
 function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
     try {
+        // Security: Must be Tech Hub Lead or Admin
+        requireRole(['Tech Hub', 'Admin']);
+
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
             const match = Object.keys(sheetTabs).find(k => k.toLowerCase() === target.toLowerCase());
@@ -534,7 +543,7 @@ function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
 
             const newStaffId = assignmentMap.get(refId);
             if (newStaffId) {
-                row[staffIdIndex] = newStaffId;
+                row[staffIdIndex] = sanitizeInput(newStaffId);
                 row[startDateIndex] = startDate;
                 row[endDateIndex] = endDate;
                 updatedData.push(row);
@@ -546,7 +555,7 @@ function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
             if(staffId) {
                 const newRow = Array(headers.length).fill('');
                 newRow[0] = 'A-' + Utilities.getUuid();
-                newRow[staffIdIndex] = staffId;
+                newRow[staffIdIndex] = sanitizeInput(staffId);
                 newRow[typeIndex] = 'Tech Hub';
                 newRow[refIdIndex] = shiftId;
                 newRow[startDateIndex] = startDate;
@@ -564,6 +573,9 @@ function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
 
 function addTechHubShift(shiftData) {
     try {
+        // Security: Must be Tech Hub Lead or Admin
+        requireRole(['Tech Hub', 'Admin']);
+
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
             const match = Object.keys(sheetTabs).find(k => k.toLowerCase() === target.toLowerCase());
@@ -571,9 +583,17 @@ function addTechHubShift(shiftData) {
         };
         const sheet = getSheet(findKey('TechHub_Shifts'));
         const days = Array.isArray(shiftData.days) ? shiftData.days : [shiftData.day];
+        
         days.forEach(day => {
             const zoomVal = shiftData.zoom === true ? 'TRUE' : 'FALSE';
-            sheet.appendRow(['SH-' + Utilities.getUuid(), shiftData.description, day, shiftData.startTime, shiftData.endTime, zoomVal]);
+            sheet.appendRow([
+                'SH-' + Utilities.getUuid(), 
+                sanitizeInput(shiftData.description), 
+                sanitizeInput(day), 
+                sanitizeInput(shiftData.startTime), 
+                sanitizeInput(shiftData.endTime), 
+                zoomVal
+            ]);
         });
         return { success: true }; 
     } catch (e) { return { success: false, message: e.message }; }
@@ -581,6 +601,9 @@ function addTechHubShift(shiftData) {
 
 function deleteTechHubShift(shiftId) {
     try {
+        // Security: Must be Tech Hub Lead or Admin
+        requireRole(['Tech Hub', 'Admin']);
+
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
             const match = Object.keys(sheetTabs).find(k => k.toLowerCase() === target.toLowerCase());

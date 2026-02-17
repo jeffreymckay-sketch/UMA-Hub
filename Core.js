@@ -17,12 +17,7 @@
  */
 function getMasterDataHub() {
   try {
-    const settings = getSettings();
-    const masterSheetId = settings.masterSheetId;
-
-    if (!masterSheetId) {
-      throw new Error('CRITICAL: masterSheetId is not defined in script properties. The application cannot load.');
-    }
+    const masterSheetId = getSpreadsheetId(); // Fetches from Config.gs (secure)
 
     const spreadsheet = SpreadsheetApp.openById(masterSheetId);
     return spreadsheet;
@@ -76,5 +71,56 @@ function getSheet(sheetKey) {
     console.error(`Error in getSheet('${sheetKey}'): ${e.toString()}`);
     // Propagate the error to be handled by the calling function.
     throw e;
+  }
+}
+
+/**
+ * SECURITY: Fetches the current user's role from the Staff_List sheet.
+ * This is used for server-side permission checking.
+ * 
+ * @returns {string[]} An array of roles assigned to the user (e.g., ['Admin', 'MST']).
+ */
+function getCurrentUserRoles() {
+  try {
+    const userEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const staffSheet = getSheet('Staff_List');
+    if (!staffSheet) return [];
+
+    const data = staffSheet.getDataRange().getValues();
+    const headers = getColumnMap(data[0]);
+    
+    // Find the row for this user
+    const userRow = data.find(row => String(row[headers.staffid]).toLowerCase() === userEmail);
+    
+    if (!userRow) return []; // Not found, no roles
+
+    const rolesStr = userRow[headers.roles] || "";
+    // Split by comma and trim
+    return rolesStr.split(',').map(r => r.trim());
+
+  } catch (e) {
+    console.error("Error fetching user roles: " + e.message);
+    return [];
+  }
+}
+
+/**
+ * SECURITY: Enforces access control. Throws an error if the user lacks the required role.
+ * This should be called at the start of any sensitive function.
+ * 
+ * @param {string|string[]} requiredRole A single role string or an array of allowed roles.
+ * @throws {Error} If the user does not have permission.
+ */
+function requireRole(requiredRole) {
+  const userRoles = getCurrentUserRoles();
+  const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+
+  // Check if user has ANY of the allowed roles
+  const hasPermission = allowedRoles.some(role => userRoles.includes(role));
+
+  if (!hasPermission) {
+    const userEmail = Session.getActiveUser().getEmail();
+    console.warn(`Security Alert: User ${userEmail} attempted unauthorized action requiring ${allowedRoles.join(' or ')}.`);
+    throw new Error("Access Denied: You do not have permission to perform this action.");
   }
 }

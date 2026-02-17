@@ -137,6 +137,13 @@ function api_fetchSheetData(customUrl, customTab) {
  */
 function api_bulkUpdateSheet(customUrl, customTab, updates) {
   try {
+    // Security Check: Ensure user has permission (Admin or Lead)
+    // Assuming Proofing Tools is restricted to Admins/Leads in the UI, 
+    // but good to enforce here if possible. 
+    // Since this tool connects to ANY sheet the user has access to, 
+    // the Google Sheet permissions themselves act as the primary gatekeeper.
+    // However, we still sanitize inputs to prevent formula injection.
+
     const target = resolveClassroomTarget(customUrl, customTab);
     const ss = SpreadsheetApp.openById(target.id);
     const sheet = ss.getSheetByName(target.tab);
@@ -145,7 +152,9 @@ function api_bulkUpdateSheet(customUrl, customTab, updates) {
 
     // updates = [{ rowIndex, colIndex, value }]
     updates.forEach(u => {
-      sheet.getRange(u.rowIndex, u.colIndex + 1).setValue(u.value);
+      // Security: Sanitize value before writing
+      const safeValue = sanitizeInput(u.value);
+      sheet.getRange(u.rowIndex, u.colIndex + 1).setValue(safeValue);
     });
 
     return { success: true, message: `Updated ${updates.length} cells.` };
