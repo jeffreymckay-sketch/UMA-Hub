@@ -2,13 +2,15 @@
 <html>
   <head>
     <base target="_top">
+    <!-- Load Google Material Symbols for clean, lightweight SaaS icons -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <?!= include('Styles'); ?>
   </head>
   <body>
 
     <div class="app-header">
       <div class="header-left">
-        <span class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</span>
+        <span class="sidebar-toggle" onclick="toggleSidebar()"><span class="material-symbols-outlined">menu</span></span>
         <h1 class="app-title">University Dept. Management App</h1>
       </div>
       <div class="user-info">
@@ -18,7 +20,8 @@
     </div>
 
     <div class="app-sidebar" id="app-sidebar">
-        <nav class="main-nav" id="main-menu"></nav>
+        <!-- Changed to UL for proper list styling -->
+        <ul class="main-nav" id="main-menu"></ul>
     </div>
 
     <div class="app-content" id="app-content">
@@ -64,7 +67,8 @@
     <?!= include('Module_Sidebars'); ?>
     <?!= include('JS_Core'); ?>
     <?!= include('JS_Dashboard'); ?>
-    <?!= include('JS_MySchedule'); ?> <?!= include('JS_UserGuide'); ?> 
+    <?!= include('JS_MySchedule'); ?> 
+    <?!= include('JS_UserGuide'); ?> 
     <?!= include('JS_MST'); ?>
     <?!= include('JS_Nursing'); ?>
     <?!= include('JS_MLT'); ?>

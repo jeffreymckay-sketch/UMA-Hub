@@ -3,7 +3,7 @@
   const g = {
     userInfo: null,
     dashboardData: null,
-    myScheduleData: null, // Added cache for new tool
+    myScheduleData: null,
     mstData: null,
     mltData: null,
     allSettings: {},
@@ -15,11 +15,13 @@
 
   /**
    * MENU CONFIGURATION
+   * Integrated Google Material Symbol icon strings
    */
   const menuItems = [
     { 
       id: 'Dashboard', 
       title: 'Dashboard', 
+      icon: 'space_dashboard',
       children: [
         { id: 'MySchedule', title: 'My Schedule' },
         { id: 'Availability', title: 'Availability' },
@@ -29,6 +31,7 @@
     {
       id: 'Logistics',
       title: 'Logistics',
+      icon: 'event_available',
       children: [
         { id: 'MST', title: 'MST' },
         { id: 'TechHub', title: 'Tech Hub' }
@@ -37,6 +40,7 @@
     {
       id: 'Proctoring',
       title: 'Proctoring',
+      icon: 'edit_document',
       children: [
         { id: 'Nursing', title: 'Nursing' },
         { id: 'MLT', title: 'MLT' },
@@ -45,27 +49,27 @@
     },
     { 
       id: 'Reporting', 
-      title: 'Stats & Reports', 
+      title: 'Stats & Reports',
+      icon: 'bar_chart',
       children: [
         { id: 'Reporting', title: 'Calendar Stats' },
         { id: 'ProofingTools', title: 'Proofing Tools' }
       ]
     },
-    { id: 'Zoom', title: 'Zoom' },
-    { id: 'Settings', title: 'Settings' }
+    { id: 'Zoom', title: 'Zoom', icon: 'videocam' },
+    { id: 'Settings', title: 'Settings', icon: 'settings' }
   ];
 
   document.addEventListener('DOMContentLoaded', function() {
     console.log("App Started: DOMContentLoaded");
     
-    // Initial load - menu will be empty until data arrives
     google.script.run
       .withSuccessHandler(handleInitialDataSuccess)
       .withFailureHandler(handleInitialError)
       .api_getInitialAppData();
 
     window.addEventListener('popstate', function(e) {
-      const pageId = window.location.hash.substring(1) || 'MySchedule'; // Defaulted to MySchedule
+      const pageId = window.location.hash.substring(1) || 'MySchedule';
       navigateToPage(pageId);
     });
   });
@@ -86,7 +90,7 @@
       populateUserInfo(); 
       buildMenu();
 
-      const initialPage = window.location.hash.substring(1) || 'MySchedule'; // Defaulted to MySchedule
+      const initialPage = window.location.hash.substring(1) || 'MySchedule';
       navigateToPage(initialPage, true);
       
       document.getElementById('loader').style.display = 'none';
@@ -107,24 +111,15 @@
     }
   }
 
-  /**
-   * Checks if the current user has access to a specific PageID
-   */
   function checkAccess(pageId) {
       if (!g.userInfo) return false;
-      // Get user's roles (Array)
       const userRoles = g.userInfo.role.split(',').map(r => r.trim());
 
-      // Admin always has access (Fail-safe client side)
       if (userRoles.includes('Admin')) return true;
 
-      // Check Matrix
       if (g.permissions && g.permissions[pageId]) {
-          // Check if ANY of the user's roles are set to TRUE for this page
           return userRoles.some(role => g.permissions[pageId][role] === true);
       }
-      
-      // Default to false if not in matrix
       return false;
   }
 
@@ -134,27 +129,39 @@
     menu.innerHTML = '';
 
     menuItems.forEach(item => {
-      // Check Parent Access
       const hasParentAccess = checkAccess(item.id);
       
-      // If it has children, check if user has access to AT LEAST ONE child
       let hasChildAccess = false;
       if (item.children) {
           hasChildAccess = item.children.some(child => checkAccess(child.id));
       }
 
-      // Show if parent is allowed OR if it's a container with allowed children
       if (!hasParentAccess && !hasChildAccess) return;
 
       if (item.children) {
         const parentLi = document.createElement('li');
         parentLi.className = 'nav-item has-submenu';
         parentLi.id = `nav-toggle-${item.id}`;
+        // Tooltip attribute for mini-rail mode
+        parentLi.dataset.tooltip = item.title;
+        
         parentLi.innerHTML = `
-          <span>${item.title}</span>
-          <span class="submenu-arrow">▶</span>
+          <span class="material-symbols-outlined nav-icon">${item.icon}</span>
+          <span class="nav-text">${item.title}</span>
+          <span class="material-symbols-outlined submenu-arrow">chevron_right</span>
         `;
-        parentLi.onclick = () => toggleSubmenu(item.id);
+        
+        parentLi.onclick = () => {
+            const sidebar = document.getElementById('app-sidebar');
+            // If clicking a folder icon while collapsed, pop the sidebar open automatically
+            if (sidebar.classList.contains('collapsed')) {
+                toggleSidebar();
+                // Wait for expansion to trigger the open state properly
+                setTimeout(() => toggleSubmenu(item.id), 100);
+            } else {
+                toggleSubmenu(item.id);
+            }
+        };
 
         const subUl = document.createElement('ul');
         subUl.className = 'sub-menu';
@@ -165,7 +172,8 @@
               const childLi = document.createElement('li');
               childLi.className = 'nav-item';
               childLi.dataset.pageId = child.id;
-              childLi.textContent = child.title;
+              // Submenus don't have icons, just text
+              childLi.innerHTML = `<span class="nav-text">${child.title}</span>`;
               subUl.appendChild(childLi);
           }
         });
@@ -176,7 +184,11 @@
         const li = document.createElement('li');
         li.className = 'nav-item';
         li.dataset.pageId = item.id;
-        li.textContent = item.title;
+        li.dataset.tooltip = item.title;
+        li.innerHTML = `
+          <span class="material-symbols-outlined nav-icon">${item.icon}</span>
+          <span class="nav-text">${item.title}</span>
+        `;
         menu.appendChild(li);
       }
     });
@@ -184,7 +196,8 @@
     menu.onclick = function(e) {
       const target = e.target.closest('.nav-item');
       if (target && target.dataset.pageId) {
-        navigateToPage(target.dataset.pageId);
+          // Navigating away from a top-level link while collapsed doesn't uncollapse, just routes
+          navigateToPage(target.dataset.pageId);
       }
     };
   }
@@ -201,10 +214,9 @@
   function navigateToPage(pageId, isInitialLoad = false) {
     console.log("Navigating to:", pageId);
 
-    // Security Check: Prevent navigation via URL hash if permission denied
     if (!checkAccess(pageId) && pageId !== 'MySchedule' && pageId !== 'Availability') {
         console.warn("Access Denied to " + pageId);
-        pageId = 'Availability'; // Redirect to default
+        pageId = 'Availability';
     }
 
     document.querySelectorAll('.page-view').forEach(page => page.style.display = 'none');
@@ -224,7 +236,6 @@
 
     updateActiveMenu(pageId, isInitialLoad);
 
-    // --- LAZY LOADERS ROUTING ---
     try {
       if (pageId === 'MySchedule') { if(typeof loadMySchedulePage === 'function') loadMySchedulePage(); }
       else if (pageId === 'Availability') { if(typeof loadAvailabilityPage === 'function') loadAvailabilityPage(); }
@@ -271,6 +282,7 @@
   }
 
   function toggleSidebar() {
+    // Toggles the mini-rail state
     document.getElementById('app-sidebar').classList.toggle('collapsed');
     document.getElementById('app-content').classList.toggle('collapsed');
   }

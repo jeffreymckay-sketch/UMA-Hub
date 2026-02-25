@@ -63,13 +63,13 @@
     width: 100%;
     z-index: 1000;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    box-sizing: border-box; /* Ensures padding doesn't add to width */
+    box-sizing: border-box;
   }
 
   .header-left { 
     display: flex;
     align-items: center;
-    min-width: 0; /* Allows shrinking */
+    min-width: 0; 
     flex: 1;
   }
 
@@ -82,17 +82,15 @@
     text-overflow: ellipsis;
   }
 
-  /* FIX: Added constraints to prevent right-side cutoff */
   .user-info { 
     display: flex; 
     align-items: center;
     text-align: right;
     margin-left: 20px;
-    min-width: 0; /* Critical for ellipsis to work in flex */
-    max-width: 40%; /* Prevents info from squishing the title */
+    min-width: 0;
+    max-width: 40%;
   }
 
-  /* FIX: Truncate long emails/roles */
   #user-email {
     font-size: 13px;
     white-space: nowrap;
@@ -102,76 +100,186 @@
     line-height: 1.2;
   }
 
+  /* --- Sidebar (Mini-Rail Updates) --- */
   .app-sidebar {
     background-color: #ffffff;
-    width: 220px;
+    width: 250px; /* Slightly wider for the pills */
     position: fixed;
     top: 60px; 
     left: 0;
     height: calc(100% - 60px);
-    padding-top: 15px;
     border-right: 1px solid var(--color-border-light);
-    transform: translateX(0);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 900;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
+  
   .app-sidebar.collapsed {
-    transform: translateX(-100%);
+    width: 68px; /* The Mini-Rail width */
   }
+
   .app-content {
     margin-top: 60px;
-    margin-left: 220px;
+    margin-left: 250px;
     padding: 25px;
     transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .app-content.collapsed {
-    margin-left: 0;
+    margin-left: 68px; /* Recapture screen real estate */
   }
 
-  .sidebar-toggle { cursor: pointer; font-size: 24px; padding: 10px; margin-right: 10px;}
+  /* Align hamburger to icons */
+  .sidebar-toggle { 
+    cursor: pointer; 
+    font-size: 24px; 
+    margin-right: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+  }
+  .sidebar-toggle:hover { background-color: rgba(255,255,255,0.1); }
+  
   #user-photo { width: 38px; height: 38px; border-radius: 50%; margin-left: 15px; border: 2px solid var(--color-text-light); }
+  
+  /* --- Navigation List & Pill Design --- */
+  .main-nav {
+    list-style: none;
+    padding: 12px;
+    margin: 0;
+  }
   
   .main-nav .nav-item {
     display: flex;
     align-items: center;
-    padding: 12px 20px;
-    text-decoration: none;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    border-radius: 8px; /* The Pill */
     color: var(--color-text-dark);
-    border-left: 5px solid transparent;
-    font-size: 16px;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    white-space: nowrap;
     position: relative;
   }
+  
   .main-nav .nav-item:hover {
     background-color: var(--color-accent-gray);
   }
+  
+  /* Active Pill State */
   .main-nav .nav-item.active {
-    border-left-color: var(--color-primary-orange);
-    font-weight: 600;
+    background-color: #f0f4f8; /* Soft pale navy */
     color: var(--color-primary-navy);
+    font-weight: 600;
+  }
+  .main-nav .nav-item.active .nav-icon {
+    color: var(--color-primary-orange); /* Pop of brand color on active icon */
+  }
+
+  /* Icons and Text */
+  .nav-icon {
+    font-size: 22px;
+    margin-right: 12px;
+    min-width: 22px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #666;
+    transition: color 0.2s;
+  }
+  
+  .nav-text {
+    flex-grow: 1;
+    opacity: 1;
+    transition: opacity 0.2s;
+  }
+
+  /* --- Collapsed Mini-Rail Behaviors --- */
+  .app-sidebar.collapsed .nav-text {
+    opacity: 0;
+    width: 0;
+    visibility: hidden;
+  }
+  .app-sidebar.collapsed .submenu-arrow {
+    display: none;
+  }
+  .app-sidebar.collapsed .sub-menu {
+    display: none !important;
+  }
+
+  /* Tooltips for Mini-Rail */
+  .app-sidebar.collapsed .nav-item::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 65px; /* Push out past the rail */
+    background-color: var(--color-primary-navy);
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-10px);
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  .app-sidebar.collapsed .nav-item:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
   }
 
   /* --- Accordion Sub-menu --- */
-  .nav-item.has-submenu .submenu-arrow {
-    position: absolute;
-    right: 20px;
+  .submenu-arrow {
+    font-size: 20px;
+    color: #999;
     transition: transform 0.3s ease;
   }
   .nav-item.has-submenu.open .submenu-arrow {
     transform: rotate(90deg);
   }
+  
   .sub-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 8px 23px; /* Align border with the center of the 22px parent icon */
+    border-left: 2px solid #eee; /* The connecting vertical line */
+    padding-left: 10px;
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease-out;
-    background-color: #fafafa;
   }
+  
   .sub-menu.open {
-      max-height: 200px;
+      max-height: 300px;
   }
+  
   .sub-menu .nav-item {
-      padding-left: 40px;
-      font-size: 15px;
+      font-size: 14px;
+      padding: 8px 12px;
+      font-weight: normal;
+  }
+  
+  /* Horizontal connecting nub */
+  .sub-menu .nav-item::before {
+      content: '';
+      position: absolute;
+      left: -12px;
+      top: 50%;
+      width: 6px;
+      height: 2px;
+      background-color: #eee;
+      border-radius: 2px;
   }
 
   /* --- Page & Widget Styles --- */
