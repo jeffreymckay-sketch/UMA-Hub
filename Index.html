@@ -22,11 +22,12 @@
     </div>
 
     <div class="app-content" id="app-content">
+      <div id="page-MySchedule" class="page-view" style="display:none;"></div>
       <div id="page-Availability" class="page-view"></div>
-      
       <div id="page-UserGuide" class="page-view" style="display:none;"></div>
       
       <div id="page-MST" class="page-view" style="display:none;"></div>
+      <div id="page-TechHub" class="page-view" style="display:none;"></div>
       
       <div id="page-Nursing" class="page-view" style="display:none;">
           <div class="tab-bar">
@@ -50,7 +51,7 @@
 
       <div id="page-Reporting" class="page-view" style="display:none;"></div>
       <div id="page-ProofingTools" class="page-view" style="display:none;"></div>
-      <div id="page-TechHub" class="page-view" style="display:none;"></div>
+      
       <div id="page-Zoom" class="page-view" style="display:none;"></div>
       <div id="page-Settings" class="page-view" style="display:none;"></div>
     </div>
@@ -63,7 +64,7 @@
     <?!= include('Module_Sidebars'); ?>
     <?!= include('JS_Core'); ?>
     <?!= include('JS_Dashboard'); ?>
-    <?!= include('JS_UserGuide'); ?> 
+    <?!= include('JS_MySchedule'); ?> <?!= include('JS_UserGuide'); ?> 
     <?!= include('JS_MST'); ?>
     <?!= include('JS_Nursing'); ?>
     <?!= include('JS_MLT'); ?>

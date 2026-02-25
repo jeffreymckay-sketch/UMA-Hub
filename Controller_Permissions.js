@@ -11,7 +11,7 @@ const PERMISSIONS_CONFIG = {
     ROLES: ['Admin', 'Lead', 'Staff', 'Tech Hub', 'MST', 'Proctor', 'FDC'],
     // The list of Page IDs currently used in Index.html / JS_Core.html
     PAGES: [
-        'Dashboard', 'Availability', 'UserGuide',
+        'Dashboard', 'MySchedule', 'Availability', 'UserGuide',
         'Logistics', 'MST', 'TechHub',
         'Proctoring', 'Nursing', 'MLT', 'ProctorSchedule',
         'Reporting', 'ProofingTools',
@@ -27,7 +27,6 @@ function api_getPermissionsMatrix() {
     try {
         // Security: Admin only for editing, but we need a read-only version for app load
         // We handle the "Edit" check in the save function.
-        
         const ss = getMasterDataHub();
         let sheet = ss.getSheetByName(PERMISSIONS_CONFIG.SHEET_NAME);
 
@@ -52,7 +51,7 @@ function api_getPermissionsMatrix() {
             const startCol = headers.length + 1;
             sheet.getRange(1, startCol, 1, missingRoles.length).setValues([missingRoles]);
             // Re-fetch data after structure change
-            return api_getPermissionsMatrix(); 
+            return api_getPermissionsMatrix();
         }
 
         // 3. Sync Logic: Ensure all Pages exist as rows
@@ -63,8 +62,13 @@ function api_getPermissionsMatrix() {
             const newRows = missingPages.map(pageId => {
                 const row = [pageId];
                 // Default: Admin gets TRUE, others FALSE
+                // Let's default 'MySchedule', 'Availability', and 'UserGuide' to true for everyone
                 PERMISSIONS_CONFIG.ROLES.forEach(role => {
-                    row.push(role === 'Admin' ? true : false);
+                    let defaultVal = false;
+                    if (role === 'Admin') defaultVal = true;
+                    if (['MySchedule', 'Availability', 'UserGuide'].includes(pageId)) defaultVal = true; 
+                    
+                    row.push(defaultVal);
                 });
                 return row;
             });
@@ -110,7 +114,8 @@ function api_getPermissionsMatrix() {
  */
 function api_savePermissionsMatrix(updates) {
     try {
-        requireRole('Admin'); // Strict Security Check
+        requireRole('Admin');
+        // Strict Security Check
 
         const ss = getMasterDataHub();
         const sheet = ss.getSheetByName(PERMISSIONS_CONFIG.SHEET_NAME);
@@ -118,7 +123,6 @@ function api_savePermissionsMatrix(updates) {
 
         const data = sheet.getDataRange().getValues();
         const headers = data[0];
-        
         // Map headers to indices
         const colMap = {};
         headers.forEach((h, i) => colMap[h] = i);
@@ -127,7 +131,6 @@ function api_savePermissionsMatrix(updates) {
         // updates is { "MST": { "Admin": true, "Staff": false }, ... }
         
         const output = [];
-        
         for (let i = 1; i < data.length; i++) {
             const row = data[i];
             const pageId = row[0];

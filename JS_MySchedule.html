@@ -1,0 +1,273 @@
+<style>
+    /* --- My Schedule Specific Styles --- */
+    
+    .schedule-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+  
+    /* Accordion Shared Styles (mirrors Dashboard to maintain UI consistency) */
+    .schedule-accordion {
+      background-color: #ffffff;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+  
+    .schedule-header {
+      padding: 15px 20px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1.1em;
+      color: var(--color-primary-navy);
+      background-color: #f8f9fa;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    
+    .schedule-header:hover { background-color: #e9ecef; }
+  
+    .schedule-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+      background-color: #fff;
+    }
+  
+    /* Open State */
+    .schedule-accordion.open .schedule-content {
+      max-height: 2000px; /* Large enough to fit contents */
+      overflow: visible;
+    }
+    
+    .schedule-accordion.open .schedule-header {
+      border-bottom: 1px solid #e0e0e0;
+    }
+  
+    .schedule-icon { transition: transform 0.3s; font-size: 1.2em; color: #666; }
+    .schedule-accordion.open .schedule-icon { transform: rotate(45deg); color: var(--color-primary-orange); }
+  
+    .schedule-day-wrapper {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+  
+    /* Empty State Text */
+    .schedule-empty {
+      color: #888;
+      font-style: italic;
+      margin: 0;
+    }
+  
+    /* --- Minimal Card Design --- */
+    .sched-card {
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border: 1px solid #eee;
+    }
+  
+    /* Brand Borders */
+    .sched-card-mst {
+      border-left: 5px solid var(--color-primary-navy);
+    }
+    
+    .sched-card-techhub {
+      border-left: 5px solid var(--color-accent-purple);
+    }
+  
+    .sched-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+  
+    .sched-card-title {
+      font-size: 1.05em;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+  
+    /* Badges */
+    .sched-badge {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.75em;
+      font-weight: bold;
+      color: white;
+      white-space: nowrap;
+    }
+    .sched-badge-mst { background-color: var(--color-primary-navy); }
+    .sched-badge-techhub { background-color: var(--color-accent-purple); }
+  
+    .sched-card-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.9em;
+      color: #555;
+    }
+  
+    .sched-detail-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  
+    .sched-link {
+      color: var(--color-primary-orange);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .sched-link:hover { text-decoration: underline; }
+  
+  </style>
+  
+  <script>
+    /**
+     * Main entry point for the My Schedule page.
+     */
+    function loadMySchedulePage() {
+      const view = document.getElementById('page-MySchedule');
+      
+      // 1. Check if data is already cached
+      if (g.myScheduleData && !g.myScheduleData.error) {
+        renderMySchedule(g.myScheduleData);
+        return;
+      }
+  
+      // 2. If not cached, show loader and fetch it
+      view.innerHTML = '<div class="loader-ring"></div>';
+      
+      google.script.run
+        .withSuccessHandler(handleMyScheduleSuccess)
+        .withFailureHandler(handleMyScheduleFailure)
+        .api_getMyScheduleData();
+    }
+  
+    function handleMyScheduleSuccess(response) {
+      if (response.success) {
+        g.myScheduleData = response.data; // Cache it
+        renderMySchedule(g.myScheduleData);
+      } else {
+        handleMyScheduleFailure({ message: response.message });
+      }
+    }
+  
+    function handleMyScheduleFailure(error) {
+      console.error("Failed to load My Schedule data:", error.message);
+      const view = document.getElementById('page-MySchedule');
+      view.innerHTML = `<div class="error-message">Could not load schedule data. Error: ${error.message}</div>`;
+    }
+  
+    // --- Render Functions ---
+  
+    function renderMySchedule(scheduleData) {
+      const view = document.getElementById('page-MySchedule');
+      view.innerHTML = ''; 
+  
+      // Header
+      const headerWrapper = document.createElement('div');
+      headerWrapper.className = 'schedule-container';
+      headerWrapper.innerHTML = `
+        <h2 style="margin-top:0; color:var(--color-primary-navy);">My Schedule</h2>
+        <p style="color:#666; margin-bottom:25px;">Your current assignments for courses and shifts.</p>
+      `;
+      
+      // Define the strict Monday-Friday structure
+      const workDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+      
+      // Figure out today's day to auto-open the correct accordion
+      const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const dayToOpen = workDays.includes(todayStr) ? todayStr : 'Monday'; // Default to Monday if it's the weekend
+  
+      let accordionsHtml = '';
+  
+      workDays.forEach(day => {
+          const items = scheduleData[day] || [];
+          const isOpen = (day === dayToOpen) ? 'open' : '';
+          
+          // Build cards for this day
+          let itemsHtml = '';
+          if (items.length === 0) {
+              itemsHtml = `<p class="schedule-empty">No assignments scheduled for ${day}.</p>`;
+          } else {
+              // Sort items by time (Optional, relies on timeString parsing which can be complex, 
+              // but we'll render them in the order they were parsed from the sheets)
+              itemsHtml = items.map(item => buildScheduleCard(item)).join('');
+          }
+  
+          accordionsHtml += `
+            <div class="schedule-accordion ${isOpen}" id="sched-acc-${day}">
+              <div class="schedule-header" onclick="toggleScheduleAccordion('sched-acc-${day}')">
+                  <span>${day} <span style="color:#999; font-size:0.85em; font-weight:normal; margin-left:8px;">(${items.length})</span></span>
+                  <span class="schedule-icon">+</span>
+              </div>
+              <div class="schedule-content">
+                  <div class="schedule-day-wrapper">
+                      ${itemsHtml}
+                  </div>
+              </div>
+            </div>
+          `;
+      });
+  
+      headerWrapper.innerHTML += accordionsHtml;
+      view.appendChild(headerWrapper);
+    }
+  
+    function buildScheduleCard(item) {
+        // Determine classes based on tool type
+        const isMst = item.type === 'MST';
+        const cardClass = isMst ? 'sched-card-mst' : 'sched-card-techhub';
+        const badgeClass = isMst ? 'sched-badge-mst' : 'sched-badge-techhub';
+        const typeLabel = isMst ? 'MST Class' : 'Tech Hub Shift';
+  
+        // Build Zoom Link HTML if it exists
+        let zoomHtml = '';
+        if (item.zoomLink) {
+            zoomHtml = `<a href="${item.zoomLink}" target="_blank" class="sched-link">Join Zoom Meeting</a>`;
+        }
+  
+        return `
+          <div class="sched-card ${cardClass}">
+              <div class="sched-card-top">
+                  <h4 class="sched-card-title">${item.title}</h4>
+                  <span class="sched-badge ${badgeClass}">${typeLabel}</span>
+              </div>
+              <div class="sched-card-details">
+                  <div class="sched-detail-row">
+                      <span style="width:20px; text-align:center;">🕒</span> 
+                      <span>${item.timeString}</span>
+                  </div>
+                  <div class="sched-detail-row">
+                      <span style="width:20px; text-align:center;">📍</span> 
+                      <span>${item.location || 'Location TBD'} ${zoomHtml ? `&nbsp;|&nbsp; ${zoomHtml}` : ''}</span>
+                  </div>
+              </div>
+          </div>
+        `;
+    }
+  
+    // --- Helper Functions ---
+  
+    function toggleScheduleAccordion(id) {
+        const acc = document.getElementById(id);
+        if (acc) {
+            acc.classList.toggle('open');
+        }
+    }
+  
+  </script>

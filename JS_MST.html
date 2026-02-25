@@ -1,207 +1,162 @@
 <style>
-  /* --- MST Card Layout Styles --- */
+  /* --- MST Card Layout & General Styles --- */
   
   /* Robust Button Styles */
   .button-primary {
-    display: inline-block;
-    cursor: pointer; 
-    font-family: inherit; 
-    transition: opacity 0.2s;
-    background-color: var(--color-primary-navy, #00274c);
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
-    text-align: center;
-    user-select: none;
+    display: inline-block; cursor: pointer; font-family: inherit; transition: opacity 0.2s;
+    background-color: var(--color-primary-navy, #00274c); color: white; border: none;
+    padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 500; text-align: center; user-select: none;
   }
-  
   .button-success {
-    display: inline-block;
-    cursor: pointer; 
-    font-family: inherit; 
-    transition: opacity 0.2s;
-    background-color: var(--color-primary-green, #28a745);
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
-    text-align: center;
-    user-select: none;
+    display: inline-block; cursor: pointer; font-family: inherit; transition: opacity 0.2s;
+    background-color: var(--color-primary-green, #28a745); color: white; border: none;
+    padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 500; text-align: center; user-select: none;
+  }
+  .button-secondary {
+    display: inline-block; cursor: pointer; font-family: inherit; transition: opacity 0.2s;
+    background-color: #6c757d; color: white; border: none;
+    padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 500; text-align: center; user-select: none;
+  }
+  .button-primary:hover, .button-success:hover, .button-secondary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .button-primary:active, .button-success:active, .button-secondary:active { transform: translateY(0); }
+  
+  .button-primary[disabled], .button-success[disabled], .button-primary.disabled, .button-success.disabled { 
+    background-color: #ccc; cursor: not-allowed; pointer-events: none;
   }
 
-  .button-primary:hover, .button-success:hover { opacity: 0.9;
-  }
-  
-  /* Disabled state */
-  .button-primary[disabled], .button-success[disabled], 
-  .button-primary.disabled, .button-success.disabled { 
-    background-color: #ccc;
-    cursor: not-allowed; 
-    pointer-events: none;
-  }
+  /* --- Compact Table Styles (Classroom Tab) --- */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+  .data-table th { background-color: #f8f9fa; color: #333; font-weight: 600; text-align: left; padding: 8px 10px; border-bottom: 2px solid #ddd; }
+  .data-table td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .data-table tr:hover { background-color: #f9f9f9; }
+  .assign-wrapper { display: flex; gap: 6px; align-items: center; }
+  .assign-select { padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; max-width: 150px; }
+  .zoom-input { width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  .zoom-input.saved { border-color: #28a745; background-color: #f0fff4; }
 
-  /* --- Compact Table Styles --- */
-  .data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9em;
+  /* --- Calendar Sync Top Bar --- */
+  .proctoring-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #ddd;
   }
+  .proctoring-actions { display: flex; gap: 10px; align-items: center; }
   
-  .data-table th {
-    background-color: #f8f9fa;
-    color: #333;
-    font-weight: 600;
-    text-align: left;
-    padding: 8px 10px;
-    border-bottom: 2px solid #ddd;
-  }
-  
-  .data-table td {
-    padding: 6px 10px;
-    border-bottom: 1px solid #eee;
-    vertical-align: middle;
-  }
-  
-  .data-table tr:hover { background-color: #f9f9f9;
-  }
-
-  /* Assignment Cell Styles */
-  .assign-wrapper {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-  
-  .assign-select {
-    padding: 4px 6px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 0.95em;
-    max-width: 150px;
-  }
-  
-  /* Zoom Input Style */
-  .zoom-input {
-    width: 100%;
-    padding: 4px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-  }
-  .zoom-input.saved {
-    border-color: #28a745;
-    background-color: #f0fff4;
-  }
-
-  /* --- Calendar Sync Layout --- */
-  .sync-controls {
-    background: #fff;
-    padding: 15px; border-radius: 8px; border: 1px solid #ddd;
-    margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end;
-  }
-  
-  .sync-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px;
-    padding-bottom: 40px;
-  }
-
-  .sync-card {
-    background: #fff; border: 1px solid #ddd; border-radius: 6px;
-    display: flex; flex-direction: column;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: transform 0.2s, box-shadow 0.2s;
-    position: relative;
-    overflow: hidden;
-  }
-  
-  .sync-card.status-new { border-left: 5px solid #28a745; }
-  .sync-card.status-update { border-left: 5px solid #f39c12;
-  }
-  .sync-card.status-synced { border-left: 5px solid #bdc3c7; opacity: 0.7;
-  }
-  
-  .sync-card-header {
-    padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between; align-items: center;
-  }
-  
-  .sync-card-body { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; gap: 8px;
-  }
-  
-  .sync-input-group { display: flex; flex-direction: column; font-size: 0.9em; }
-  .sync-input-group label { font-size: 0.8em;
-    color: #666; margin-bottom: 2px; font-weight: 600; }
-  .sync-input { 
-    padding: 5px 8px;
-    border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; 
-    font-size: 1em;
-  }
-  
-  /* Diff Styles */
-  .diff-container {
-    background: #fff3cd; border: 1px solid #ffeeba;
-    padding: 8px; border-radius: 4px; margin-bottom: 5px;
-  }
-  .diff-item {
-    display: flex; align-items: flex-start; gap: 8px;
-    margin-bottom: 4px; font-size: 0.85em; color: #856404;
-  }
-  .diff-item:last-child { margin-bottom: 0; }
-  .diff-item input { margin-top: 2px;
-  }
-
-  .sync-info-section {
-    background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.85em; color: #555;
-    border: 1px solid #eee;
-  }
-  .sync-info-row { margin-bottom: 2px; }
-  .sync-info-label { font-weight: bold; color: #333; margin-right: 5px;
-  }
-
-  .sync-card-footer {
-    padding: 8px 12px; background: #fff; border-top: 1px solid #eee;
-    display: flex; justify-content: space-between;
-    align-items: center;
-  }
-
-  .status-badge {
-    padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .status-badge.new { background: #d4edda; color: #155724; }
-  .status-badge.update { background: #fff3cd; color: #856404;
-  }
-  .status-badge.synced { background: #e2e3e5; color: #383d41; }
-
-  /* Filters */
   .filter-bar { 
-    margin-bottom: 15px;
-    display: flex; gap: 8px; align-items: center; flex-wrap: wrap; 
-    padding: 5px; background: #f8f9fa; border-radius: 30px; border: 1px solid #eee;
+    margin-bottom: 20px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; 
+    padding: 8px 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #eee;
   }
   .filter-btn { 
-    padding: 5px 12px; border: 1px solid transparent; background: transparent; 
-    border-radius: 20px;
-    cursor: pointer; font-size: 0.85em; color: #666; font-weight: 500;
+    padding: 6px 14px; border: 1px solid transparent; background: transparent; 
+    border-radius: 20px; cursor: pointer; font-size: 0.9em; color: #666; font-weight: 600;
+    transition: all 0.2s;
   }
-  .filter-btn:hover { background: #e9ecef;
-  }
+  .filter-btn:hover { background: #e9ecef; }
   .filter-btn.active { 
-    background: var(--color-primary-navy, #00274c); 
-    color: #fff; 
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    background: var(--color-primary-navy, #00274c); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
 
-  /* Form Elements */
-  .form-field { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;
+  /* --- FLIP CARD STYLES --- */
+  .sync-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; padding-bottom: 40px;
   }
-  .form-field label { display: block; margin-bottom: 4px; font-weight: bold; }
+
+  .sync-card-container {
+    background-color: transparent;
+    height: 420px; /* Fixed height for consistent flipping */
+    perspective: 1000px;
+  }
+
+  .sync-card-inner {
+    position: relative; width: 100%; height: 100%;
+    text-align: left; transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+
+  .sync-card-container.flipped .sync-card-inner {
+    transform: rotateY(180deg);
+  }
+
+  .sync-card-front, .sync-card-back {
+    position: absolute; width: 100%; height: 100%;
+    backface-visibility: hidden; border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    display: flex; flex-direction: column; background-color: #fff;
+    border: 3px solid transparent; overflow: hidden;
+  }
+
+  /* Status Borders for Front */
+  .sync-card-front.status-new { border-color: var(--color-primary-green, #28a745); }
+  .sync-card-front.status-update { border-color: var(--color-primary-orange, #FF7F11); }
+  .sync-card-front.status-synced { border-color: #bdc3c7; opacity: 0.8; }
+
+  /* Back is always Navy */
+  .sync-card-back {
+    transform: rotateY(180deg);
+    border-color: var(--color-primary-navy, #003057);
+  }
+
+  /* Card Headers */
+  .sync-card-header {
+    padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; color: white;
+  }
+  .sync-card-header h4 { margin: 0; font-size: 1.1em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  
+  .header-new { background-color: var(--color-primary-green, #28a745); }
+  .header-update { background-color: var(--color-primary-orange, #FF7F11); }
+  .header-synced { background-color: #bdc3c7; color: #333; }
+  .header-back { background-color: var(--color-primary-navy, #003057); }
+
+  /* Card Body */
+  .sync-card-body { padding: 15px; flex-grow: 1; overflow-y: auto; font-size: 0.95em; display: flex; flex-direction: column; gap: 10px; }
+  .sync-card-footer { padding: 12px 15px; background: #f8f9fa; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+
+  /* Read-Only Info Rows (Front) */
+  .info-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #eee; padding-bottom: 6px; margin-bottom: 2px; }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: #666; font-weight: 500; }
+  .info-value { font-weight: 600; color: #222; text-align: right; max-width: 65%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* --- ACCESSIBLE DIFF STYLES (Badge & Arrow) --- */
+  .diff-section { background: #fdfbf7; border: 1px solid #f5e8d3; border-radius: 6px; padding: 10px; margin-top: 5px; }
+  .diff-title { font-size: 0.85em; font-weight: bold; color: var(--color-primary-orange); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  
+  .diff-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.9em; }
+  .diff-item:last-child { margin-bottom: 0; }
+  
+  .diff-prop { font-weight: bold; color: #444; min-width: 60px; }
+  
+  .diff-badge-old { 
+    background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; 
+    padding: 2px 6px; border-radius: 4px; text-decoration: line-through; 
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;
+  }
+  .diff-badge-new { 
+    background: #e6f4ea; color: #137333; border: 1px solid #ceead6; 
+    padding: 2px 6px; border-radius: 4px; font-weight: bold;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;
+  }
+  .diff-badge-removed {
+    background: #fce8e6; color: #c5221f; border: 1px solid #fad2cf;
+    padding: 2px 6px; border-radius: 4px; font-weight: bold;
+  }
+  .diff-arrow { color: #9aa0a6; font-size: 1.1em; }
+
+  /* --- TOGGLE SWITCH (Replaces Checkboxes in Diffs) --- */
+  .toggle-switch { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 20px; }
+  .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+  input:checked + .slider { background-color: var(--color-primary-green, #28a745); }
+  input:checked + .slider:before { transform: translateX(14px); }
+
+  /* Main Sync Checkbox (Header) */
+  .header-checkbox { width: 20px; height: 20px; cursor: pointer; accent-color: #fff; }
+
+  /* --- INPUTS (Back of Card) --- */
+  .sync-input-group { display: flex; flex-direction: column; font-size: 0.9em; margin-bottom: 8px; }
+  .sync-input-group label { font-size: 0.85em; color: #666; margin-bottom: 3px; font-weight: 600; }
+  .sync-input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 1em; font-family: inherit; }
+  .sync-input:focus { border-color: var(--color-primary-navy); outline: none; }
 
 </style>
 
@@ -212,7 +167,6 @@
 function loadMstPage() {
   const pageContainer = document.getElementById('page-MST');
   
-  // Create basic layout if not present
   if (pageContainer.childElementCount === 0) {
       pageContainer.innerHTML = `
         <div class="widget">
@@ -232,27 +186,18 @@ function loadMstPage() {
       });
   }
 
-  // --- LAZY LOADING ---
   if (g.mstData && !g.mstData.error) {
-      // Data exists, render immediately
       loadMstClassroomTab();
   } else {
-      // Data missing, fetch it
       const classroomTab = document.getElementById('mst-classroom');
-      classroomTab.innerHTML = '<div class="loader-container" style="position:relative; height:300px; background:transparent;"><div class="loader-ring"></div></div>';
+      classroomTab.innerHTML = '<div style="display:flex; justify-content:center; padding:40px;"><div class="loader-ring"></div></div>';
       
       google.script.run
         .withSuccessHandler(res => {
-            if (res.success) {
-                g.mstData = res;
-                loadMstClassroomTab();
-            } else {
-                classroomTab.innerHTML = `<div class="error-message">Error loading MST data: ${res.message}</div>`;
-            }
+            if (res.success) { g.mstData = res; loadMstClassroomTab(); } 
+            else { classroomTab.innerHTML = `<div class="error-message">Error: ${res.message}</div>`; }
         })
-        .withFailureHandler(err => {
-            classroomTab.innerHTML = `<div class="error-message">Server Error: ${err.message}</div>`;
-        })
+        .withFailureHandler(err => { classroomTab.innerHTML = `<div class="error-message">Server Error: ${err.message}</div>`; })
         .api_getMstViewData();
   }
 }
@@ -260,12 +205,10 @@ function loadMstPage() {
 function handleMstTabClick(e, pageContainer) {
   e.preventDefault();
   const tabId = e.target.dataset.tab;
-
   pageContainer.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
   e.target.classList.add('active');
   pageContainer.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-  const activeContent = document.getElementById(`mst-${tabId}`);
-  activeContent.style.display = 'block';
+  document.getElementById(`mst-${tabId}`).style.display = 'block';
 
   switch (tabId) {
     case 'classroom': loadMstClassroomTab(); break;
@@ -278,12 +221,7 @@ function handleMstTabClick(e, pageContainer) {
 
 function loadMstClassroomTab() {
   const container = document.getElementById('mst-classroom');
-  // Only render if we have data
-  if (!g.mstData || !g.mstData.data) return;
-  
-  // Re-render only if container is empty (or we want to force refresh)
-  if (container.querySelector('table')) return; 
-
+  if (!g.mstData || !g.mstData.data || container.querySelector('table')) return; 
   renderScheduleTable(container, g.mstData.data.courseAssignments, g.mstData.data.mstStaffList);
 }
 
@@ -291,38 +229,18 @@ function renderScheduleTable(container, schedule, staffList) {
   container.innerHTML = `
     <table class="data-table">
       <thead>
-        <tr>
-          <th>Course</th>
-          <th>Faculty</th>
-          <th>Day</th>
-          <th>Time</th>
-          <th>Location</th>
-          <th style="width:200px;">Zoom Link</th>
-          <th>Staff Assignment</th>
-        </tr>
+        <tr><th>Course</th><th>Faculty</th><th>Day</th><th>Time</th><th>Location</th><th style="width:200px;">Zoom Link</th><th>Staff Assignment</th></tr>
       </thead>
       <tbody>
         ${schedule.map(item => {
-          const options = staffList.map(staff => 
-            `<option value="${staff.id}" ${String(staff.id) === String(item.staffId) ? 'selected' : ''}>${staff.name}</option>`
-          ).join('');
-          
+          const options = staffList.map(staff => `<option value="${staff.id}" ${String(staff.id) === String(item.staffId) ? 'selected' : ''}>${staff.name}</option>`).join('');
           return `
           <tr data-course-id="${item.id}">
-            <td>${item.itemName}</td>
-            <td>${item.courseFaculty}</td>
-            <td>${item.courseDay}</td>
-            <td>${item.courseTime}</td>
-            <td>${item.location}</td>
-            <td>
-                <input type="text" class="zoom-input" id="zoom-${item.id}" value="${item.zoomLink || ''}" placeholder="Paste link..." onchange="updateZoomLink('${item.id}', this)">
-            </td>
+            <td>${item.itemName}</td><td>${item.courseFaculty}</td><td>${item.courseDay}</td><td>${item.courseTime}</td><td>${item.location}</td>
+            <td><input type="text" class="zoom-input" id="zoom-${item.id}" value="${item.zoomLink || ''}" placeholder="Paste link..." onchange="updateZoomLink('${item.id}', this)"></td>
             <td>
               <div class="assign-wrapper">
-                <select id="select-staff-${item.id}" class="assign-select">
-                  <option value="">-- Unassigned --</option>
-                  ${options}
-                </select>
+                <select id="select-staff-${item.id}" class="assign-select"><option value="">-- Unassigned --</option>${options}</select>
                 <button type="button" class="button-primary" id="btn-assign-${item.id}">Save</button>
               </div>
             </td>
@@ -331,114 +249,71 @@ function renderScheduleTable(container, schedule, staffList) {
       </tbody>
     </table>`;
     
-    // Attach Listeners
     schedule.forEach(item => {
         const btn = document.getElementById(`btn-assign-${item.id}`);
-        if(btn) {
-            btn.onclick = function(e) { assignStaff(item.id, e); return false; };
-        }
+        if(btn) btn.onclick = function(e) { assignStaff(item.id, e); return false; };
     });
 }
 
 function updateZoomLink(courseId, inputEl) {
     const newVal = inputEl.value;
-    inputEl.disabled = true;
-    inputEl.style.opacity = '0.7';
+    inputEl.disabled = true; inputEl.style.opacity = '0.7';
     google.script.run
         .withSuccessHandler(res => {
-            inputEl.disabled = false;
-            inputEl.style.opacity = '1';
-            if(res.success) {
-                inputEl.classList.add('saved');
-                setTimeout(() => inputEl.classList.remove('saved'), 2000);
-            } else {
-                alert("Failed to save Zoom link: " + res.message);
-            }
-        })
-        .withFailureHandler(err => {
-            inputEl.disabled = false;
-            inputEl.style.opacity = '1';
-            alert("Error saving Zoom link: " + err.message);
+            inputEl.disabled = false; inputEl.style.opacity = '1';
+            if(res.success) { inputEl.classList.add('saved'); setTimeout(() => inputEl.classList.remove('saved'), 2000); } 
+            else { alert("Failed to save Zoom link: " + res.message); }
         })
         .api_updateCourseZoom(courseId, newVal);
 }
 
 function assignStaff(courseId, event) {
   if(event) { event.preventDefault(); event.stopPropagation(); }
-  
-  const select = document.getElementById(`select-staff-${courseId}`);
-  const staffId = select.value;
-  
-  const btn = event.target;
-  const originalText = btn.textContent;
+  const staffId = document.getElementById(`select-staff-${courseId}`).value;
+  const btn = event.target; const originalText = btn.textContent;
   btn.disabled = true; btn.textContent = '...';
   google.script.run
     .withSuccessHandler(res => {
       if (res.success) {
-        btn.textContent = 'Saved!';
-        btn.style.backgroundColor = 'var(--color-primary-green, #28a745)';
-        setTimeout(() => {
-            btn.disabled = false; 
-            btn.textContent = originalText;
-            btn.style.backgroundColor = ''; 
-        }, 2000);
-      } else { 
-        alert('Save Failed: ' + res.error); 
-        btn.disabled = false; btn.textContent = originalText;
-      }
-    })
-    .withFailureHandler(err => { 
-        alert('Error: ' + err.message); 
-        btn.disabled = false; btn.textContent = originalText; 
+        btn.textContent = 'Saved!'; btn.style.backgroundColor = 'var(--color-primary-green)';
+        setTimeout(() => { btn.disabled = false; btn.textContent = originalText; btn.style.backgroundColor = ''; }, 2000);
+      } else { alert('Save Failed: ' + res.error); btn.disabled = false; btn.textContent = originalText; }
     })
     .api_updateCourseAssignment(courseId, staffId);
 }
 
-// --- Calendar Sync Tab (New Card Layout) ---
+// --- Calendar Sync Tab (Redesigned) ---
 
 let mstSyncData = [];
 
 function loadMstCalendarTab() {
   const container = document.getElementById('mst-calendar');
-  
-  // 1. Check if calendars are loaded (null means not fetched yet)
   if (g.writableCalendars === null) {
-      container.innerHTML = '<div class="loader-container" style="position:relative; height:200px; background:transparent;"><div class="loader-ring"></div></div>';
-      google.script.run
-        .withSuccessHandler(res => {
-            if (res.success) {
-                g.writableCalendars = res.data;
-                renderMstCalendarControls(container);
-            } else {
-                container.innerHTML = `<div class="error-message">Failed to load calendars: ${res.message}</div>`;
-            }
-        })
-        .withFailureHandler(err => {
-            container.innerHTML = `<div class="error-message">System Error: ${err.message}</div>`;
-        })
-        .getWritableCalendars();
+      container.innerHTML = '<div style="display:flex; justify-content:center; padding:40px;"><div class="loader-ring"></div></div>';
+      google.script.run.withSuccessHandler(res => {
+            if (res.success) { g.writableCalendars = res.data; renderMstCalendarControls(container); } 
+            else { container.innerHTML = `<div class="error-message">Failed to load calendars: ${res.message}</div>`; }
+        }).getWritableCalendars();
   } else {
-      // 2. Render if already loaded
       renderMstCalendarControls(container);
   }
 }
 
 function renderMstCalendarControls(container) {
-  if (container.querySelector('.sync-controls')) return; // Already rendered
+  if (container.querySelector('.proctoring-header')) return; 
 
-  // Gracefully handle if user has 0 writable calendars
   let calOptions = '<option value="">-- No Calendars Found --</option>';
   if (g.writableCalendars && g.writableCalendars.length > 0) {
       calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   }
 
   container.innerHTML = `
-    <div class="sync-controls">
-      <div style="flex-grow:1;">
-        <label style="display:block; font-weight:bold; margin-bottom:5px;">Select Target Calendar</label>
-        <select id="mst-calendar-select" class="form-field">${calOptions}</select>
+    <div class="proctoring-header">
+      <h2 style="margin:0; color: var(--color-primary-navy);">Calendar Sync</h2>
+      <div class="proctoring-actions">
+        <select id="mst-calendar-select" class="form-input" style="width:250px; padding:8px;">${calOptions}</select>
+        <button class="button-primary" id="btn-preview">Preview Changes</button>
       </div>
-      <div class="button-primary" id="btn-preview" role="button">Preview Changes</div>
     </div>
     
     <div id="mst-sync-area" style="display:none;">
@@ -448,20 +323,21 @@ function renderMstCalendarControls(container) {
             <button type="button" class="filter-btn" id="filter-update">Updates</button>
             <button type="button" class="filter-btn" id="filter-synced">Synced</button>
             <div style="flex-grow:1"></div>
-            <div class="button-success" id="btn-sync-selected" role="button">Sync Selected</div>
+            <button class="button-success" id="btn-sync-selected">Sync Selected to Calendar</button>
         </div>
         <div id="mst-sync-grid" class="sync-grid"></div>
     </div>
     
-    <!-- FIX: Removed the global 'loader-container' class to prevent full-screen takeover -->
-    <div id="mst-sync-loader" style="display:none; justify-content:center; align-items:center; padding: 40px 0;">
-        <div class="loader-ring"></div>
+    <div id="mst-sync-loader" style="display:none; justify-content:center; align-items:center; padding: 60px 0;">
+        <div style="text-align:center;">
+            <div class="loader-ring" style="margin: 0 auto 15px auto;"></div>
+            <div style="color:#666; font-weight:500;">Analyzing Calendar Data...</div>
+        </div>
     </div>
   `;
   
   container.querySelector('#btn-preview').onclick = function(e) { runMstPreview(e); return false; };
   container.querySelector('#btn-sync-selected').onclick = function(e) { runMstCommit(e); return false; };
-  
   container.querySelector('#filter-all').onclick = function(e) { filterSyncGrid('all', e.target); return false; };
   container.querySelector('#filter-new').onclick = function(e) { filterSyncGrid('new', e.target); return false; };
   container.querySelector('#filter-update').onclick = function(e) { filterSyncGrid('update', e.target); return false; };
@@ -469,33 +345,26 @@ function renderMstCalendarControls(container) {
 }
 
 function runMstPreview(e) {
-    if(e) { e.preventDefault(); e.stopPropagation();
-    }
-    console.log("Starting Preview...");
-    
+    if(e) { e.preventDefault(); e.stopPropagation(); }
     const calId = document.getElementById('mst-calendar-select').value;
-    if(!calId) {
-        alert("Please select a valid calendar.");
-        return false;
-    }
+    if(!calId) { alert("Please select a valid calendar."); return false; }
 
     document.getElementById('mst-sync-area').style.display = 'none';
     document.getElementById('mst-sync-loader').style.display = 'flex';
+    
     google.script.run
         .withSuccessHandler(res => {
-            console.log("Preview Success:", res);
             document.getElementById('mst-sync-loader').style.display = 'none';
             if(res.success) {
-                mstSyncData = res.data; // Store data
+                mstSyncData = res.data; 
                 renderSyncGrid();
                 document.getElementById('mst-sync-area').style.display = 'block';
             } else {
                 alert("Error: " + res.message);
-                document.getElementById('mst-sync-area').style.display = 'block'; // Show area again
+                document.getElementById('mst-sync-area').style.display = 'block'; 
             }
         })
         .withFailureHandler(err => {
-            console.error("Preview Failed:", err);
             document.getElementById('mst-sync-loader').style.display = 'none';
             document.getElementById('mst-sync-area').style.display = 'block';
             alert("System Error: " + err.message);
@@ -504,11 +373,31 @@ function runMstPreview(e) {
     return false;
 }
 
+// --- Diff Parser for Accessibility ---
+function formatDiffText(text) {
+    // Match: Property: "Old" -> "New"
+    const match = text.match(/^(.*?):\s*"(.*?)"\s*->\s*"(.*?)"$/);
+    if (match) {
+        const prop = match[1];
+        const oldVal = match[2] || "None";
+        const newVal = match[3] || "None";
+        return `<span class="diff-prop">${prop}:</span> <span class="diff-badge-old">${oldVal}</span> <span class="diff-arrow">➔</span> <span class="diff-badge-new">${newVal}</span>`;
+    }
+    // Match: Add/Remove Guest
+    if (text.startsWith("Add Guest:")) {
+        return `<span class="diff-prop">Guest:</span> <span class="diff-arrow">➔</span> <span class="diff-badge-new">${text.replace("Add Guest:", "").trim()}</span>`;
+    }
+    if (text.startsWith("Remove Guest:")) {
+        return `<span class="diff-prop">Guest:</span> <span class="diff-badge-old">${text.replace("Remove Guest:", "").trim()}</span> <span class="diff-arrow">➔</span> <span class="diff-badge-removed">Removed</span>`;
+    }
+    return `<span class="diff-prop">Update:</span> <span style="color:#555;">${text}</span>`;
+}
+
 function renderSyncGrid() {
     const grid = document.getElementById('mst-sync-grid');
     grid.innerHTML = '';
     if(mstSyncData.length === 0) {
-        grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:20px;">No events found in sheet.</div>';
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:40px; color:#666; background:#fff; border-radius:8px;">No events found in sheet.</div>';
         return;
     }
 
@@ -516,103 +405,115 @@ function renderSyncGrid() {
         const p = item.payload;
         const statusClass = item.status.toLowerCase();
         
-        // Format Date for Input
         const startObj = new Date(p.startTime);
         const endObj = new Date(p.endTime);
         const fmtTime = d => d.toTimeString().substring(0,5);
+        const displayTime = `${startObj.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} - ${endObj.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`;
         
-        // Diff HTML with Checkboxes
+        // --- Build Diff Section (Front) ---
         let diffHtml = '';
         if(item.diffs && item.diffs.length > 0) {
             const diffItems = item.diffs.map((d, dIdx) => `
                 <div class="diff-item">
-                    <input type="checkbox" class="diff-check" data-diff-idx="${dIdx}" checked>
-                    <span>${d.text}</span>
+                    <label class="toggle-switch" title="Include this change?">
+                        <input type="checkbox" class="diff-check" data-diff-idx="${dIdx}" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <div style="flex-grow:1; overflow:hidden;">${formatDiffText(d.text)}</div>
                 </div>
             `).join('');
-            diffHtml = `<div class="diff-container">${diffItems}</div>`;
+            diffHtml = `
+                <div class="diff-section">
+                    <div class="diff-title">Proposed Changes</div>
+                    ${diffItems}
+                </div>`;
         }
         
-        // Guests Formatting
-        const guestListStr = (item.currentGuests && item.currentGuests.length > 0) 
-            ? item.currentGuests.join(', ') 
-            : 'None';
-
-        const card = document.createElement('div');
-        card.className = `sync-card status-${statusClass}`;
-        card.dataset.status = statusClass;
-        card.dataset.index = index;
-        
+        const guestListStr = (item.currentGuests && item.currentGuests.length > 0) ? item.currentGuests.join(', ') : 'None';
         const isChecked = (item.status !== 'SYNCED') ? 'checked' : '';
+        const headerClass = statusClass === 'new' ? 'header-new' : (statusClass === 'update' ? 'header-update' : 'header-synced');
 
-        card.innerHTML = `
-            <div class="sync-card-header">
-                <span class="status-badge ${statusClass}">${item.status}</span>
-                <input type="checkbox" class="sync-check" data-index="${index}" ${isChecked}>
-            </div>
-            <div class="sync-card-body">
-                ${diffHtml}
-                <div class="sync-input-group">
-                    <label>Title</label>
-                    <input type="text" class="sync-input field-title" value="${p.title}">
-                </div>
-                <div style="display:flex; gap:10px;">
-                    <div class="sync-input-group" style="flex:1">
-                        <label>Start Time</label>
-                        <input type="time" class="sync-input field-start" value="${fmtTime(startObj)}">
+        const cardContainer = document.createElement('div');
+        cardContainer.className = `sync-card-container sync-card`; // Added sync-card for querySelector compatibility
+        cardContainer.dataset.status = statusClass;
+        cardContainer.dataset.index = index;
+        
+        cardContainer.innerHTML = `
+            <div class="sync-card-inner">
+                
+                <!-- FRONT OF CARD (Read-Only Summary) -->
+                <div class="sync-card-front status-${statusClass}">
+                    <div class="sync-card-header ${headerClass}">
+                        <h4 title="${p.title}">${p.title}</h4>
+                        <input type="checkbox" class="header-checkbox sync-check" data-index="${index}" ${isChecked} title="Include in Sync?">
                     </div>
-                    <div class="sync-input-group" style="flex:1">
-                        <label>End Time</label>
-                        <input type="time" class="sync-input field-end" value="${fmtTime(endObj)}">
+                    <div class="sync-card-body">
+                        <div class="info-row"><span class="info-label">Time</span> <span class="info-value">${displayTime}</span></div>
+                        <div class="info-row"><span class="info-label">Location</span> <span class="info-value" title="${p.location}">${p.location || '-'}</span></div>
+                        <div class="info-row"><span class="info-label">Series</span> <span class="info-value">${p.dayStr || 'Single'}</span></div>
+                        ${diffHtml}
                     </div>
-                </div>
-                <div class="sync-input-group">
-                    <label>Location</label>
-                    <input type="text" class="sync-input field-loc" value="${p.location}">
+                    <div class="sync-card-footer">
+                        <span style="font-size:0.8em; color:#888; font-weight:bold; text-transform:uppercase;">${item.status}</span>
+                        <button class="button-secondary" style="padding: 4px 10px; font-size: 0.85em;" onclick="flipCard(this)">Manual Edit ✎</button>
+                    </div>
                 </div>
                 
-                <div class="sync-input-group">
-                    <label>Description</label>
-                    <textarea class="sync-input field-desc" rows="3" style="font-size:0.85em;">${p.description}</textarea>
-                </div>
-                
-                <div class="sync-info-section">
-                    <div class="sync-info-row">
-                        <span class="sync-info-label">Series:</span> ${item.seriesStartStr} - ${item.seriesEndStr}
+                <!-- BACK OF CARD (Edit Mode) -->
+                <div class="sync-card-back">
+                    <div class="sync-card-header header-back">
+                        <h4>Manual Override</h4>
                     </div>
-                    <div class="sync-info-row">
-                        <span class="sync-info-label">Current Guests:</span> ${guestListStr}
+                    <div class="sync-card-body">
+                        <div class="sync-input-group"><label>Title</label><input type="text" class="sync-input field-title" value="${p.title}"></div>
+                        <div style="display:flex; gap:10px;">
+                            <div class="sync-input-group" style="flex:1"><label>Start</label><input type="time" class="sync-input field-start" value="${fmtTime(startObj)}"></div>
+                            <div class="sync-input-group" style="flex:1"><label>End</label><input type="time" class="sync-input field-end" value="${fmtTime(endObj)}"></div>
+                        </div>
+                        <div class="sync-input-group"><label>Location</label><input type="text" class="sync-input field-loc" value="${p.location}"></div>
+                        <div class="sync-input-group"><label>Description</label><textarea class="sync-input field-desc" rows="3">${p.description}</textarea></div>
+                    </div>
+                    <div class="sync-card-footer">
+                        <span style="font-size:0.8em; color:#888;">Edits apply to next sync</span>
+                        <button class="button-primary" style="padding: 4px 12px; font-size: 0.85em;" onclick="flipCard(this)">Done ✓</button>
                     </div>
                 </div>
-            </div>
-            <div class="sync-card-footer">
-                <small style="color:#888;">${p.dayStr || 'Single Event'}</small>
+
             </div>
         `;
-        // Attach generic input listener for auto-selection
-        card.querySelectorAll('.sync-input').forEach(input => {
+
+        // Auto-check the main sync box if they type in the back
+        cardContainer.querySelectorAll('.sync-input').forEach(input => {
             input.addEventListener('input', () => {
-                const checkbox = card.querySelector('.sync-check');
+                const checkbox = cardContainer.querySelector('.sync-check');
                 if (!checkbox.checked) {
                     checkbox.checked = true;
-                    card.classList.remove('status-synced');
-                    card.classList.add('status-update');
-                    const badge = card.querySelector('.status-badge');
-                    badge.className = 'status-badge update';
-                    badge.textContent = 'MODIFIED';
+                    const front = cardContainer.querySelector('.sync-card-front');
+                    const header = front.querySelector('.sync-card-header');
+                    front.className = 'sync-card-front status-update';
+                    header.className = 'sync-card-header header-update';
+                    cardContainer.dataset.status = 'update';
+                    cardContainer.querySelector('.sync-card-footer span').textContent = 'MODIFIED';
                 }
             });
         });
-        grid.appendChild(card);
+
+        grid.appendChild(cardContainer);
     });
+}
+
+// Helper to trigger the CSS flip animation
+function flipCard(btn) {
+    const container = btn.closest('.sync-card-container');
+    container.classList.toggle('flipped');
 }
 
 function filterSyncGrid(filter, btn) {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll('.sync-card').forEach(card => {
+    document.querySelectorAll('.sync-card-container').forEach(card => {
         if(filter === 'all' || card.dataset.status === filter) {
-            card.style.display = 'flex';
+            card.style.display = 'block';
         } else {
             card.style.display = 'none';
         }
@@ -622,40 +523,34 @@ function filterSyncGrid(filter, btn) {
 function runMstCommit(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
     const btn = e.target;
-    // Check if button is disabled (simulated for DIV)
     if(btn.classList.contains('disabled')) return false;
 
     const calId = document.getElementById('mst-calendar-select').value;
-    // Gather Data
     const selectedEvents = [];
-    document.querySelectorAll('.sync-card').forEach(card => {
+    
+    document.querySelectorAll('.sync-card-container').forEach(card => {
         const checkbox = card.querySelector('.sync-check');
         if(checkbox.checked) {
             const index = parseInt(card.dataset.index);
             const original = mstSyncData[index];
-            
-            // Clone payload
             let finalPayload = JSON.parse(JSON.stringify(original.payload));
             
-            // Check Diffs for SKIP logic
+            // Check Diffs for SKIP logic (Front of card)
             const diffChecks = card.querySelectorAll('.diff-check');
             diffChecks.forEach(dc => {
                 if (!dc.checked) {
                     const diffIdx = parseInt(dc.dataset.diffIdx);
                     const diff = original.diffs[diffIdx];
-                    
-                    // If unchecked, set field to SKIP
                     if (diff.key === 'title') finalPayload.title = "SKIP";
                     if (diff.key === 'location') finalPayload.location = "SKIP";
                     if (diff.key === 'time') finalPayload.startTime = "SKIP";
                     if (diff.key === 'guest_add' || diff.key === 'guest_remove') finalPayload.guests = "SKIP";
                 }
             });
-            // Capture Edits (Only if not skipped)
+            
+            // Capture Edits from the Back of the card (Only if not skipped)
             if(finalPayload.title !== "SKIP") finalPayload.title = card.querySelector('.field-title').value;
             if(finalPayload.location !== "SKIP") finalPayload.location = card.querySelector('.field-loc').value;
-            
-            // Capture Description
             finalPayload.description = card.querySelector('.field-desc').value;
 
             if(finalPayload.startTime !== "SKIP") {
@@ -672,48 +567,32 @@ function runMstCommit(e) {
                 finalPayload.endTime = endDt.getTime();
             }
             
-            const finalEvent = {
-                ...original,
-                payload: finalPayload
-            };
-            selectedEvents.push(finalEvent);
+            selectedEvents.push({ ...original, payload: finalPayload });
         }
     });
 
-    if(selectedEvents.length === 0) {
-        alert("No events selected.");
-        return false;
-    }
-
+    if(selectedEvents.length === 0) { alert("No events selected."); return false; }
     if(!confirm(`Sync ${selectedEvents.length} events to Calendar?`)) return false;
     
-    // Disable button (Visual)
-    btn.classList.add('disabled');
-    btn.textContent = 'Syncing...';
-    
+    btn.classList.add('disabled'); btn.textContent = 'Syncing...';
     document.getElementById('mst-sync-loader').style.display = 'flex';
-    document.getElementById('mst-sync-grid').style.opacity = '0.5';
+    document.getElementById('mst-sync-grid').style.opacity = '0.3';
+    
     google.script.run
         .withSuccessHandler(res => {
             document.getElementById('mst-sync-loader').style.display = 'none';
             document.getElementById('mst-sync-grid').style.opacity = '1';
-            
-            // Re-enable button
-            btn.classList.remove('disabled');
-            btn.textContent = 'Sync Selected';
+            btn.classList.remove('disabled'); btn.textContent = 'Sync Selected to Calendar';
             
             if(res.success) {
                 alert(`Sync Complete!\nCreated: ${res.stats.created}\nUpdated: ${res.stats.updated}\nErrors: ${res.stats.errors}`);
                 runMstPreview(null);
-            } else {
-                alert("Error: " + res.message);
-            }
+            } else { alert("Error: " + res.message); }
         })
         .withFailureHandler(err => {
             document.getElementById('mst-sync-loader').style.display = 'none';
             document.getElementById('mst-sync-grid').style.opacity = '1';
-            btn.classList.remove('disabled');
-            btn.textContent = 'Sync Selected';
+            btn.classList.remove('disabled'); btn.textContent = 'Sync Selected to Calendar';
             alert("System Error: " + err.message);
         })
         .api_commitMstCalendarEvents(calId, selectedEvents);
@@ -728,14 +607,9 @@ function loadMstSettingsTab() {
     if (container.childElementCount > 0) return;
 
     if (!g.mstSettings && !g.mstSettings?.error) {
-        // Fetch if missing (Settings usually come in Phase 1, but safe to check)
         google.script.run.withSuccessHandler(res => {
-            if(res.success) {
-                g.mstSettings = res.data;
-                renderMstSettingsForm(container, g.mstSettings);
-            } else {
-                container.innerHTML = `<div class="error-message">${res.message}</div>`;
-            }
+            if(res.success) { g.mstSettings = res.data; renderMstSettingsForm(container, g.mstSettings); } 
+            else { container.innerHTML = `<div class="error-message">${res.message}</div>`; }
         }).api_getMstSettings();
     } else {
         renderMstSettingsForm(container, g.mstSettings);
@@ -758,32 +632,24 @@ function renderMstSettingsForm(container, data) {
       <button type="button" class="button-primary" id="btn-save-settings">Save Settings</button>
       <div id="mst-settings-feedback" style="display: inline-block; margin-left: 10px;"></div>
     </div>`;
-    
     document.getElementById('btn-save-settings').onclick = function(e) { saveMstSettings(e); return false; };
 }
 
 function saveMstSettings(event) {
   if(event) { event.preventDefault(); event.stopPropagation(); }
-  
   const sourceTabName = document.getElementById('mst-source-tab-name').value;
   if (!sourceTabName) { alert('Please select a Source Sheet Tab.'); return; }
 
-  const btn = event.target;
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-  const feedbackDiv = document.getElementById('mst-settings-feedback');
-  feedbackDiv.innerHTML = '';
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Saving...';
+  const feedbackDiv = document.getElementById('mst-settings-feedback'); feedbackDiv.innerHTML = '';
+  
   google.script.run
     .withSuccessHandler(res => {
       if (res.success) {
         feedbackDiv.innerHTML = '<span style="color: var(--color-primary-green, green);">Saved!</span>';
-        if (g.mstSettings && g.mstSettings.settings) {
-          g.mstSettings.settings.sourceTabName = sourceTabName;
-        }
+        if (g.mstSettings && g.mstSettings.settings) g.mstSettings.settings.sourceTabName = sourceTabName;
         setTimeout(() => feedbackDiv.innerHTML = '', 3000);
-      } else {
-        feedbackDiv.innerHTML = `<span style="color: red;">Error: ${res.message || 'Unknown error'}</span>`;
-      }
+      } else { feedbackDiv.innerHTML = `<span style="color: red;">Error: ${res.message || 'Unknown error'}</span>`; }
       btn.disabled = false; btn.textContent = 'Save Settings';
     })
     .withFailureHandler(err => {

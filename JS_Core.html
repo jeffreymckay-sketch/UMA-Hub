@@ -3,10 +3,11 @@
   const g = {
     userInfo: null,
     dashboardData: null,
+    myScheduleData: null, // Added cache for new tool
     mstData: null,
     mltData: null,
     allSettings: {},
-    permissions: {}, // NEW: Stores the matrix
+    permissions: {}, 
     writableCalendars: null,
     allCalendars: null, 
     nursingData: null,
@@ -14,13 +15,13 @@
 
   /**
    * MENU CONFIGURATION
-   * Note: 'roles' property removed. Visibility is now determined by g.permissions matrix.
    */
   const menuItems = [
     { 
       id: 'Dashboard', 
       title: 'Dashboard', 
       children: [
+        { id: 'MySchedule', title: 'My Schedule' },
         { id: 'Availability', title: 'Availability' },
         { id: 'UserGuide', title: 'User Guide' }
       ]
@@ -64,7 +65,7 @@
       .api_getInitialAppData();
 
     window.addEventListener('popstate', function(e) {
-      const pageId = window.location.hash.substring(1) || 'Availability';
+      const pageId = window.location.hash.substring(1) || 'MySchedule'; // Defaulted to MySchedule
       navigateToPage(pageId);
     });
   });
@@ -74,7 +75,7 @@
     if (response && response.success) {
       g.userInfo = response.data.userInfo;
       g.allSettings = response.data.settings || {};
-      g.permissions = response.data.permissions || {}; // Load Matrix
+      g.permissions = response.data.permissions || {}; 
 
       g.mstData = response.data.mstData || null;
       g.mltData = response.data.mltData || null;
@@ -85,7 +86,7 @@
       populateUserInfo(); 
       buildMenu();
 
-      const initialPage = window.location.hash.substring(1) || 'Availability';
+      const initialPage = window.location.hash.substring(1) || 'MySchedule'; // Defaulted to MySchedule
       navigateToPage(initialPage, true);
       
       document.getElementById('loader').style.display = 'none';
@@ -111,10 +112,9 @@
    */
   function checkAccess(pageId) {
       if (!g.userInfo) return false;
-      
       // Get user's roles (Array)
       const userRoles = g.userInfo.role.split(',').map(r => r.trim());
-      
+
       // Admin always has access (Fail-safe client side)
       if (userRoles.includes('Admin')) return true;
 
@@ -200,12 +200,11 @@
 
   function navigateToPage(pageId, isInitialLoad = false) {
     console.log("Navigating to:", pageId);
-    
+
     // Security Check: Prevent navigation via URL hash if permission denied
-    if (!checkAccess(pageId) && pageId !== 'Availability') {
+    if (!checkAccess(pageId) && pageId !== 'MySchedule' && pageId !== 'Availability') {
         console.warn("Access Denied to " + pageId);
-        // Redirect to default
-        pageId = 'Availability';
+        pageId = 'Availability'; // Redirect to default
     }
 
     document.querySelectorAll('.page-view').forEach(page => page.style.display = 'none');
@@ -227,7 +226,8 @@
 
     // --- LAZY LOADERS ROUTING ---
     try {
-      if (pageId === 'Availability') { if(typeof loadAvailabilityPage === 'function') loadAvailabilityPage(); }
+      if (pageId === 'MySchedule') { if(typeof loadMySchedulePage === 'function') loadMySchedulePage(); }
+      else if (pageId === 'Availability') { if(typeof loadAvailabilityPage === 'function') loadAvailabilityPage(); }
       else if (pageId === 'UserGuide') { if(typeof loadUserGuidePage === 'function') loadUserGuidePage(); }
       else if (pageId === 'MST') { if(typeof loadMstPage === 'function') loadMstPage(); }
       else if (pageId === 'Nursing') { if(typeof loadNursingPage === 'function') loadNursingPage(); }
