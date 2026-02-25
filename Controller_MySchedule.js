@@ -87,7 +87,7 @@ function api_getMyScheduleData() {
 
         // 4. Fetch Tech Hub Shifts
         if (shiftIds.length > 0) {
-            const shiftSheet = getSheet('TechHub_Shifts');
+            const shiftSheet = getSheet('TechHub_shifts');
             if (shiftSheet) {
                 const shiftData = shiftSheet.getDataRange().getValues();
                 const sHeaders = getColumnMap(shiftData[0]);
