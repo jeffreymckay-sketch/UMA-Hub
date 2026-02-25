@@ -312,14 +312,30 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
             throw new Error("Failed to fetch calendar events. " + e.message);
         }
 
+        // OPTIMIZATION: Memory Cache for Series Tags
+        const seriesCache = {};
+        existingEvents.forEach(e => {
+            let tag = e.getTag('TechHub_ShiftID');
+            if (!tag) {
+                const baseId = (e.getId() || "").split('_')[0];
+                if (seriesCache[baseId] !== undefined) {
+                    tag = seriesCache[baseId];
+                } else {
+                    try {
+                        const series = e.getEventSeries();
+                        tag = series ? series.getTag('TechHub_ShiftID') : null;
+                        seriesCache[baseId] = tag;
+                    } catch(err) { seriesCache[baseId] = null; }
+                }
+            }
+            e._cachedTag = tag;
+        });
+
         const results = [];
 
         proposals.forEach(prop => {
-            const match = existingEvents.find(e => {
-                let tag = e.getTag('TechHub_ShiftID');
-                if(!tag) { try { tag = e.getEventSeries().getTag('TechHub_ShiftID'); } catch(err){} }
-                return tag === prop.shiftId;
-            });
+            // Instantly check memory instead of calling Google Calendar
+            const match = existingEvents.find(e => e._cachedTag === prop.shiftId);
 
             let status = "NEW";
             let diffs = [];
@@ -375,9 +391,23 @@ function api_commitTechHubSync(targetCalendarId, eventsToSync) {
                 const scanEnd = new Date(startDt);
                 scanEnd.setDate(scanEnd.getDate() + 14);
                 
-                const existing = cal.getEvents(startDt, scanEnd).find(e => {
+                const existingEvents = cal.getEvents(startDt, scanEnd);
+                const seriesCache = {};
+                
+                const existing = existingEvents.find(e => {
                     let tag = e.getTag('TechHub_ShiftID');
-                    if(!tag) { try { tag = e.getEventSeries().getTag('TechHub_ShiftID'); } catch(err){} }
+                    if (!tag) {
+                        const baseId = (e.getId() || "").split('_')[0];
+                        if (seriesCache[baseId] !== undefined) {
+                            tag = seriesCache[baseId];
+                        } else {
+                            try {
+                                const series = e.getEventSeries();
+                                tag = series ? series.getTag('TechHub_ShiftID') : null;
+                                seriesCache[baseId] = tag;
+                            } catch(err) { seriesCache[baseId] = null; }
+                        }
+                    }
                     return tag === p.shiftId;
                 });
 

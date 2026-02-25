@@ -401,8 +401,8 @@ let mstSyncData = [];
 function loadMstCalendarTab() {
   const container = document.getElementById('mst-calendar');
   
-  // 1. Check if calendars are loaded
-  if (!g.writableCalendars) {
+  // 1. Check if calendars are loaded (null means not fetched yet)
+  if (g.writableCalendars === null) {
       container.innerHTML = '<div class="loader-container" style="position:relative; height:200px; background:transparent;"><div class="loader-ring"></div></div>';
       google.script.run
         .withSuccessHandler(res => {
@@ -426,7 +426,12 @@ function loadMstCalendarTab() {
 function renderMstCalendarControls(container) {
   if (container.querySelector('.sync-controls')) return; // Already rendered
 
-  const calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  // Gracefully handle if user has 0 writable calendars
+  let calOptions = '<option value="">-- No Calendars Found --</option>';
+  if (g.writableCalendars && g.writableCalendars.length > 0) {
+      calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+
   container.innerHTML = `
     <div class="sync-controls">
       <div style="flex-grow:1;">
@@ -447,7 +452,11 @@ function renderMstCalendarControls(container) {
         </div>
         <div id="mst-sync-grid" class="sync-grid"></div>
     </div>
-    <div id="mst-sync-loader" class="loader-container" style="display:none;"><div class="loader-ring"></div></div>
+    
+    <!-- FIX: Removed the global 'loader-container' class to prevent full-screen takeover -->
+    <div id="mst-sync-loader" style="display:none; justify-content:center; align-items:center; padding: 40px 0;">
+        <div class="loader-ring"></div>
+    </div>
   `;
   
   container.querySelector('#btn-preview').onclick = function(e) { runMstPreview(e); return false; };
@@ -465,7 +474,10 @@ function runMstPreview(e) {
     console.log("Starting Preview...");
     
     const calId = document.getElementById('mst-calendar-select').value;
-    if(!calId) return false;
+    if(!calId) {
+        alert("Please select a valid calendar.");
+        return false;
+    }
 
     document.getElementById('mst-sync-area').style.display = 'none';
     document.getElementById('mst-sync-loader').style.display = 'flex';

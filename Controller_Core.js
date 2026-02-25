@@ -64,7 +64,7 @@ function api_getInitialAppData() {
         } catch (e) { console.warn("Failed to load permissions matrix: " + e.message); }
 
         // --- LAZY LOAD PLACEHOLDERS ---
-        // We return null/empty values here. The client (browser) will check for null
+        // We return null values here. The client (browser) will check for null
         // and fetch specific data only when the user clicks that tab.
         
         return {
@@ -75,11 +75,11 @@ function api_getInitialAppData() {
                 sheetTabs: sheetTabs,
                 permissions: permissions, // Pass to client
                 
-                // Placeholders for Lazy Loading
+                // Placeholders for Lazy Loading (Fixed: Changed [] to null)
                 mstData: null,
-                assignments: [],
-                writableCalendars: [],
-                allCalendars: [],
+                assignments: null,
+                writableCalendars: null,
+                allCalendars: null,
                 nursingData: null
             }
         };

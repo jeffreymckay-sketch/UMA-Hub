@@ -281,22 +281,50 @@ function api_getMstSettings() {
   
       const eventIdMap = new Map();
       
-      // 3. Fetch Calendar Events (Only if we have dates, and only for that range)
+      // 3. Fetch Calendar Events & Build Cache (OPTIMIZED FOR SPEED)
       if (hasValidDates && minDate < maxDate) {
-          // Add buffer to ensure we catch events on the boundary
           minDate.setHours(0,0,0,0);
           maxDate.setHours(23,59,59,999);
           
           const existingEvents = calendar.getEvents(minDate, maxDate);
+          const seriesCache = {}; // Memory Cache to prevent duplicate API calls
+          
           existingEvents.forEach(e => {
               let tagId = e.getTag('StaffHub_EventID');
-              if (!tagId) {
-                  try {
-                      const series = e.getEventSeries();
-                      if (series) tagId = series.getTag('StaffHub_EventID');
-                  } catch(err) {}
+              let timeSig = e.getTag('StaffHub_TimeSignature');
+              
+              if (!tagId || !timeSig) {
+                  const eventIdStr = e.getId() || "";
+                  const baseId = eventIdStr.split('_')[0]; // Groups recurring instances
+                  
+                  if (seriesCache[baseId] !== undefined) {
+                      // Use cached data instantly
+                      if (!tagId) tagId = seriesCache[baseId].tagId;
+                      if (!timeSig) timeSig = seriesCache[baseId].timeSig;
+                  } else {
+                      // Fetch from Google once per series
+                      try {
+                          const series = e.getEventSeries();
+                          if (series) {
+                              const sTag = series.getTag('StaffHub_EventID');
+                              const sSig = series.getTag('StaffHub_TimeSignature');
+                              seriesCache[baseId] = { tagId: sTag, timeSig: sSig };
+                              if (!tagId) tagId = sTag;
+                              if (!timeSig) timeSig = sSig;
+                          } else {
+                              seriesCache[baseId] = { tagId: null, timeSig: null };
+                          }
+                      } catch(err) {
+                          seriesCache[baseId] = { tagId: null, timeSig: null };
+                      }
+                  }
               }
-              if (tagId) eventIdMap.set(tagId, e);
+              
+              if (tagId) {
+                  // Attach cached signature directly to object for later use
+                  e._cachedTimeSig = timeSig; 
+                  eventIdMap.set(tagId, e);
+              }
           });
       }
   
@@ -419,10 +447,8 @@ function api_getMstSettings() {
                       diffs.push({ key: 'description', type: 'update', text: "Description/Zoom Updated" });
                   }
                   
-                  let storedSig = existing.getTag('StaffHub_TimeSignature');
-                  if(!storedSig) {
-                      try { storedSig = existing.getEventSeries().getTag('StaffHub_TimeSignature'); } catch(e){}
-                  }
+                  // Use the cached signature to avoid getEventSeries calls
+                  let storedSig = existing._cachedTimeSig || existing.getTag('StaffHub_TimeSignature');
   
                   const timeSig = `${startDt.toISOString()}_${endDt.toISOString()}_${dayStr}`;
                   if (storedSig !== timeSig) {
@@ -628,18 +654,49 @@ function api_getMstSettings() {
   
           // --- SURGICAL RECOVERY: Only fetch calendar if IDs are missing ---
           const rowsMissingIds = [];
+          let minDate = new Date(8640000000000000);
+          let maxDate = new Date(-8640000000000000);
+
           for (let i = headerRowIdx + 1; i < data.length; i++) {
               if (!data[i][idColIdx] && data[i][courseIdx] && data[i][startIdx]) {
                   rowsMissingIds.push({ rowIndex: i, rowData: data[i] });
+                  const d = new Date(data[i][startIdx]);
+                  if (!isNaN(d.getTime())) {
+                      if (d < minDate) minDate = d;
+                      if (d > maxDate) maxDate = d;
+                  }
               }
           }
   
-          if (rowsMissingIds.length === 0) return; // Exit immediately if no work needed!
+          if (rowsMissingIds.length === 0 || minDate > maxDate) return; 
   
-          // If we have missing IDs, we fetch ONLY the specific days needed
           const calendar = CalendarApp.getCalendarById(calendarId);
           if (!calendar) return;
   
+          // OPTIMIZATION: Fetch all events in the missing range at once
+          minDate.setHours(0,0,0,0);
+          maxDate.setHours(23,59,59,999);
+          const bulkEvents = calendar.getEvents(minDate, maxDate);
+          const seriesCache = {};
+
+          // Pre-cache tags to avoid getEventSeries inside the loop
+          bulkEvents.forEach(e => {
+              let tag = e.getTag('StaffHub_EventID');
+              if (!tag) {
+                  const baseId = (e.getId() || "").split('_')[0];
+                  if (seriesCache[baseId] !== undefined) {
+                      tag = seriesCache[baseId];
+                  } else {
+                      try {
+                          const series = e.getEventSeries();
+                          tag = series ? series.getTag('StaffHub_EventID') : null;
+                          seriesCache[baseId] = tag;
+                      } catch(err) { seriesCache[baseId] = null; }
+                  }
+              }
+              e._cachedTag = tag;
+          });
+
           const idsToWrite = [];
           let hasUpdates = false;
   
@@ -653,20 +710,16 @@ function api_getMstSettings() {
               const startDate = new Date(row[startIdx]);
               
               if (!isNaN(startDate.getTime())) {
-                  // Fetch events ONLY for this specific day
-                  const dayEvents = calendar.getEventsForDay(startDate);
+                  const targetDateStr = startDate.toDateString();
+                  // Filter from our bulk memory array instead of calling Google Calendar
+                  const dayEvents = bulkEvents.filter(e => e.getStartTime().toDateString() === targetDateStr);
                   
                   const courseName = String(row[courseIdx]).toLowerCase().trim();
                   const sheetLoc = (locIdx > -1 && row[locIdx]) ? String(row[locIdx]).toLowerCase().trim() : "";
                   
                   let foundId = null;
                   
-                  // Match logic
                   const match = dayEvents.find(e => {
-                      let tag = e.getTag('StaffHub_EventID');
-                      if (!tag) { try { tag = e.getEventSeries().getTag('StaffHub_EventID'); } catch(err){} }
-                      
-                      // If tag exists, verify title matches. If no tag, verify title matches.
                       const eTitle = e.getTitle().toLowerCase();
                       if (!eTitle.includes(courseName)) return false;
                       
@@ -678,16 +731,13 @@ function api_getMstSettings() {
                   });
   
                   if (match) {
-                      let tag = match.getTag('StaffHub_EventID');
-                      if (!tag) { try { tag = match.getEventSeries().getTag('StaffHub_EventID'); } catch(err){} }
-                      foundId = tag;
+                      foundId = match._cachedTag;
                   }
   
                   if (!foundId) {
                       foundId = 'MST_' + Utilities.getUuid().split('-')[0].toUpperCase();
                   }
   
-                  // Update our write buffer
                   const writeIndex = item.rowIndex - (headerRowIdx + 1);
                   idsToWrite[writeIndex][0] = foundId;
                   hasUpdates = true;

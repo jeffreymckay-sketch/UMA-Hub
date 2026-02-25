@@ -315,8 +315,8 @@
       function renderTechHubSync() {
           const container = document.getElementById('th-tab-sync');
           
-          // LAZY LOAD: Calendars
-          if (!g.writableCalendars) {
+          // LAZY LOAD: Calendars (null means not fetched yet)
+          if (g.writableCalendars === null) {
               container.innerHTML = '<div class="loader-container" style="position:relative; height:200px; background:transparent;"><div class="loader-ring"></div></div>';
               google.script.run.withSuccessHandler(res => {
                   if (res.success) {
@@ -334,12 +334,17 @@
       function renderTechHubSyncControls(container) {
           if (container.querySelector('#th-sync-cal-select')) return; // Already rendered
     
-          const calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+          // Gracefully handle if user has 0 writable calendars
+          let calOptions = '<option value="">-- No Calendars Found --</option>';
+          if (g.writableCalendars && g.writableCalendars.length > 0) {
+              calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+          }
+
           container.innerHTML = `
             <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
                 <h4 style="margin-top:0;">Sync to Google Calendar</h4>
                 <div style="display:flex; gap:15px; align-items:flex-end;">
-                    <div class="form-group" style="flex-grow:1; margin-bottom:0;"><label>Target Calendar</label><select id="th-sync-cal-select" class="form-input">${calOptions || '<option>Loading...</option>'}</select></div>
+                    <div class="form-group" style="flex-grow:1; margin-bottom:0;"><label>Target Calendar</label><select id="th-sync-cal-select" class="form-input">${calOptions}</select></div>
                     <button class="button-primary" onclick="handlePreviewSync(this)">Preview Changes</button>
                 </div>
             </div>
@@ -349,6 +354,10 @@
     
       function handlePreviewSync(btn) {
           const calId = document.getElementById('th-sync-cal-select').value;
+          if(!calId) {
+              alert("Please select a valid calendar.");
+              return false;
+          }
           const startVal = document.getElementById('th-sem-start')?.value;
           const endVal = document.getElementById('th-sem-end')?.value;
           if(!startVal || !endVal) { showNotification("Set Semester Dates in Roster tab first.", "error"); switchTechHubTab('roster'); return;
