@@ -44,6 +44,7 @@
       children: [
         { id: 'Nursing', title: 'Nursing' },
         { id: 'MLT', title: 'MLT' },
+        { id: 'SingleDoc', title: 'New Exams' }, // <-- Title Changed Here
         { id: 'ProctorSchedule', title: 'Master Schedule' }
       ]
     },
@@ -142,7 +143,6 @@
         const parentLi = document.createElement('li');
         parentLi.className = 'nav-item has-submenu';
         parentLi.id = `nav-toggle-${item.id}`;
-        // Tooltip attribute for mini-rail mode
         parentLi.dataset.tooltip = item.title;
         
         parentLi.innerHTML = `
@@ -153,10 +153,8 @@
         
         parentLi.onclick = () => {
             const sidebar = document.getElementById('app-sidebar');
-            // If clicking a folder icon while collapsed, pop the sidebar open automatically
             if (sidebar.classList.contains('collapsed')) {
                 toggleSidebar();
-                // Wait for expansion to trigger the open state properly
                 setTimeout(() => toggleSubmenu(item.id), 100);
             } else {
                 toggleSubmenu(item.id);
@@ -172,7 +170,6 @@
               const childLi = document.createElement('li');
               childLi.className = 'nav-item';
               childLi.dataset.pageId = child.id;
-              // Submenus don't have icons, just text
               childLi.innerHTML = `<span class="nav-text">${child.title}</span>`;
               subUl.appendChild(childLi);
           }
@@ -196,7 +193,6 @@
     menu.onclick = function(e) {
       const target = e.target.closest('.nav-item');
       if (target && target.dataset.pageId) {
-          // Navigating away from a top-level link while collapsed doesn't uncollapse, just routes
           navigateToPage(target.dataset.pageId);
       }
     };
@@ -243,6 +239,7 @@
       else if (pageId === 'MST') { if(typeof loadMstPage === 'function') loadMstPage(); }
       else if (pageId === 'Nursing') { if(typeof loadNursingPage === 'function') loadNursingPage(); }
       else if (pageId === 'MLT') { if(typeof loadMLTPage === 'function') loadMLTPage(); }
+      else if (pageId === 'SingleDoc') { if(typeof loadSingleDocPage === 'function') loadSingleDocPage(); }
       else if (pageId === 'ProctorSchedule') { if(typeof loadProctorSchedulePage === 'function') loadProctorSchedulePage(); }
       else if (pageId === 'Reporting') { if(typeof loadReportingPage === 'function') loadReportingPage(); }
       else if (pageId === 'ProofingTools') { if(typeof loadProofingToolsPage === 'function') loadProofingToolsPage(); }
@@ -282,7 +279,6 @@
   }
 
   function toggleSidebar() {
-    // Toggles the mini-rail state
     document.getElementById('app-sidebar').classList.toggle('collapsed');
     document.getElementById('app-content').classList.toggle('collapsed');
   }

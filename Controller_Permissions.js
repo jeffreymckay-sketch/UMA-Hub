@@ -12,7 +12,7 @@ const PERMISSIONS_CONFIG = {
     // The list of Page IDs currently used in Index.html / JS_Core.html
     PAGES: [
         'Dashboard', 'MySchedule', 'Availability', 'UserGuide',
-        'Logistics', 'MST', 'TechHub',
+        'Logistics', 'MST', 'TechHub', 'SingleDoc',
         'Proctoring', 'Nursing', 'MLT', 'ProctorSchedule',
         'Reporting', 'ProofingTools',
         'Zoom', 'Settings'

@@ -20,7 +20,6 @@
     </div>
 
     <div class="app-sidebar" id="app-sidebar">
-        <!-- Changed to UL for proper list styling -->
         <ul class="main-nav" id="main-menu"></ul>
     </div>
 
@@ -50,6 +49,18 @@
           <div id="MLT-Settings" class="tab-content"></div>
       </div>
 
+      <!-- NEW EXAMS (SingleDoc) TOOL CONTAINER -->
+      <div id="page-SingleDoc" class="page-view" style="display:none;">
+          <div class="tab-bar">
+              <button class="tab-link active" onclick="openTab(event, 'SingleDoc-View')">View Docs</button>
+              <button class="tab-link" onclick="openTab(event, 'SingleDoc-Generate')">Generate New</button>
+              <button class="tab-link" onclick="openTab(event, 'SingleDoc-Settings')">Settings</button>
+          </div>
+          <div id="SingleDoc-View" class="tab-content" style="display:block; padding-top:20px;"></div>
+          <div id="SingleDoc-Generate" class="tab-content" style="padding-top:20px;"></div>
+          <div id="SingleDoc-Settings" class="tab-content" style="padding-top:20px;"></div>
+      </div>
+
       <div id="page-ProctorSchedule" class="page-view" style="display:none;"></div>
 
       <div id="page-Reporting" class="page-view" style="display:none;"></div>
@@ -72,6 +83,7 @@
     <?!= include('JS_MST'); ?>
     <?!= include('JS_Nursing'); ?>
     <?!= include('JS_MLT'); ?>
+    <?!= include('JS_SingleDoc'); ?>
     <?!= include('JS_ProctorSchedule'); ?>
     <?!= include('JS_Reporting'); ?>
     <?!= include('JS_ProofingTools'); ?>

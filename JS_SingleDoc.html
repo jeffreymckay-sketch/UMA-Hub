@@ -1,0 +1,473 @@
+<style>
+    /* Base Container Styles */
+    .single-doc-container { max-width: 900px; margin: 0 auto; }
+    
+    .sd-section {
+        background: #fff; border-radius: 8px; padding: 20px;
+        margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border-left: 4px solid var(--color-accent-purple);
+    }
+  
+    .sd-section h3 {
+        margin-top: 0; color: var(--color-primary-navy); font-size: 1.1em;
+        border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;
+    }
+  
+    .sd-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .sd-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+  
+    /* Roster Builder Styles */
+    .sd-roster-builder {
+        background: #f8f9fa; padding: 15px; border-radius: 6px;
+        border: 1px solid #ddd; margin-bottom: 15px;
+    }
+  
+    .sd-roster-inputs {
+        display: grid; grid-template-columns: 2fr 2fr 3fr auto;
+        gap: 10px; align-items: end;
+    }
+  
+    .sd-roster-table-container {
+        max-height: 300px; overflow-y: auto;
+        border: 1px solid #eee; border-radius: 6px;
+    }
+  
+    .sd-empty-roster {
+        text-align: center; padding: 20px; color: #888;
+        font-style: italic; background: #fff;
+    }
+  
+    .btn-remove-student {
+        background: none; border: none; color: var(--color-danger);
+        cursor: pointer; font-weight: bold; font-size: 1.2em;
+        transition: transform 0.2s;
+    }
+    .btn-remove-student:hover { transform: scale(1.2); }
+  
+    #sd-success-area {
+        display: none; background: #e6f4ea; border: 1px solid #ceead6;
+        padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;
+    }
+  
+    /* --- EXAM CARDS --- */
+    .sd-exam-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px; 
+    }
+    
+    .sd-exam-card {
+        border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: flex; flex-direction: column; background-color: #fff;
+        border: 3px solid var(--color-accent-purple, #583583); overflow: hidden;
+    }
+  
+    .sd-exam-card-header {
+        padding: 12px 15px; display: flex; align-items: center; gap: 12px;
+        color: #fff; background-color: var(--color-primary-green);
+    }
+    
+    .sd-exam-card-header h4 {
+        margin: 0; font-size: 1.15em; font-weight: 600; letter-spacing: 0.5px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+  
+    .sd-exam-card-body { padding: 15px; flex-grow: 1; font-size: 0.95em; }
+    
+    .sd-exam-info-row {
+        display: flex; justify-content: space-between; margin-bottom: 8px;
+        padding-bottom: 8px; border-bottom: 1px dashed #ddd;
+    }
+    .sd-exam-info-row:last-child { border-bottom: none; margin-bottom: 0; }
+    
+    .sd-exam-label { color: #555; font-weight: 500; }
+    .sd-exam-value { font-weight: 700; color: #222; text-align: right; }
+    
+    .sd-exam-card-footer {
+        padding: 12px 15px; background: #fff; border-top: 1px solid #eee;
+        display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    }
+  
+    .sd-btn-sm {
+        padding: 6px 14px; font-size: 0.9em; border-radius: 4px; cursor: pointer;
+        border: none; text-decoration: none; display: inline-block; font-weight: 600;
+        transition: opacity 0.2s, transform 0.1s; text-align: center;
+    }
+    .sd-btn-sm:hover { opacity: 0.9; transform: translateY(-1px); }
+    
+    .sd-btn-view { background-color: var(--color-primary-orange); color: white !important; flex: 1; }
+    .sd-btn-folder { background-color: var(--color-primary-navy); color: white !important; flex: 1; }
+  
+  </style>
+  
+  <script>
+    const singleDocState = {
+        students: [],
+        generatedDocs: null
+    };
+  
+    /**
+     * Main load function called by the navigation router
+     */
+    function loadSingleDocPage() {
+        console.log("Initializing Single Doc Page...");
+        const viewTab = document.getElementById('SingleDoc-View');
+        const genTab = document.getElementById('SingleDoc-Generate');
+        const setTab = document.getElementById('SingleDoc-Settings');
+        
+        if (!viewTab || !genTab || !setTab) return;
+  
+        // Initialize Generator Form UI if empty
+        if (genTab.innerHTML.trim() === '') {
+            renderGeneratorForm(genTab);
+        }
+  
+        // Initialize Settings UI if empty
+        if (setTab.innerHTML.trim() === '') {
+            renderSingleDocSettings(setTab);
+        }
+  
+        // Always fetch the latest docs for the View tab when opening the page
+        loadGeneratedDocsView(viewTab);
+    }
+  
+    // --- VIEW DOCS TAB LOGIC ---
+  
+    function loadGeneratedDocsView(container) {
+        container.innerHTML = '<div style="text-align:center; padding: 40px;"><div class="loader-ring" style="margin: 0 auto;"></div><p style="margin-top:15px; color:#666;">Scanning target folder in Google Drive...</p></div>';
+        
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res.success) {
+                    singleDocState.generatedDocs = res.data;
+                    renderGeneratedDocsGrid(container, res.data);
+                } else {
+                    if (res.message === "Folder not configured.") {
+                        container.innerHTML = `
+                            <div style="text-align:center; padding: 50px; background: #fff; border-radius: 8px; border: 1px solid #eee;">
+                                <h3 style="color:var(--color-primary-orange); margin-top:0;">Folder Not Set</h3>
+                                <p style="color:#666;">Please go to the <strong>Settings</strong> tab and set your Target Output Folder first.</p>
+                            </div>`;
+                    } else {
+                        container.innerHTML = `<div class="error-message">Failed to load docs: ${res.message}</div>`;
+                    }
+                }
+            })
+            .withFailureHandler(err => {
+                container.innerHTML = `<div class="error-message">Server Error: ${err.message}</div>`;
+            })
+            .api_getSingleDocs();
+    }
+  
+    function renderGeneratedDocsGrid(container, docsData) {
+        if (!docsData || docsData.length === 0) {
+            container.innerHTML = `
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                  <h2 style="margin:0; color:var(--color-primary-navy);">Generated Exams</h2>
+                  <button class="button-secondary" onclick="loadGeneratedDocsView(document.getElementById('SingleDoc-View'))">Refresh List</button>
+              </div>
+              <div style="text-align:center; padding: 50px; background: #fff; border-radius: 8px; border: 1px solid #eee;">
+                    <h3 style="color:#666; margin-top:0;">No Documents Found</h3>
+                    <p style="color:#888;">The target folder is currently empty. Use the <strong>Generate New</strong> tab to create ad-hoc exam documents.</p>
+                </div>`;
+            return;
+        }
+  
+        let gridHtml = `<div class="sd-exam-grid">`;
+        
+        docsData.forEach(doc => {
+            const folderUrl = `https://drive.google.com/drive/folders/${doc.FolderId}`;
+  
+            gridHtml += `
+                <div class="sd-exam-card">
+                    <div class="sd-exam-card-header" title="${doc.DocTitle}">
+                        <h4>${doc.DocTitle}</h4>
+                    </div>
+                    <div class="sd-exam-card-body">
+                        <div class="sd-exam-info-row"><span class="sd-exam-label">Created:</span> <span class="sd-exam-value">${doc.DateCreated}</span></div>
+                        <p style="color:#666; font-size:0.85em; margin-top:15px; line-height:1.4;">
+                            <em>This document was generated ad-hoc and resides in your Google Drive. Open the document to view exam details and passwords.</em>
+                        </p>
+                    </div>
+                    <div class="sd-exam-card-footer">
+                        <a href="${folderUrl}" target="_blank" class="sd-btn-sm sd-btn-folder">Open Folder</a>
+                        <a href="${doc.DocUrl}" target="_blank" class="sd-btn-sm sd-btn-view">View Doc</a>
+                    </div>
+                </div>
+            `;
+        });
+  
+        gridHtml += `</div>`;
+        container.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+              <h2 style="margin:0; color:var(--color-primary-navy);">Generated Exams</h2>
+              <button class="button-secondary" onclick="loadGeneratedDocsView(document.getElementById('SingleDoc-View'))">Refresh List</button>
+          </div>
+          ${gridHtml}
+        `;
+    }
+  
+    // --- GENERATOR FORM LOGIC ---
+  
+    function renderGeneratorForm(container) {
+        container.innerHTML = `
+            <div class="single-doc-container">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div>
+                        <h2 style="margin:0; color:var(--color-primary-navy);">Create New Exam</h2>
+                        <p style="color:#666; margin:5px 0 0 0;">Build a standalone proctoring document from scratch.</p>
+                    </div>
+                    <button class="button-secondary" onclick="clearSingleDocForm()">Clear Form</button>
+                </div>
+  
+                <div id="sd-success-area"></div>
+  
+                <form id="single-doc-form" onsubmit="event.preventDefault(); generateSingleDoc();">
+                    
+                    <div class="sd-section">
+                        <h3>1. Header Information</h3>
+                        <div class="sd-grid-2">
+                            <div class="form-group">
+                                <label>Document File Name <span style="color:red;">*</span></label>
+                                <input type="text" id="sd-doc-title" class="form-input" required placeholder="e.g., BIO 101 : Smith - Midterm">
+                            </div>
+                            <div class="form-group">
+                                <label>Course Title (Doc Header)</label>
+                                <input type="text" id="sd-course" class="form-input" placeholder="e.g., BIO 101">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Faculty Name (Sub-header)</label>
+                            <input type="text" id="sd-faculty" class="form-input" placeholder="e.g., Dr. Jane Smith">
+                        </div>
+                    </div>
+  
+                    <div class="sd-section">
+                        <h3>2. Exam Details</h3>
+                        <div class="sd-grid-3">
+                            <div class="form-group"><label>Date</label><input type="text" id="sd-date" class="form-input" placeholder="e.g., Monday, October 14th"></div>
+                            <div class="form-group"><label>Site Start Time</label><input type="text" id="sd-site-time" class="form-input" placeholder="e.g., 9:00 AM"></div>
+                            <div class="form-group"><label>Zoom Start Time</label><input type="text" id="sd-zoom-time" class="form-input" placeholder="e.g., 8:45 AM"></div>
+                        </div>
+                        <div class="sd-grid-2">
+                            <div class="form-group"><label>Duration</label><input type="text" id="sd-duration" class="form-input" placeholder="e.g., 2 Hours"></div>
+                            <div class="form-group"><label>Password</label><input type="text" id="sd-password" class="form-input" placeholder="Leave blank if none"></div>
+                        </div>
+                    </div>
+  
+                    <div class="sd-section">
+                        <h3>3. Student Roster</h3>
+                        <div class="sd-roster-builder">
+                            <label style="display:block; font-weight:bold; margin-bottom:8px; color:#444;">Add a Student</label>
+                            <div class="sd-roster-inputs">
+                                <div><input type="text" id="sd-student-name" class="form-input" placeholder="Student Name"></div>
+                                <div><input type="text" id="sd-student-loc" class="form-input" placeholder="Location (e.g., Augusta)"></div>
+                                <div><input type="text" id="sd-student-note" class="form-input" placeholder="Accommodations / Notes (Optional)"></div>
+                                <div><button type="button" class="button-secondary" onclick="addStudentToRoster()">Add</button></div>
+                            </div>
+                        </div>
+  
+                        <div class="sd-roster-table-container">
+                            <table class="data-table" style="margin-top:0;">
+                                <thead>
+                                    <tr>
+                                        <th>Student Name</th>
+                                        <th>Location</th>
+                                        <th>Notes</th>
+                                        <th style="width:50px; text-align:center;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sd-roster-tbody">
+                                    <tr><td colspan="4" class="sd-empty-roster">No students added yet.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+  
+                    <div class="sd-section">
+                        <h3>4. General Accommodations & Notes</h3>
+                        <div class="form-group">
+                            <label>Highlighted Green Box Instructions</label>
+                            <textarea id="sd-general-notes" class="form-input" rows="4" placeholder="Enter any general instructions or class-wide accommodations here..."></textarea>
+                        </div>
+                    </div>
+  
+                    <div style="text-align: right; margin-bottom: 40px;">
+                        <button type="submit" id="sd-submit-btn" class="button-primary" style="font-size: 1.1em; padding: 12px 24px;">Generate Document</button>
+                    </div>
+                </form>
+            </div>
+        `;
+    }
+  
+    function addStudentToRoster() {
+        const nameInput = document.getElementById('sd-student-name');
+        const locInput = document.getElementById('sd-student-loc');
+        const noteInput = document.getElementById('sd-student-note');
+  
+        const name = nameInput.value.trim();
+        const loc = locInput.value.trim() || 'Unassigned';
+        const note = noteInput.value.trim();
+  
+        if (!name) {
+            showNotification("Student Name is required.", "error");
+            nameInput.focus();
+            return;
+        }
+  
+        singleDocState.students.push({ name, location: loc, note });
+        
+        nameInput.value = '';
+        noteInput.value = '';
+        nameInput.focus(); 
+  
+        renderRosterTable();
+    }
+  
+    function removeStudentFromRoster(index) {
+        singleDocState.students.splice(index, 1);
+        renderRosterTable();
+    }
+  
+    function renderRosterTable() {
+        const tbody = document.getElementById('sd-roster-tbody');
+        if (singleDocState.students.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="sd-empty-roster">No students added yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = singleDocState.students.map((s, index) => `
+            <tr>
+                <td style="font-weight:500;">${s.name}</td>
+                <td><span style="background:#eee; padding:3px 8px; border-radius:12px; font-size:0.9em;">${s.location}</span></td>
+                <td>${s.note ? `<span style="background:#fff3cd; padding:3px 6px; border-radius:4px; font-size:0.9em;">${s.note}</span>` : '-'}</td>
+                <td style="text-align:center;">
+                    <button type="button" class="btn-remove-student" onclick="removeStudentFromRoster(${index})" title="Remove">×</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+  
+    function clearSingleDocForm() {
+        if(!confirm("Are you sure you want to clear the entire form and roster?")) return;
+        document.getElementById('single-doc-form').reset();
+        singleDocState.students = [];
+        renderRosterTable();
+        document.getElementById('sd-success-area').style.display = 'none';
+    }
+  
+    function generateSingleDoc() {
+        const btn = document.getElementById('sd-submit-btn');
+        
+        const payload = {
+            docTitle: document.getElementById('sd-doc-title').value.trim(),
+            courseTitle: document.getElementById('sd-course').value.trim() || 'Exam',
+            facultyName: document.getElementById('sd-faculty').value.trim() || 'Faculty Unassigned',
+            date: document.getElementById('sd-date').value.trim(),
+            siteTime: document.getElementById('sd-site-time').value.trim(),
+            zoomTime: document.getElementById('sd-zoom-time').value.trim(),
+            duration: document.getElementById('sd-duration').value.trim(),
+            password: document.getElementById('sd-password').value.trim(),
+            generalNotes: document.getElementById('sd-general-notes').value.trim(),
+            students: singleDocState.students
+        };
+  
+        btn.disabled = true;
+        btn.textContent = 'Generating Document...';
+        document.getElementById('sd-success-area').style.display = 'none';
+  
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.textContent = 'Generate Document';
+                
+                if (res.success) {
+                    showNotification("Document created successfully!", "success");
+                    
+                    const successArea = document.getElementById('sd-success-area');
+                    successArea.style.display = 'block';
+                    successArea.innerHTML = `
+                        <h3 style="color: var(--color-primary-green); margin-top:0;">✅ Success!</h3>
+                        <p>Your document <strong>"${payload.docTitle}"</strong> has been generated.</p>
+                        <a href="${res.url}" target="_blank" class="button-success" style="text-decoration:none; padding: 10px 20px; display:inline-block; margin-top:10px;">Open Document</a>
+                    `;
+                    
+                    document.getElementById('single-doc-form').reset();
+                    singleDocState.students = [];
+                    renderRosterTable();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+  
+                    // Refresh View Docs cache in background
+                    loadGeneratedDocsView(document.getElementById('SingleDoc-View'));
+                } else {
+                    showNotification("Error: " + res.message, "error");
+                }
+            })
+            .withFailureHandler(err => {
+                btn.disabled = false;
+                btn.textContent = 'Generate Document';
+                showNotification("Server Error: " + err.message, "error");
+            })
+            .api_generateSingleDoc(payload);
+    }
+  
+    // --- SETTINGS TAB LOGIC ---
+  
+    function renderSingleDocSettings(container) {
+        let settings = {};
+        try {
+            if (g.allSettings && g.allSettings.single_doc_settings) {
+                settings = JSON.parse(g.allSettings.single_doc_settings);
+            }
+        } catch (e) {}
+  
+        container.innerHTML = `
+            <div class="single-doc-container">
+                <h2 style="margin-top:0; color:var(--color-primary-navy);">Tool Settings</h2>
+                <p style="color:#666;">Configure where ad-hoc exams should be saved.</p>
+                
+                <div class="sd-section">
+                    <div class="form-group">
+                        <label>Target Output Folder (URL or ID) <span style="color:red;">*</span></label>
+                        <input type="text" id="sd-settings-folder" class="form-input" value="${settings.targetFolderId || ''}" placeholder="Paste Google Drive folder link here...">
+                        <small style="color:#666; display:block; margin-top:5px;">All documents generated via the 'Generate New' tab will be placed in this folder.</small>
+                    </div>
+                    <button class="button-primary" onclick="saveSingleDocSettings(this)">Save Settings</button>
+                </div>
+            </div>
+        `;
+    }
+  
+    function saveSingleDocSettings(btn) {
+        const folderInput = document.getElementById('sd-settings-folder').value.trim();
+        if (!folderInput) {
+            showNotification("Folder URL cannot be empty.", "error");
+            return;
+        }
+  
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+  
+        const settingsObj = { targetFolderId: folderInput };
+  
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.textContent = 'Save Settings';
+                
+                if (res.success) {
+                    showNotification("Settings saved!", "success");
+                    // Update local cache
+                    g.allSettings.single_doc_settings = JSON.stringify(settingsObj);
+                    
+                    // Reload the View Docs tab to reflect the new folder
+                    loadGeneratedDocsView(document.getElementById('SingleDoc-View'));
+                } else {
+                    showNotification("Error: " + res.message, "error");
+                }
+            })
+            .withFailureHandler(err => {
+                btn.disabled = false;
+                btn.textContent = 'Save Settings';
+                showNotification("Server Error: " + err.message, "error");
+            })
+            .api_saveSettings('single_doc_settings', settingsObj);
+    }
+  </script>
