@@ -15,7 +15,10 @@ const proofingToolsState = {
   groupByColumn: null,
   editMode: false,
   pendingEdits: [],
-  selectedHeaders: [] // Track which headers are visible
+  selectedHeaders: [],
+  crossReferenceActive: false,
+  crossReferenceColumn: null,
+  crossReferenceValue: null
 };
 
 function loadProofingToolsPage() {
@@ -78,7 +81,7 @@ function loadProofingToolsPage() {
         .proofing-badge {
           display: inline-block;
           padding: 2px 8px;
-          background: var(--color-accent-purple);
+          background: var(--color-primary-orange);
           color: white;
           border-radius: 12px;
           font-size: 0.75em;
@@ -92,7 +95,7 @@ function loadProofingToolsPage() {
           padding: 20px;
           margin-bottom: 20px;
           box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-          border-left: 4px solid var(--color-accent-purple);
+          border-left: 4px solid var(--color-primary-orange);
         }
         
         .proofing-section h3 {
@@ -117,6 +120,16 @@ function loadProofingToolsPage() {
         
         .proofing-grouped-row:hover {
           background: #e9ecef;
+        }
+        
+        .proofing-grouped-row-matched {
+          background: #fff9f0;
+          border-left: 3px solid var(--color-primary-orange);
+        }
+        
+        .proofing-grouped-row-related {
+          background: #f0f8ff;
+          border-left: 3px solid #1976d2;
         }
         
         .proofing-header-checkbox {
@@ -152,6 +165,77 @@ function loadProofingToolsPage() {
           background: #fff9f0;
           border-color: var(--color-primary-orange);
           font-weight: 600;
+        }
+        
+        .proofing-cell-clickable {
+          position: relative;
+          cursor: pointer;
+        }
+        
+        .proofing-cell-clickable:hover {
+          background: #fff9f0 !important;
+          box-shadow: inset 0 0 0 2px var(--color-primary-orange);
+        }
+        
+        .proofing-find-icon {
+          opacity: 0;
+          position: absolute;
+          right: 4px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: var(--color-primary-orange);
+          color: white;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 0.7em;
+          font-weight: bold;
+          pointer-events: none;
+          transition: opacity 0.2s;
+        }
+        
+        .proofing-cell-clickable:hover .proofing-find-icon {
+          opacity: 1;
+        }
+        
+        .proofing-cross-ref-banner {
+          background: linear-gradient(135deg, #1976d2 0%, var(--color-primary-orange) 100%);
+          color: white;
+          padding: 15px 20px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .proofing-highlighted-cell {
+          background: #fff3cd !important;
+          border: 2px solid var(--color-primary-orange) !important;
+          font-weight: 600;
+        }
+        
+        .proofing-legend {
+          display: flex;
+          gap: 20px;
+          padding: 12px;
+          background: #f8f9fa;
+          border-radius: 6px;
+          margin-bottom: 15px;
+          font-size: 0.9em;
+        }
+        
+        .proofing-legend-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .proofing-legend-box {
+          width: 20px;
+          height: 20px;
+          border-radius: 3px;
+          border: 1px solid #ddd;
         }
       </style>
       
@@ -228,10 +312,12 @@ function loadProofingToolsPage() {
           </div>
         </div>
         
-        <div id="proofing-grouping-section" style="display:none;" class="proofing-section" style="border-left-color: #ffc107;">
-          <h3>📊 Step 4: Group By Column (Optional)</h3>
+        <div id="proofing-grouping-section" style="display:none;" class="proofing-section">
+          <h3>📊 Step 4: Group By Column</h3>
           <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
-            Group rows that share the same value in a specific column (e.g., Section ID to see all modalities together).
+            <strong>Important:</strong> When you filter AND group, this tool shows:
+            <br>• All rows matching your filter (highlighted in orange)
+            <br>• PLUS all other rows that share the same group value (highlighted in blue)
           </p>
           
           <div style="display:grid; grid-template-columns: 1fr auto; gap:15px; align-items:end;">
@@ -246,6 +332,20 @@ function loadProofingToolsPage() {
         </div>
         
         <div id="proofing-data-section" style="display:none;">
+          <div id="proofing-cross-ref-banner" style="display:none;" class="proofing-cross-ref-banner">
+            <div>
+              <strong style="font-size:1.1em;">🔗 Cross-Reference Active</strong><br>
+              <span style="opacity:0.9; font-size:0.9em;">
+                Showing all rows where <strong id="cross-ref-column-name"></strong> = 
+                "<strong id="cross-ref-value"></strong>"
+              </span>
+            </div>
+            <button class="button-secondary" onclick="handleClearCrossReference()" 
+              style="background:white; color:var(--color-primary-navy); border:none; padding:8px 16px;">
+              Clear Cross-Reference
+            </button>
+          </div>
+          
           <div class="proofing-section" style="margin-bottom:0;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
               <h3 style="margin:0;">✏️ Step 5: View & Edit</h3>
@@ -253,6 +353,22 @@ function loadProofingToolsPage() {
                 <button id="btn-toggle-proofing-edit" class="button-secondary" onclick="handleToggleProofingEdit()">Enable Edit Mode</button>
                 <button id="btn-export-proofing" class="button-primary" onclick="handleExportProofing()">Export Filtered Data</button>
               </div>
+            </div>
+            
+            <div id="proofing-legend" style="display:none;" class="proofing-legend">
+              <div class="proofing-legend-item">
+                <div class="proofing-legend-box" style="background:#fff9f0; border-color:var(--color-primary-orange);"></div>
+                <span><strong>Matched Filter</strong> - Rows that match your filter criteria</span>
+              </div>
+              <div class="proofing-legend-item">
+                <div class="proofing-legend-box" style="background:#f0f8ff; border-color:#1976d2;"></div>
+                <span><strong>Related Records</strong> - Other rows in the same group</span>
+              </div>
+            </div>
+            
+            <div style="background:#e3f2fd; padding:12px; border-radius:6px; margin-bottom:15px; border-left:4px solid #1976d2;">
+              <strong style="color:#1976d2;">💡 Tip:</strong> 
+              <span style="color:#666;">Click on any cell value in the table below to find and group all rows that share that value.</span>
             </div>
             
             <div id="proofing-edit-controls" style="display:none; background:#fff3cd; padding:15px; border-radius:6px; margin-bottom:15px; border:2px solid #ffc107;">
@@ -342,7 +458,8 @@ function handleLoadProofingSheetData() {
         proofingToolsState.filteredData = response.rows;
         proofingToolsState.filters = {};
         proofingToolsState.groupByColumn = null;
-        proofingToolsState.selectedHeaders = response.headers.map((h, i) => i); // Select all by default
+        proofingToolsState.selectedHeaders = response.headers.map((h, i) => i);
+        proofingToolsState.crossReferenceActive = false;
         
         feedback.innerHTML = `<div style="color:#28a745; font-weight:600;">✅ Loaded ${response.rows.length} rows with ${response.headers.length} columns.</div>`;
         
@@ -397,7 +514,6 @@ function handleHeaderToggle(index, isChecked) {
     proofingToolsState.selectedHeaders = proofingToolsState.selectedHeaders.filter(i => i !== index);
   }
   
-  // Update checkbox styling
   const checkboxes = document.querySelectorAll('.proofing-header-checkbox');
   checkboxes[index].classList.toggle('checked', isChecked);
   
@@ -432,7 +548,6 @@ function renderProofingFilters() {
   const container = document.getElementById('proofing-filters-container');
   container.innerHTML = '';
   
-  // Only show filters for selected headers
   proofingToolsState.selectedHeaders.forEach(colIndex => {
     const header = proofingToolsState.headers[colIndex];
     const uniqueValues = [...new Set(proofingToolsState.rawData.map(row => row[colIndex]))].sort();
@@ -475,7 +590,6 @@ function renderGroupByDropdown() {
   const select = document.getElementById('proofing-group-by-select');
   select.innerHTML = '<option value="">-- No Grouping --</option>';
   
-  // Only show selected headers in group by dropdown
   proofingToolsState.selectedHeaders.forEach(index => {
     const header = proofingToolsState.headers[index];
     select.innerHTML += `<option value="${index}">${escapeProofingHtml(header)}</option>`;
@@ -495,12 +609,13 @@ function handleProofingFilterChange(colIndex) {
     proofingToolsState.filters[colIndex] = selectedValues;
   }
   
-  applyProofingFilters();
+  applyProofingFiltersWithGroupExpansion();
   renderProofingDataTable();
 }
 
-function applyProofingFilters() {
-  proofingToolsState.filteredData = proofingToolsState.rawData.filter(row => {
+function applyProofingFiltersWithGroupExpansion() {
+  // Step 1: Apply basic filters to find matching rows
+  const basicFilteredRows = proofingToolsState.rawData.filter(row => {
     for (let colIndex in proofingToolsState.filters) {
       const allowedValues = proofingToolsState.filters[colIndex];
       if (!allowedValues.includes(row[colIndex])) {
@@ -509,6 +624,26 @@ function applyProofingFilters() {
     }
     return true;
   });
+  
+  // Step 2: If grouping is active, expand to include all rows in those groups
+  if (proofingToolsState.groupByColumn !== null && Object.keys(proofingToolsState.filters).length > 0) {
+    // Extract unique group values from filtered rows
+    const groupValues = new Set(
+      basicFilteredRows.map(row => row[proofingToolsState.groupByColumn])
+    );
+    
+    // Show ALL rows that have any of those group values
+    proofingToolsState.filteredData = proofingToolsState.rawData.filter(row => 
+      groupValues.has(row[proofingToolsState.groupByColumn])
+    );
+    
+    // Show legend when expansion is active
+    document.getElementById('proofing-legend').style.display = 'flex';
+  } else {
+    // No grouping or no filters - just show filtered rows
+    proofingToolsState.filteredData = basicFilteredRows;
+    document.getElementById('proofing-legend').style.display = 'none';
+  }
 }
 
 function handleClearProofingFilters() {
@@ -530,6 +665,7 @@ function handleClearProofingFilters() {
     if (accordionHeader) accordionHeader.classList.remove('active');
   });
   
+  document.getElementById('proofing-legend').style.display = 'none';
   renderProofingDataTable();
 }
 
@@ -543,12 +679,76 @@ function handleGroupByChange() {
     proofingToolsState.groupByColumn = parseInt(value);
   }
   
+  // Reapply filters with group expansion
+  applyProofingFiltersWithGroupExpansion();
   renderProofingDataTable();
 }
 
 function handleClearGrouping() {
   proofingToolsState.groupByColumn = null;
   document.getElementById('proofing-group-by-select').value = '';
+  document.getElementById('proofing-legend').style.display = 'none';
+  applyProofingFiltersWithGroupExpansion();
+  renderProofingDataTable();
+}
+
+function handleCellClick(rowIdx, colIdx) {
+  if (proofingToolsState.editMode) return;
+  
+  const cellValue = proofingToolsState.filteredData[rowIdx][colIdx];
+  const columnName = proofingToolsState.headers[colIdx];
+  
+  proofingToolsState.crossReferenceActive = true;
+  proofingToolsState.crossReferenceColumn = colIdx;
+  proofingToolsState.crossReferenceValue = cellValue;
+  
+  document.getElementById('cross-ref-column-name').textContent = columnName;
+  document.getElementById('cross-ref-value').textContent = cellValue;
+  document.getElementById('proofing-cross-ref-banner').style.display = 'flex';
+  
+  // Apply cross-reference as a filter
+  proofingToolsState.filters[colIdx] = [cellValue];
+  
+  // Update filter UI
+  const selectEl = document.getElementById(`proofing-filter-${colIdx}`);
+  if (selectEl) {
+    Array.from(selectEl.options).forEach(opt => {
+      opt.selected = opt.value === cellValue;
+    });
+    const badge = document.getElementById(`proofing-badge-${colIdx}`);
+    if (badge) badge.textContent = '1';
+  }
+  
+  // If no grouping is set, auto-group by this column
+  if (proofingToolsState.groupByColumn === null) {
+    proofingToolsState.groupByColumn = colIdx;
+    document.getElementById('proofing-group-by-select').value = colIdx;
+  }
+  
+  applyProofingFiltersWithGroupExpansion();
+  renderProofingDataTable();
+}
+
+function handleClearCrossReference() {
+  proofingToolsState.crossReferenceActive = false;
+  
+  if (proofingToolsState.crossReferenceColumn !== null) {
+    delete proofingToolsState.filters[proofingToolsState.crossReferenceColumn];
+    
+    const selectEl = document.getElementById(`proofing-filter-${proofingToolsState.crossReferenceColumn}`);
+    if (selectEl) {
+      Array.from(selectEl.options).forEach(opt => opt.selected = false);
+    }
+    const badge = document.getElementById(`proofing-badge-${proofingToolsState.crossReferenceColumn}`);
+    if (badge) badge.textContent = '0';
+  }
+  
+  proofingToolsState.crossReferenceColumn = null;
+  proofingToolsState.crossReferenceValue = null;
+  
+  document.getElementById('proofing-cross-ref-banner').style.display = 'none';
+  
+  applyProofingFiltersWithGroupExpansion();
   renderProofingDataTable();
 }
 
@@ -559,7 +759,6 @@ function renderProofingDataTable() {
   
   rowCount.textContent = proofingToolsState.filteredData.length;
   
-  // Only show selected headers
   const selectedHeadersData = proofingToolsState.selectedHeaders.map(i => proofingToolsState.headers[i]);
   
   thead.innerHTML = `
@@ -590,12 +789,40 @@ function renderProofingDataTable() {
 }
 
 function renderUngroupedData(tbody) {
+  // Determine which rows actually matched the filter
+  const matchedRowSet = new Set();
+  if (Object.keys(proofingToolsState.filters).length > 0) {
+    proofingToolsState.filteredData.forEach((row, idx) => {
+      let matches = true;
+      for (let colIndex in proofingToolsState.filters) {
+        const allowedValues = proofingToolsState.filters[colIndex];
+        if (!allowedValues.includes(row[colIndex])) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) matchedRowSet.add(idx);
+    });
+  }
+  
   tbody.innerHTML = proofingToolsState.filteredData.map((row, rowIdx) => {
+    const isMatched = matchedRowSet.has(rowIdx) || Object.keys(proofingToolsState.filters).length === 0;
+    const rowClass = isMatched ? '' : 'proofing-grouped-row-related';
+    
     return `
-      <tr style="border-bottom:1px solid #eee;">
+      <tr class="${rowClass}" style="border-bottom:1px solid #eee;">
         ${proofingToolsState.selectedHeaders.map(colIdx => {
           const cellId = `proofing-cell-${rowIdx}-${colIdx}`;
-          return `<td id="${cellId}" style="padding:10px; border-right:1px solid #f0f0f0;">${escapeProofingHtml(row[colIdx])}</td>`;
+          const isHighlighted = proofingToolsState.crossReferenceActive && 
+                               colIdx === proofingToolsState.crossReferenceColumn;
+          
+          return `<td id="${cellId}" 
+                     class="proofing-cell-clickable ${isHighlighted ? 'proofing-highlighted-cell' : ''}" 
+                     onclick="handleCellClick(${rowIdx}, ${colIdx})"
+                     style="padding:10px; border-right:1px solid #f0f0f0; position:relative;">
+                    ${escapeProofingHtml(row[colIdx])}
+                    <span class="proofing-find-icon">🔗</span>
+                  </td>`;
         }).join('')}
       </tr>
     `;
@@ -606,36 +833,67 @@ function renderGroupedData(tbody) {
   const groupCol = proofingToolsState.groupByColumn;
   const groupedData = {};
   
-  proofingToolsState.filteredData.forEach(row => {
+  // Determine which rows actually matched the filter (before group expansion)
+  const matchedRowIndices = new Set();
+  proofingToolsState.filteredData.forEach((row, idx) => {
+    let matches = true;
+    for (let colIndex in proofingToolsState.filters) {
+      const allowedValues = proofingToolsState.filters[colIndex];
+      if (!allowedValues.includes(row[colIndex])) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) matchedRowIndices.add(idx);
+  });
+  
+  proofingToolsState.filteredData.forEach((row, idx) => {
     const groupKey = row[groupCol];
     if (!groupedData[groupKey]) {
       groupedData[groupKey] = [];
     }
-    groupedData[groupKey].push(row);
+    groupedData[groupKey].push({ row, originalIndex: idx });
   });
   
   let html = '';
   let globalRowIdx = 0;
   
   Object.keys(groupedData).sort().forEach(groupKey => {
-    const rows = groupedData[groupKey];
+    const items = groupedData[groupKey];
     const groupHeaderName = proofingToolsState.headers[groupCol];
+    
+    const matchedCount = items.filter(item => matchedRowIndices.has(item.originalIndex)).length;
+    const relatedCount = items.length - matchedCount;
     
     html += `
       <tr>
         <td colspan="${proofingToolsState.selectedHeaders.length}" class="proofing-grouped-header">
           📌 ${escapeProofingHtml(groupHeaderName)}: <strong>${escapeProofingHtml(groupKey)}</strong>
-          <span style="opacity:0.8; font-weight:normal; margin-left:10px;">(${rows.length} row${rows.length !== 1 ? 's' : ''})</span>
+          <span style="opacity:0.8; font-weight:normal; margin-left:10px;">
+            (${matchedCount} matched${relatedCount > 0 ? `, ${relatedCount} related` : ''})
+          </span>
         </td>
       </tr>
     `;
     
-    rows.forEach(row => {
+    items.forEach(item => {
+      const isMatched = matchedRowIndices.has(item.originalIndex) || Object.keys(proofingToolsState.filters).length === 0;
+      const rowClass = isMatched ? 'proofing-grouped-row-matched' : 'proofing-grouped-row-related';
+      
       html += `
-        <tr class="proofing-grouped-row">
+        <tr class="${rowClass}">
           ${proofingToolsState.selectedHeaders.map(colIdx => {
             const cellId = `proofing-cell-${globalRowIdx}-${colIdx}`;
-            return `<td id="${cellId}" style="padding:10px; border-right:1px solid #e0e0e0;">${escapeProofingHtml(row[colIdx])}</td>`;
+            const isHighlighted = proofingToolsState.crossReferenceActive && 
+                                 colIdx === proofingToolsState.crossReferenceColumn;
+            
+            return `<td id="${cellId}" 
+                       class="proofing-cell-clickable ${isHighlighted ? 'proofing-highlighted-cell' : ''}" 
+                       onclick="handleCellClick(${item.originalIndex}, ${colIdx})"
+                       style="padding:10px; border-right:1px solid #e0e0e0; position:relative;">
+                      ${escapeProofingHtml(item.row[colIdx])}
+                      <span class="proofing-find-icon">🔗</span>
+                    </td>`;
           }).join('')}
         </tr>
       `;
@@ -675,6 +933,7 @@ function enableProofingCellEditing() {
         cellEl.contentEditable = true;
         cellEl.style.cursor = 'text';
         cellEl.style.minWidth = '100px';
+        cellEl.onclick = null;
         
         cellEl.addEventListener('blur', function() {
           const newValue = this.textContent.trim();
@@ -764,7 +1023,6 @@ function handleExportProofing() {
   btn.disabled = true;
   btn.textContent = 'Exporting...';
   
-  // Only export selected columns
   const selectedHeadersData = proofingToolsState.selectedHeaders.map(i => proofingToolsState.headers[i]);
   const filteredRows = proofingToolsState.filteredData.map(row => 
     proofingToolsState.selectedHeaders.map(i => row[i])
