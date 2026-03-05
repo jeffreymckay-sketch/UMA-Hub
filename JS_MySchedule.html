@@ -301,6 +301,10 @@
       ? '<a href="' + item.zoomLink + '" target="_blank" class="sched-link-btn"><span>📹</span> Join Zoom Meeting</a>'
       : '';
 
+    var dateHtml = item.dateStr 
+      ? '<div class="sched-detail-row"><span class="sched-icon-box">📅</span><span style="font-weight:600; color:var(--color-primary-navy);">' + item.dateStr + '</span></div>'
+      : '';
+
     return (
       '<div class="sched-card ' + cardClass + '">' +
         '<div class="sched-card-top">' +
@@ -316,6 +320,7 @@
             '<span class="sched-icon-box">📍</span>' +
             '<span>' + (item.location || 'Location TBD') + '</span>' +
           '</div>' +
+          dateHtml +
           zoomHtml +
         '</div>' +
       '</div>'

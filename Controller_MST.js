@@ -64,9 +64,10 @@ function api_getMstSettings() {
           var courseHeaders = getColumnMap(courseHeaderRow);
           var courseHeaderIndex = courseData.indexOf(courseHeaderRow);
   
-          var allStaff = staffData.slice(1).map(function(row) { return parseStaff(row, staffHeaders); }).filter(function(s) { return s && s.isActive; });
-          var allAssignments = assignmentData.slice(1).map(function(row) { return parseAssignment(row, assignmentHeaders); }).filter(Boolean);
-          var allCourses = courseData.slice(courseHeaderIndex + 1).map(function(row) { return parseCourse(row, courseHeaders); }).filter(Boolean);
+          // Use isolated parsers to prevent collisions with Parsers.js
+          var allStaff = staffData.slice(1).map(function(row) { return mst_parseStaff(row, staffHeaders); }).filter(function(s) { return s && s.isActive; });
+          var allAssignments = assignmentData.slice(1).map(function(row) { return mst_parseAssignment(row, assignmentHeaders); }).filter(Boolean);
+          var allCourses = courseData.slice(courseHeaderIndex + 1).map(function(row) { return mst_parseCourse(row, courseHeaders); }).filter(Boolean);
   
           var staffMap = new Map(allStaff.map(function(s) { return [String(s.id).toLowerCase(), s]; }));
           var assignmentMap = new Map(allAssignments.map(function(a) { return [String(a.eventId), a]; }));
@@ -74,13 +75,26 @@ function api_getMstSettings() {
           var courseAssignmentsView = allCourses.map(function(course) {
               var assignment = assignmentMap.get(String(course.id));
               var staff = assignment && assignment.staffId ? staffMap.get(String(assignment.staffId).toLowerCase()) : null;
+              
+              // Safely format dates
+              let sStr = "?";
+              if (course.startDate && !isNaN(course.startDate.getTime())) {
+                  sStr = Utilities.formatDate(course.startDate, Session.getScriptTimeZone(), 'M/d/yy');
+              }
+              let eStr = "?";
+              if (course.endDate && !isNaN(course.endDate.getTime())) {
+                  eStr = Utilities.formatDate(course.endDate, Session.getScriptTimeZone(), 'M/d/yy');
+              }
+
               return {
                   id: course.id,
                   assignmentId: assignment ? assignment.id : null,
                   itemName: course.name,
                   courseFaculty: course.faculty,
                   courseDay: course.daysOfWeek.join(' / '),
-                  courseTime: formatDate(course.startDate, 'h:mm') + ' - ' + formatDate(course.endDate, 'h:mm aa'),
+                  courseTime: course.timeString || "TBD", // Pulls raw time string directly from sheet
+                  startDateStr: sStr,
+                  endDateStr: eStr,
                   location: course.location,
                   zoomLink: course.zoomLink, 
                   staffName: staff ? staff.name : "Unassigned",
@@ -342,6 +356,11 @@ function api_getMstSettings() {
           const locationVal = (colIdx.location > -1) ? String(row[colIdx.location]).trim() : "";
           if (locationVal) title += ` (${locationVal})`;
           if (!title || title === '-') title = "Untitled Event";
+
+          // --- NEW: Prepend MST prefix if it doesn't already exist ---
+          if (!title.toUpperCase().startsWith("MST:")) {
+              title = "MST: " + title;
+          }
   
           const courseName = (colIdx.course > -1) ? row[colIdx.course] : "";
           const faculty = (colIdx.faculty > -1) ? row[colIdx.faculty] : "";
@@ -479,8 +498,8 @@ function api_getMstSettings() {
                   existingEventId: existingId,
                   currentData: currentData,
                   currentGuests: currentGuests,
-                  seriesStartStr: formatDate(startDt, 'MM/dd/yyyy'),
-                  seriesEndStr: seriesEndDate ? formatDate(seriesEndDate, 'MM/dd/yyyy') : 'Single Event',
+                  seriesStartStr: formatDate(startDt, 'M/d/yy'),
+                  seriesEndStr: seriesEndDate ? formatDate(seriesEndDate, 'M/d/yy') : 'Single Event',
                   payload: {
                       title: title,
                       startTime: startDt.getTime(), 
@@ -753,20 +772,8 @@ function api_getMstSettings() {
       }
   }
   
-  function mstHelper_parseDayOfWeek(dayStr) {
-      if (!dayStr) return null;
-      const s = dayStr.toLowerCase().trim();
-      if (s === 'm' || s.includes('mon')) return CalendarApp.Weekday.MONDAY;
-      if (s === 'tu' || s === 't' || s.includes('tue')) return CalendarApp.Weekday.TUESDAY;
-      if (s === 'w' || s.includes('wed')) return CalendarApp.Weekday.WEDNESDAY;
-      if (s === 'th' || s === 'r' || s.includes('thu')) return CalendarApp.Weekday.THURSDAY;
-      if (s === 'f' || s.includes('fri')) return CalendarApp.Weekday.FRIDAY;
-      if (s === 'sa' || s.includes('sat')) return CalendarApp.Weekday.SATURDAY;
-      if (s === 'su' || s.includes('sun')) return CalendarApp.Weekday.SUNDAY;
-      return null;
-  }
-  
-  function parseStaff(row, map) {
+  // --- ISOLATED PARSERS & HELPERS ---
+  function mst_parseStaff(row, map) {
       const nameIdx = map['fullname'] !== undefined ? map['fullname'] : map['name'];
       const idIdx = map['staffid'] !== undefined ? map['staffid'] : map['id'];
       const roleIdx = map['roles'] !== undefined ? map['roles'] : map['role'];
@@ -780,7 +787,7 @@ function api_getMstSettings() {
       };
   }
   
-  function parseAssignment(row, map) {
+  function mst_parseAssignment(row, map) {
       const idIdx = map['assignmentid'];
       const eventIdx = map['referenceid'];
       const staffIdx = map['staffid'];
@@ -788,7 +795,7 @@ function api_getMstSettings() {
       return { id: row[idIdx], eventId: row[eventIdx], staffId: row[staffIdx] };
   }
   
-  function parseCourse(row, map) {
+  function mst_parseCourse(row, map) {
       const idIdx = map['eventid'];
       const nameIdx = map['course']; 
       const facultyIdx = map['faculty'];
@@ -798,23 +805,50 @@ function api_getMstSettings() {
       const startIdx = map['startdate'];
       const endIdx = map['enddate'];
       const zoomIdx = map['zoomlink']; 
+      
       if (idIdx === undefined || nameIdx === undefined) return null;
+      
       let days = [];
       if (daysIdx !== undefined && row[daysIdx]) {
           days = String(row[daysIdx]).split(',').map(d => d.trim());
       }
+      
+      let sDate = null;
+      if (startIdx !== undefined && row[startIdx]) {
+          sDate = new Date(row[startIdx]);
+      }
+      
+      let eDate = null;
+      if (endIdx !== undefined && row[endIdx]) {
+          eDate = new Date(row[endIdx]);
+      }
+
       return {
           id: row[idIdx],
           name: row[nameIdx],
           faculty: facultyIdx !== undefined ? row[facultyIdx] : '',
           daysOfWeek: days,
-          startDate: startIdx !== undefined ? row[startIdx] : null,
-          endDate: endIdx !== undefined ? row[endIdx] : null,
+          timeString: runTimeIdx !== undefined ? row[runTimeIdx] : '',
+          startDate: sDate,
+          endDate: eDate,
           location: locIdx !== undefined ? row[locIdx] : '',
           zoomLink: zoomIdx !== undefined ? row[zoomIdx] : ''
       };
   }
-  
+
+  function mstHelper_parseDayOfWeek(dayStr) {
+      if (!dayStr) return null;
+      const s = dayStr.toLowerCase().trim();
+      if (s === 'm' || s.includes('mon')) return CalendarApp.Weekday.MONDAY;
+      if (s === 'tu' || s === 't' || s.includes('tue')) return CalendarApp.Weekday.TUESDAY;
+      if (s === 'w' || s.includes('wed')) return CalendarApp.Weekday.WEDNESDAY;
+      if (s === 'th' || s === 'r' || s.includes('thu')) return CalendarApp.Weekday.THURSDAY;
+      if (s === 'f' || s.includes('fri')) return CalendarApp.Weekday.FRIDAY;
+      if (s === 'sa' || s.includes('sat')) return CalendarApp.Weekday.SATURDAY;
+      if (s === 'su' || s.includes('sun')) return CalendarApp.Weekday.SUNDAY;
+      return null;
+  }
+
   function formatDate(date, format) {
       if (!date || !(date instanceof Date)) return '';
       return Utilities.formatDate(date, Session.getScriptTimeZone(), format);

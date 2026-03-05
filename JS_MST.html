@@ -162,6 +162,48 @@
 
 <script>
 /**
+ * Custom Modal Handlers for MST (Self-Injecting)
+ */
+let pendingMstConfirmAction = null;
+
+function showCustomConfirm(message, callback) {
+    let overlay = document.getElementById('mst-custom-confirm-overlay');
+    
+    // Create it if it doesn't exist
+    if (!overlay) {
+        const modalHtml = `
+        <div id="mst-custom-confirm-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px);">
+            <div style="background: #fff; padding: 25px 30px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-width: 400px; width: 90%; text-align: center; border-top: 5px solid var(--color-primary-orange);">
+                <div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>
+                <h3 style="margin-top: 0; color: var(--color-primary-navy);">Confirm Action</h3>
+                <div id="mst-custom-confirm-msg" style="margin-bottom: 25px; color: #444; font-size: 1.05em; line-height: 1.4;"></div>
+                <div style="display: flex; justify-content: center; gap: 15px;">
+                    <button class="button-secondary" onclick="closeMstConfirm()" style="min-width: 100px;">Cancel</button>
+                    <button class="button-primary" onclick="executeMstConfirm()" style="min-width: 100px; background-color: var(--color-primary-orange);">Confirm</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        overlay = document.getElementById('mst-custom-confirm-overlay');
+    }
+
+    document.getElementById('mst-custom-confirm-msg').innerHTML = message;
+    pendingMstConfirmAction = callback;
+    overlay.style.display = 'flex';
+}
+
+window.closeMstConfirm = function() {
+    document.getElementById('mst-custom-confirm-overlay').style.display = 'none';
+    pendingMstConfirmAction = null;
+};
+
+window.executeMstConfirm = function() {
+    document.getElementById('mst-custom-confirm-overlay').style.display = 'none';
+    if (pendingMstConfirmAction) pendingMstConfirmAction();
+    pendingMstConfirmAction = null;
+};
+
+/**
  * Main entry point for the MST page.
  */
 function loadMstPage() {
@@ -229,14 +271,16 @@ function renderScheduleTable(container, schedule, staffList) {
   container.innerHTML = `
     <table class="data-table">
       <thead>
-        <tr><th>Course</th><th>Faculty</th><th>Day</th><th>Time</th><th>Location</th><th style="width:200px;">Zoom Link</th><th>Staff Assignment</th></tr>
+        <tr><th>Course</th><th>Faculty</th><th>Dates</th><th>Day</th><th>Time</th><th>Location</th><th style="width:200px;">Zoom Link</th><th>Staff Assignment</th></tr>
       </thead>
       <tbody>
         ${schedule.map(item => {
           const options = staffList.map(staff => `<option value="${staff.id}" ${String(staff.id) === String(item.staffId) ? 'selected' : ''}>${staff.name}</option>`).join('');
           return `
           <tr data-course-id="${item.id}">
-            <td>${item.itemName}</td><td>${item.courseFaculty}</td><td>${item.courseDay}</td><td>${item.courseTime}</td><td>${item.location}</td>
+            <td>${item.itemName}</td><td>${item.courseFaculty}</td>
+            <td style="white-space:nowrap; font-size:0.9em; color:#555; font-weight:bold;">${item.startDateStr || '?'} - ${item.endDateStr || '?'}</td>
+            <td>${item.courseDay}</td><td>${item.courseTime}</td><td>${item.location}</td>
             <td><input type="text" class="zoom-input" id="zoom-${item.id}" value="${item.zoomLink || ''}" placeholder="Paste link..." onchange="updateZoomLink('${item.id}', this)"></td>
             <td>
               <div class="assign-wrapper">
@@ -245,7 +289,7 @@ function renderScheduleTable(container, schedule, staffList) {
               </div>
             </td>
           </tr>`;
-        }).join('') || '<tr><td colspan="7">No schedule data found.</td></tr>'}
+        }).join('') || '<tr><td colspan="8">No schedule data found.</td></tr>'}
       </tbody>
     </table>`;
     
@@ -261,8 +305,11 @@ function updateZoomLink(courseId, inputEl) {
     google.script.run
         .withSuccessHandler(res => {
             inputEl.disabled = false; inputEl.style.opacity = '1';
-            if(res.success) { inputEl.classList.add('saved'); setTimeout(() => inputEl.classList.remove('saved'), 2000); } 
-            else { alert("Failed to save Zoom link: " + res.message); }
+            if(res.success) { 
+                inputEl.classList.add('saved'); setTimeout(() => inputEl.classList.remove('saved'), 2000); 
+            } else { 
+                showNotification("Failed to save Zoom link: " + res.message, 'error'); 
+            }
         })
         .api_updateCourseZoom(courseId, newVal);
 }
@@ -277,7 +324,10 @@ function assignStaff(courseId, event) {
       if (res.success) {
         btn.textContent = 'Saved!'; btn.style.backgroundColor = 'var(--color-primary-green)';
         setTimeout(() => { btn.disabled = false; btn.textContent = originalText; btn.style.backgroundColor = ''; }, 2000);
-      } else { alert('Save Failed: ' + res.error); btn.disabled = false; btn.textContent = originalText; }
+      } else { 
+          showNotification('Save Failed: ' + res.error, 'error'); 
+          btn.disabled = false; btn.textContent = originalText; 
+      }
     })
     .api_updateCourseAssignment(courseId, staffId);
 }
@@ -347,7 +397,10 @@ function renderMstCalendarControls(container) {
 function runMstPreview(e) {
     if(e) { e.preventDefault(); e.stopPropagation(); }
     const calId = document.getElementById('mst-calendar-select').value;
-    if(!calId) { alert("Please select a valid calendar."); return false; }
+    if(!calId) { 
+        showNotification("Please select a valid calendar.", 'error'); 
+        return false; 
+    }
 
     document.getElementById('mst-sync-area').style.display = 'none';
     document.getElementById('mst-sync-loader').style.display = 'flex';
@@ -360,14 +413,14 @@ function runMstPreview(e) {
                 renderSyncGrid();
                 document.getElementById('mst-sync-area').style.display = 'block';
             } else {
-                alert("Error: " + res.message);
+                showNotification("Error: " + res.message, 'error');
                 document.getElementById('mst-sync-area').style.display = 'block'; 
             }
         })
         .withFailureHandler(err => {
             document.getElementById('mst-sync-loader').style.display = 'none';
             document.getElementById('mst-sync-area').style.display = 'block';
-            alert("System Error: " + err.message);
+            showNotification("System Error: " + err.message, 'error');
         })
         .api_previewMstCalendarSync(calId);
     return false;
@@ -410,6 +463,9 @@ function renderSyncGrid() {
         const fmtTime = d => d.toTimeString().substring(0,5);
         const displayTime = `${startObj.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} - ${endObj.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`;
         
+        // Format Dates for display
+        const displayDates = item.seriesEndStr !== 'Single Event' ? `${item.seriesStartStr} - ${item.seriesEndStr}` : item.seriesStartStr;
+        
         // --- Build Diff Section (Front) ---
         let diffHtml = '';
         if(item.diffs && item.diffs.length > 0) {
@@ -448,9 +504,10 @@ function renderSyncGrid() {
                         <input type="checkbox" class="header-checkbox sync-check" data-index="${index}" ${isChecked} title="Include in Sync?">
                     </div>
                     <div class="sync-card-body">
+                        <div class="info-row"><span class="info-label">Dates</span> <span class="info-value">${displayDates}</span></div>
                         <div class="info-row"><span class="info-label">Time</span> <span class="info-value">${displayTime}</span></div>
                         <div class="info-row"><span class="info-label">Location</span> <span class="info-value" title="${p.location}">${p.location || '-'}</span></div>
-                        <div class="info-row"><span class="info-label">Series</span> <span class="info-value">${p.dayStr || 'Single'}</span></div>
+                        <div class="info-row"><span class="info-label">Days</span> <span class="info-value">${p.dayStr || 'Single'}</span></div>
                         ${diffHtml}
                     </div>
                     <div class="sync-card-footer">
@@ -571,31 +628,37 @@ function runMstCommit(e) {
         }
     });
 
-    if(selectedEvents.length === 0) { alert("No events selected."); return false; }
-    if(!confirm(`Sync ${selectedEvents.length} events to Calendar?`)) return false;
+    if(selectedEvents.length === 0) { 
+        showNotification("No events selected.", "error"); 
+        return false; 
+    }
     
-    btn.classList.add('disabled'); btn.textContent = 'Syncing...';
-    document.getElementById('mst-sync-loader').style.display = 'flex';
-    document.getElementById('mst-sync-grid').style.opacity = '0.3';
-    
-    google.script.run
-        .withSuccessHandler(res => {
-            document.getElementById('mst-sync-loader').style.display = 'none';
-            document.getElementById('mst-sync-grid').style.opacity = '1';
-            btn.classList.remove('disabled'); btn.textContent = 'Sync Selected to Calendar';
-            
-            if(res.success) {
-                alert(`Sync Complete!\nCreated: ${res.stats.created}\nUpdated: ${res.stats.updated}\nErrors: ${res.stats.errors}`);
-                runMstPreview(null);
-            } else { alert("Error: " + res.message); }
-        })
-        .withFailureHandler(err => {
-            document.getElementById('mst-sync-loader').style.display = 'none';
-            document.getElementById('mst-sync-grid').style.opacity = '1';
-            btn.classList.remove('disabled'); btn.textContent = 'Sync Selected to Calendar';
-            alert("System Error: " + err.message);
-        })
-        .api_commitMstCalendarEvents(calId, selectedEvents);
+    showCustomConfirm(`Sync ${selectedEvents.length} events to Calendar?`, () => {
+        btn.classList.add('disabled'); btn.textContent = 'Syncing...';
+        document.getElementById('mst-sync-loader').style.display = 'flex';
+        document.getElementById('mst-sync-grid').style.opacity = '0.3';
+        
+        google.script.run
+            .withSuccessHandler(res => {
+                document.getElementById('mst-sync-loader').style.display = 'none';
+                document.getElementById('mst-sync-grid').style.opacity = '1';
+                btn.classList.remove('disabled'); btn.textContent = 'Sync Selected to Calendar';
+                
+                if(res.success) {
+                    showNotification(`Sync Complete! Created: ${res.stats.created}, Updated: ${res.stats.updated}, Errors: ${res.stats.errors}`, 'success', 6000);
+                    runMstPreview(null);
+                } else { 
+                    showNotification("Error: " + res.message, 'error'); 
+                }
+            })
+            .withFailureHandler(err => {
+                document.getElementById('mst-sync-loader').style.display = 'none';
+                document.getElementById('mst-sync-grid').style.opacity = '1';
+                btn.classList.remove('disabled'); btn.textContent = 'Sync Selected to Calendar';
+                showNotification("System Error: " + err.message, 'error');
+            })
+            .api_commitMstCalendarEvents(calId, selectedEvents);
+    });
         
     return false;
 }
@@ -638,7 +701,10 @@ function renderMstSettingsForm(container, data) {
 function saveMstSettings(event) {
   if(event) { event.preventDefault(); event.stopPropagation(); }
   const sourceTabName = document.getElementById('mst-source-tab-name').value;
-  if (!sourceTabName) { alert('Please select a Source Sheet Tab.'); return; }
+  if (!sourceTabName) { 
+      showNotification('Please select a Source Sheet Tab.', 'error'); 
+      return; 
+  }
 
   const btn = event.target; btn.disabled = true; btn.textContent = 'Saving...';
   const feedbackDiv = document.getElementById('mst-settings-feedback'); feedbackDiv.innerHTML = '';

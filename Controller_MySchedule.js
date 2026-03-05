@@ -70,6 +70,18 @@ function api_getMyScheduleData() {
                         const id = String(row[cHeaders.eventid]).trim();
                         
                         if (courseIds.includes(id)) {
+                            // Extract dates for UI display
+                            let dateStr = "";
+                            const startD = row[cHeaders.startdate];
+                            const endD = row[cHeaders.enddate];
+                            if (startD && endD) {
+                                const sd = new Date(startD);
+                                const ed = new Date(endD);
+                                if (!isNaN(sd) && !isNaN(ed)) {
+                                    dateStr = `${sd.getMonth()+1}/${sd.getDate()} - ${ed.getMonth()+1}/${ed.getDate()}`;
+                                }
+                            }
+
                             allItems.push({
                                 id: id,
                                 type: 'MST',
@@ -77,7 +89,8 @@ function api_getMyScheduleData() {
                                 rawDay: String(row[cHeaders.day]),
                                 timeString: String(row[cHeaders.runtime] || 'TBD'),
                                 location: String(row[cHeaders.bxlocation] || ''),
-                                zoomLink: String(row[cHeaders.zoomlink] || '')
+                                zoomLink: String(row[cHeaders.zoomlink] || ''),
+                                dateStr: dateStr
                             });
                         }
                     }
@@ -114,7 +127,8 @@ function api_getMyScheduleData() {
                             rawDay: String(row[sHeaders.day] || row[sHeaders.dayofweek] || ''),
                             timeString: `${startDisplay} - ${endDisplay}`,
                             location: isZoom ? 'Zoom' : 'Tech Hub Desk',
-                            zoomLink: ''
+                            zoomLink: '',
+                            dateStr: '' // Shifts don't use this specific date range display
                         });
                     }
                 }
