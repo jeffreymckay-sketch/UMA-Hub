@@ -81,7 +81,7 @@
     backface-visibility: hidden; border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.12);
     display: flex; flex-direction: column; background-color: #fff;
-    border: 3px solid transparent; overflow: hidden;
+    border: 3px solid transparent;
   }
 
   /* Status Borders for Front */
@@ -148,6 +148,11 @@
   .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
   input:checked + .slider { background-color: var(--color-primary-green, #28a745); }
   input:checked + .slider:before { transform: translateX(14px); }
+  .toggle-switch input:focus-visible + .slider {
+    outline: 3px solid var(--color-primary-orange);
+    outline-offset: 2px;
+    border-radius: 20px;
+}
 
   /* Main Sync Checkbox (Header) */
   .header-checkbox { width: 20px; height: 20px; cursor: pointer; accent-color: #fff; }
@@ -156,7 +161,7 @@
   .sync-input-group { display: flex; flex-direction: column; font-size: 0.9em; margin-bottom: 8px; }
   .sync-input-group label { font-size: 0.85em; color: #666; margin-bottom: 3px; font-weight: 600; }
   .sync-input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 1em; font-family: inherit; }
-  .sync-input:focus { border-color: var(--color-primary-navy); outline: none; }
+  .sync-input:focus { border-color: var(--color-primary-navy); }
 
 </style>
 
@@ -517,7 +522,7 @@ function renderSyncGrid() {
                 </div>
                 
                 <!-- BACK OF CARD (Edit Mode) -->
-                <div class="sync-card-back">
+                <div class="sync-card-back" inert>
                     <div class="sync-card-header header-back">
                         <h4>Manual Override</h4>
                     </div>
@@ -562,7 +567,11 @@ function renderSyncGrid() {
 // Helper to trigger the CSS flip animation
 function flipCard(btn) {
     const container = btn.closest('.sync-card-container');
-    container.classList.toggle('flipped');
+    const isFlipped = container.classList.toggle('flipped');
+    const back = container.querySelector('.sync-card-back');
+    const front = container.querySelector('.sync-card-front');
+    back.inert = !isFlipped;
+    front.inert = isFlipped;
 }
 
 function filterSyncGrid(filter, btn) {
