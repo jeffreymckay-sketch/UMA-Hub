@@ -10,8 +10,7 @@
 
     <div class="app-header">
       <div class="header-left">
-        <!-- ACCESSIBILITY FIX: Added tabindex, role, and onkeydown -->
-        <span class="sidebar-toggle" tabindex="0" role="button" aria-label="Toggle Sidebar" onclick="toggleSidebar()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleSidebar(); }"><span class="material-symbols-outlined">menu</span></span>
+        <span class="sidebar-toggle" onclick="toggleSidebar()"><span class="material-symbols-outlined">menu</span></span>
         <h1 class="app-title">MENU</h1>
       </div>
       <div class="user-info">

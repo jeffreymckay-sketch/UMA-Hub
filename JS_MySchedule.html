@@ -43,6 +43,7 @@
     border: 1px solid #e0e0e0;
     border-radius: 10px;
     margin-bottom: 12px;
+    overflow: hidden;
     transition: all 0.3s ease;
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
   }
@@ -230,7 +231,7 @@
     const view = document.getElementById('page-MySchedule');
     view.innerHTML = ''; 
 
-    const workDays =['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const workDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long' });
     const dayToOpen = workDays.includes(todayStr) ? todayStr : 'Monday';
 
@@ -238,7 +239,7 @@
     let mstCount = 0;
     let techHubCount = 0;
     workDays.forEach(function(d) {
-      (scheduleData[d] ||[]).forEach(function(item) {
+      (scheduleData[d] || []).forEach(function(item) {
         if (item.type === 'MST') mstCount++;
         else techHubCount++;
       });
@@ -267,12 +268,8 @@
 
     let accordionsHtml = '';
     workDays.forEach(function(day) {
-      const items = scheduleData[day] ||[];
+      const items = scheduleData[day] || [];
       const isOpen = (day === dayToOpen) ? 'open' : '';
-      const isExpanded = (day === dayToOpen) ? 'true' : 'false';
-      
-      // ACCESSIBILITY FIX: Set initial padlock status based on if it's open or closed
-      const inertAttr = (day === dayToOpen) ? '' : 'inert';
       
       let itemsHtml = items.length === 0 
         ? '<p class="schedule-empty">No assignments scheduled for ' + day + '.</p>'
@@ -280,11 +277,11 @@
 
       accordionsHtml +=
         '<div class="schedule-accordion ' + isOpen + '" id="sched-acc-' + day + '">' +
-          '<div class="schedule-header" tabindex="0" role="button" aria-expanded="' + isExpanded + '" onclick="toggleScheduleAccordion(\'sched-acc-' + day + '\')" onkeydown="if(event.key === \'Enter\' || event.key === \' \') { event.preventDefault(); toggleScheduleAccordion(\'sched-acc-' + day + '\'); }">' +
+          '<div class="schedule-header" onclick="toggleScheduleAccordion(\'sched-acc-' + day + '\')">' +
             '<span>' + day + ' <span style="color:#999; font-size:0.85em; font-weight:normal; margin-left:8px;">(' + items.length + ')</span></span>' +
             '<span class="schedule-icon">+</span>' +
           '</div>' +
-          '<div class="schedule-content" ' + inertAttr + '>' +
+          '<div class="schedule-content">' +
             '<div class="schedule-day-wrapper">' + itemsHtml + '</div>' +
           '</div>' +
         '</div>';
@@ -332,17 +329,6 @@
 
   function toggleScheduleAccordion(id) {
     var acc = document.getElementById(id);
-    if (acc) {
-      var isOpen = acc.classList.toggle('open');
-      var header = acc.querySelector('.schedule-header');
-      if (header) {
-        header.setAttribute('aria-expanded', isOpen);
-      }
-      // ACCESSIBILITY FIX: Add/Remove padlock
-      var content = acc.querySelector('.schedule-content');
-      if (content) {
-        content.inert = !isOpen;
-      }
-    }
+    if (acc) acc.classList.toggle('open');
   }
 </script>
