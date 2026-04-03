@@ -1,1057 +1,942 @@
 <script>
-/**
- * ------------------------------------------------------------------
- * PROOFING TOOLS: Advanced Sheet Lookup & Bulk Editor
- * ------------------------------------------------------------------
- */
-
-const proofingToolsState = {
-  sheetUrl: '',
-  tabName: '',
-  headers: [],
-  rawData: [],
-  filteredData: [],
-  filters: {},
-  groupByColumn: null,
-  editMode: false,
-  pendingEdits: [],
-  selectedHeaders: [],
-  crossReferenceActive: false,
-  crossReferenceColumn: null,
-  crossReferenceValue: null
-};
-
-function loadProofingToolsPage() {
-  const container = document.getElementById('page-ProofingTools');
+  /**
+   * ------------------------------------------------------------------
+   * PROOFING TOOLS: Advanced Sheet Lookup & Bulk Editor
+   * ------------------------------------------------------------------
+   */
   
-  if (container.childElementCount === 0) {
-    container.innerHTML = `
-      <style>
-        .proofing-accordion {
-          margin-bottom: 8px;
-          border: 1px solid #ddd;
-          border-radius: 6px;
-          overflow: hidden;
-          background: white;
-        }
-        
-        .proofing-accordion-header {
-          padding: 12px 16px;
-          background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
-          cursor: pointer;
-          user-select: none;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-weight: 600;
-          color: var(--color-primary-navy);
-          transition: background 0.2s;
-        }
-        
-        .proofing-accordion-header:hover {
-          background: linear-gradient(to bottom, #e9ecef, #dee2e6);
-        }
-        
-        .proofing-accordion-header.active {
-          background: var(--color-primary-navy);
-          color: white;
-        }
-        
-        .proofing-accordion-arrow {
-          transition: transform 0.3s ease;
-          font-size: 0.8em;
-        }
-        
-        .proofing-accordion-header.active .proofing-accordion-arrow {
-          transform: rotate(90deg);
-        }
-        
-        .proofing-accordion-body {
-          max-height: 0;
-          overflow: hidden;
-          transition: max-height 0.3s ease-out;
-        }
-        
-        .proofing-accordion-body.open {
-          max-height: 200px;
-          padding: 12px 16px;
-          border-top: 1px solid #ddd;
-        }
-        
-        .proofing-badge {
-          display: inline-block;
-          padding: 2px 8px;
-          background: var(--color-primary-orange);
-          color: white;
-          border-radius: 12px;
-          font-size: 0.75em;
-          font-weight: 600;
-          margin-left: 8px;
-        }
-        
-        .proofing-section {
-          background: white;
-          border-radius: 8px;
-          padding: 20px;
-          margin-bottom: 20px;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-          border-left: 4px solid var(--color-primary-orange);
-        }
-        
-        .proofing-section h3 {
-          margin-top: 0;
-          color: var(--color-primary-navy);
-          font-size: 1.1em;
-        }
-        
-        .proofing-grouped-header {
-          background: linear-gradient(135deg, var(--color-primary-navy) 0%, #1976d2 100%);
-          color: white;
-          padding: 14px 16px;
-          font-weight: 600;
-          border-radius: 6px 6px 0 0;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .proofing-grouped-row {
-          background: #f8f9fa;
-          border-left: 3px solid var(--color-primary-orange);
-        }
-        
-        .proofing-grouped-row:hover {
-          background: #e9ecef;
-        }
-        
-        .proofing-grouped-row-matched {
-          background: #fff9f0;
-          border-left: 3px solid var(--color-primary-orange);
-        }
-        
-        .proofing-grouped-row-related {
-          background: #f0f8ff;
-          border-left: 3px solid #1976d2;
-        }
-        
-        .proofing-header-checkbox {
-          display: inline-flex;
-          align-items: center;
-          padding: 8px 12px;
-          margin: 4px;
-          background: white;
-          border: 2px solid #ddd;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.2s;
-          user-select: none;
-        }
-        
-        .proofing-header-checkbox:hover {
-          border-color: var(--color-primary-orange);
-          background: #fff9f0;
-        }
-        
-        .proofing-header-checkbox input[type="checkbox"] {
-          margin-right: 8px;
-          cursor: pointer;
-          width: 18px;
-          height: 18px;
-        }
-        
-        .proofing-header-checkbox input[type="checkbox"]:checked {
-          accent-color: var(--color-primary-orange);
-        }
-        
-        .proofing-header-checkbox.checked {
-          background: #fff9f0;
-          border-color: var(--color-primary-orange);
-          font-weight: 600;
-        }
-        
-        .proofing-cell-clickable {
-          position: relative;
-          cursor: pointer;
-        }
-        
-        .proofing-cell-clickable:hover {
-          background: #fff9f0 !important;
-          box-shadow: inset 0 0 0 2px var(--color-primary-orange);
-        }
-        
-        .proofing-find-icon {
-          opacity: 0;
-          position: absolute;
-          right: 4px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: var(--color-primary-orange);
-          color: white;
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 0.7em;
-          font-weight: bold;
-          pointer-events: none;
-          transition: opacity 0.2s;
-        }
-        
-        .proofing-cell-clickable:hover .proofing-find-icon {
-          opacity: 1;
-        }
-        
-        .proofing-cross-ref-banner {
-          background: linear-gradient(135deg, #1976d2 0%, var(--color-primary-orange) 100%);
-          color: white;
-          padding: 15px 20px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .proofing-highlighted-cell {
-          background: #fff3cd !important;
-          border: 2px solid var(--color-primary-orange) !important;
-          font-weight: 600;
-        }
-        
-        .proofing-legend {
-          display: flex;
-          gap: 20px;
-          padding: 12px;
-          background: #f8f9fa;
-          border-radius: 6px;
-          margin-bottom: 15px;
-          font-size: 0.9em;
-        }
-        
-        .proofing-legend-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        
-        .proofing-legend-box {
-          width: 20px;
-          height: 20px;
-          border-radius: 3px;
-          border: 1px solid #ddd;
-        }
-      </style>
-      
-      <div class="widget">
-        <h2 style="margin:0 0 10px 0; color:var(--color-primary-navy);">
-          <span style="color:var(--color-primary-orange);">■</span> Proofing Tools
-        </h2>
-        <p style="color:#666; margin-bottom:25px;">Load any Google Sheet to filter, cross-reference, and bulk edit data.</p>
-        
-        <div class="proofing-section">
-          <h3>📋 Step 1: Load Your Sheet</h3>
+  const proofingToolsState = {
+    sheetUrl: '',
+    tabName: '',
+    headers: [],
+    rawData: [],
+    filteredData: [],
+    filters: {},
+    groupByColumns: [], // CHANGED: Now an array to support multiple columns
+    showCrossListed: true, // NEW: Toggle state for showing related records
+    editMode: false,
+    pendingEdits: [],
+    selectedHeaders: [],
+    crossReferenceActive: false,
+    crossReferenceColumn: null,
+    crossReferenceValue: null,
+    tableSearchQuery: '',
+    sortCol: null,
+    sortAsc: true,
+    expandedGroups: {}, 
+    draggedVisualIndex: null 
+  };
+  
+  function loadProofingToolsPage() {
+    const container = document.getElementById('page-ProofingTools');
+    
+    if (container.childElementCount === 0) {
+      container.innerHTML = `
+        <style>
+          /* Accordion & Section Styles */
+          .proofing-accordion { margin-bottom: 8px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: white; }
+          .proofing-accordion-header { padding: 12px 16px; background: linear-gradient(to bottom, #f8f9fa, #e9ecef); cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: var(--color-primary-navy); transition: background 0.2s; }
+          .proofing-accordion-header:hover { background: linear-gradient(to bottom, #e9ecef, #dee2e6); }
+          .proofing-accordion-header.active { background: var(--color-primary-navy); color: white; }
+          .proofing-accordion-arrow { transition: transform 0.3s ease; font-size: 0.8em; }
+          .proofing-accordion-header.active .proofing-accordion-arrow { transform: rotate(90deg); }
+          .proofing-accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+          .proofing-accordion-body.open { max-height: 200px; padding: 12px 16px; border-top: 1px solid #ddd; overflow-y: auto; }
+          .proofing-badge { display: inline-block; padding: 2px 8px; background: var(--color-primary-orange); color: white; border-radius: 12px; font-size: 0.75em; font-weight: 600; margin-left: 8px; }
+          .proofing-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 4px solid var(--color-primary-orange); }
+          .proofing-section h3 { margin-top: 0; color: var(--color-primary-navy); font-size: 1.1em; }
           
-          <div style="display:grid; grid-template-columns: 2fr 1fr auto; gap:15px; align-items:end;">
-            <div>
-              <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Google Sheet URL</label>
-              <input type="text" id="proofing-sheet-url" class="form-input" 
-                placeholder="Paste full URL here..." 
-                style="width:100%;">
+          /* Table/Group Styles */
+          .proofing-grouped-header { background: linear-gradient(135deg, var(--color-primary-navy) 0%, #1976d2 100%); color: white; padding: 14px 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; user-select: none; position: sticky; left: 0; }
+          .proofing-grouped-header:hover { filter: brightness(1.1); }
+          .proofing-grouped-row { background: #f8f9fa; border-left: 3px solid var(--color-primary-orange); }
+          .proofing-grouped-row:hover { background: #e9ecef; }
+          
+          /* Removed color coding dependence - relying on high contrast borders and text badges */
+          .proofing-grouped-row-matched { border-left: 4px solid var(--color-primary-navy); }
+          .proofing-grouped-row-related { border-left: 4px solid #999; background: #f4f4f4; }
+          
+          /* Accessible Inline Badges */
+          .badge-inline { font-size: 0.75em; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-right: 8px; display: inline-block; white-space: nowrap; }
+          .badge-target { background: var(--color-primary-navy); color: white; border: 1px solid #001f3f; }
+          .badge-cross { background: #e0e0e0; color: #333; border: 1px solid #ccc; }
+          
+          /* Drag & Drop Styles */
+          .drag-handle { cursor: grab; margin-right: 8px; opacity: 0.5; font-size: 14px; user-select: none; }
+          .drag-handle:hover { opacity: 1; }
+          .drag-handle:active { cursor: grabbing; }
+          .drag-over { border-left: 3px dashed var(--color-primary-orange) !important; background-color: rgba(255, 127, 17, 0.2) !important; }
+          
+          .proofing-header-checkbox { display: inline-flex; align-items: center; padding: 8px 12px; margin: 4px; background: white; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; transition: all 0.2s; user-select: none; }
+          .proofing-header-checkbox:hover { border-color: var(--color-primary-orange); background: #fff9f0; }
+          .proofing-header-checkbox input[type="checkbox"] { margin-right: 8px; cursor: pointer; width: 18px; height: 18px; }
+          .proofing-header-checkbox input[type="checkbox"]:checked { accent-color: var(--color-primary-orange); }
+          .proofing-header-checkbox.checked { background: #fff9f0; border-color: var(--color-primary-orange); font-weight: 600; }
+          
+          .proofing-cell-clickable { position: relative; cursor: pointer; }
+          .proofing-cell-clickable:hover { background: #fff9f0 !important; box-shadow: inset 0 0 0 2px var(--color-primary-orange); }
+          .proofing-find-icon { opacity: 0; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: var(--color-primary-orange); color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; font-weight: bold; pointer-events: none; transition: opacity 0.2s; }
+          .proofing-cell-clickable:hover .proofing-find-icon { opacity: 1; }
+          
+          .proofing-cross-ref-banner { background: linear-gradient(135deg, #1976d2 0%, var(--color-primary-orange) 100%); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+          .proofing-highlighted-cell { background: #fff3cd !important; border: 2px solid var(--color-primary-orange) !important; font-weight: 600; }
+          
+          .proofing-checkbox-container { max-height: 250px; overflow-y: auto; padding: 10px; background:#f9f9f9; border-radius:6px; border:1px solid #ddd; display: flex; flex-wrap: wrap; gap: 8px; }
+          .proofing-table-header-cell { background: var(--color-primary-navy); color: white; padding: 12px; text-align: left; position: sticky; top: 0; z-index: 10; border-right: 1px solid rgba(255,255,255,0.1); user-select: none; transition: background-color 0.2s; }
+          .proofing-table-header-cell:hover { background: #004080; }
+          .sticky-col { position: sticky; left: 0; z-index: 5; background: inherit; border-right: 2px solid #ccc !important; font-weight: bold; }
+          th.sticky-col { z-index: 11; } 
+          
+          /* Editable Data Span */
+          .proofing-data-span { display: inline-block; min-width: 20px; min-height: 1em; }
+        </style>
+        
+        <div class="widget">
+          <h2 style="margin:0 0 10px 0; color:var(--color-primary-navy);">
+            <span style="color:var(--color-primary-orange);">■</span> Proofing Tools
+          </h2>
+          <p style="color:#666; margin-bottom:25px;">Load any Google Sheet to filter, cross-reference, and bulk edit data.</p>
+          
+          <div class="proofing-section">
+            <h3>📋 Step 1: Load Your Sheet</h3>
+            <div style="display:grid; grid-template-columns: 2fr 1fr auto; gap:15px; align-items:end;">
+              <div>
+                <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Google Sheet URL</label>
+                <input type="text" id="proofing-sheet-url" class="form-input" placeholder="Paste full URL here..." style="width:100%;">
+              </div>
+              <div>
+                <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Tab Name (Optional)</label>
+                <input type="text" id="proofing-tab-name" class="form-input" placeholder="Leave blank for Sheet1" style="width:100%;">
+              </div>
+              <div>
+                <button id="btn-load-proofing-data" class="button-primary" onclick="handleLoadProofingSheetData()" style="padding:10px 24px;">Load Data</button>
+              </div>
             </div>
-            
-            <div>
-              <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Tab Name (Optional)</label>
-              <input type="text" id="proofing-tab-name" class="form-input" 
-                placeholder="Leave blank for Sheet1" 
-                style="width:100%;">
-            </div>
-            
-            <div>
-              <button id="btn-load-proofing-data" class="button-primary" 
-                onclick="handleLoadProofingSheetData()" 
-                style="padding:10px 24px;">
-                Load Data
-              </button>
-            </div>
+            <div id="proofing-load-feedback" style="margin-top:15px; min-height:20px;"></div>
           </div>
           
-          <div id="proofing-load-feedback" style="margin-top:15px; min-height:20px;"></div>
-        </div>
-        
-        <div id="proofing-header-selection" style="display:none;" class="proofing-section">
-          <h3>📑 Step 2: Select Columns to Display</h3>
-          <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
-            Choose which columns you want to see and filter. Uncheck columns to hide them.
-          </p>
-          
-          <div style="display:flex; gap:10px; margin-bottom:15px;">
-            <button class="button-secondary" onclick="handleSelectAllHeaders()">Select All</button>
-            <button class="button-secondary" onclick="handleDeselectAllHeaders()">Deselect All</button>
-          </div>
-          
-          <div id="proofing-header-checkboxes" style="display:flex; flex-wrap:wrap; gap:8px; padding:15px; background:#f9f9f9; border-radius:6px; border:1px solid #ddd;"></div>
-          
-          <div style="margin-top:15px; padding-top:15px; border-top:2px solid var(--color-accent-gray);">
-            <span style="color:var(--color-primary-navy); font-weight:600;">
-              <span id="proofing-selected-count" style="color:var(--color-primary-orange);">0</span> of 
-              <span id="proofing-total-count">0</span> columns selected
-            </span>
-          </div>
-        </div>
-        
-        <div id="proofing-filter-section" style="display:none;" class="proofing-section">
-          <h3>🔍 Step 3: Filter Your Data</h3>
-          <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
-            Click any header below to expand and select filter values. Hold Ctrl/Cmd to select multiple.
-          </p>
-          
-          <div id="proofing-filters-container"></div>
-          
-          <div style="display:flex; gap:10px; justify-content:space-between; align-items:center; padding-top:15px; border-top:2px solid var(--color-accent-gray); margin-top:15px;">
-            <button class="button-secondary" onclick="handleClearProofingFilters()">Clear All Filters</button>
-            <div style="color:var(--color-primary-navy); font-weight:600; font-size:1em;">
-              <span id="proofing-row-count" style="color:var(--color-primary-orange);">0</span> rows shown
+          <div id="proofing-header-selection" style="display:none;" class="proofing-section">
+            <h3>📑 Step 2: Select Columns to Display</h3>
+            <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
+              Choose which columns you want to see. Uncheck columns to hide them.
+            </p>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+              <div style="display:flex; gap:10px;">
+                <button class="button-secondary" onclick="handleSelectAllHeaders()">Select All</button>
+                <button class="button-secondary" onclick="handleDeselectAllHeaders()">Deselect All</button>
+              </div>
+              <input type="text" id="proofing-column-search" class="form-input" placeholder="🔍 Search columns..." onkeyup="filterColumnCheckboxes()" style="width:250px;">
             </div>
-          </div>
-        </div>
-        
-        <div id="proofing-grouping-section" style="display:none;" class="proofing-section">
-          <h3>📊 Step 4: Group By Column</h3>
-          <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
-            <strong>Important:</strong> When you filter AND group, this tool shows:
-            <br>• All rows matching your filter (highlighted in orange)
-            <br>• PLUS all other rows that share the same group value (highlighted in blue)
-          </p>
-          
-          <div style="display:grid; grid-template-columns: 1fr auto; gap:15px; align-items:end;">
-            <div>
-              <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Group By Column</label>
-              <select id="proofing-group-by-select" class="form-input" onchange="handleGroupByChange()" style="width:100%;">
-                <option value="">-- No Grouping --</option>
-              </select>
-            </div>
-            <button class="button-secondary" onclick="handleClearGrouping()">Clear Grouping</button>
-          </div>
-        </div>
-        
-        <div id="proofing-data-section" style="display:none;">
-          <div id="proofing-cross-ref-banner" style="display:none;" class="proofing-cross-ref-banner">
-            <div>
-              <strong style="font-size:1.1em;">🔗 Cross-Reference Active</strong><br>
-              <span style="opacity:0.9; font-size:0.9em;">
-                Showing all rows where <strong id="cross-ref-column-name"></strong> = 
-                "<strong id="cross-ref-value"></strong>"
+            <div id="proofing-header-checkboxes" class="proofing-checkbox-container"></div>
+            <div style="margin-top:15px; padding-top:15px; border-top:2px solid var(--color-accent-gray);">
+              <span style="color:var(--color-primary-navy); font-weight:600;">
+                <span id="proofing-selected-count" style="color:var(--color-primary-orange);">0</span> of 
+                <span id="proofing-total-count">0</span> columns selected
               </span>
             </div>
-            <button class="button-secondary" onclick="handleClearCrossReference()" 
-              style="background:white; color:var(--color-primary-navy); border:none; padding:8px 16px;">
-              Clear Cross-Reference
-            </button>
           </div>
           
-          <div class="proofing-section" style="margin-bottom:0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-              <h3 style="margin:0;">✏️ Step 5: View & Edit</h3>
-              <div style="display:flex; gap:10px;">
-                <button id="btn-toggle-proofing-edit" class="button-secondary" onclick="handleToggleProofingEdit()">Enable Edit Mode</button>
-                <button id="btn-export-proofing" class="button-primary" onclick="handleExportProofing()">Export Filtered Data</button>
+          <div id="proofing-filter-section" style="display:none;" class="proofing-section">
+            <h3>🔍 Step 3: Filter Your Data</h3>
+            <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
+              Click any header below to expand and select filter values. Hold Ctrl/Cmd to select multiple.
+            </p>
+            <div id="proofing-filters-container"></div>
+            <div style="display:flex; gap:10px; justify-content:space-between; align-items:center; padding-top:15px; border-top:2px solid var(--color-accent-gray); margin-top:15px;">
+              <button class="button-secondary" onclick="handleClearProofingFilters()">Clear All Filters</button>
+            </div>
+          </div>
+          
+          <div id="proofing-grouping-section" style="display:none;" class="proofing-section">
+            <h3>📊 Step 4: Group & Cross-List</h3>
+            <p style="color:#666; font-size:0.9em; margin-bottom:15px;">
+              Select one or more columns to create a compound group (e.g., Section ID + Time + Instructor).
+            </p>
+            
+            <div style="display:grid; grid-template-columns: 1fr; gap:15px; align-items:start;">
+              <div>
+                <label style="display:block; font-weight:600; margin-bottom:8px; color:var(--color-primary-navy);">Compound Grouping Columns (Hold Ctrl/Cmd for multiple)</label>
+                <select id="proofing-group-by-select" class="form-input" multiple onchange="handleGroupByChange()" style="width:100%; height:120px;">
+                </select>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; background:#f9f9f9; padding:10px 15px; border-radius:6px; border:1px solid #ddd;">
+                <label style="display:flex; align-items:center; cursor:pointer; font-weight:600;">
+                  <input type="checkbox" id="proofing-toggle-crosslisted" checked onchange="handleToggleCrossListed()" style="width:20px; height:20px; margin-right:10px; accent-color:var(--color-primary-orange);">
+                  Include cross-listed/related records (Find rows sharing the exact criteria above)
+                </label>
+                <button class="button-secondary" onclick="handleClearGrouping()">Clear Grouping</button>
               </div>
             </div>
-            
-            <div id="proofing-legend" style="display:none;" class="proofing-legend">
-              <div class="proofing-legend-item">
-                <div class="proofing-legend-box" style="background:#fff9f0; border-color:var(--color-primary-orange);"></div>
-                <span><strong>Matched Filter</strong> - Rows that match your filter criteria</span>
+          </div>
+          
+          <div id="proofing-data-section" style="display:none;">
+            <div id="proofing-cross-ref-banner" style="display:none;" class="proofing-cross-ref-banner">
+              <div>
+                <strong style="font-size:1.1em;">🔗 Quick Filter Applied</strong><br>
+                <span style="opacity:0.9; font-size:0.9em;">
+                  Filtered table where <strong id="cross-ref-column-name"></strong> = "<strong id="cross-ref-value"></strong>"
+                </span>
               </div>
-              <div class="proofing-legend-item">
-                <div class="proofing-legend-box" style="background:#f0f8ff; border-color:#1976d2;"></div>
-                <span><strong>Related Records</strong> - Other rows in the same group</span>
-              </div>
+              <button class="button-secondary" onclick="handleClearCrossReference()" style="background:white; color:var(--color-primary-navy); border:none; padding:8px 16px;">
+                Clear Quick Filter
+              </button>
             </div>
             
-            <div style="background:#e3f2fd; padding:12px; border-radius:6px; margin-bottom:15px; border-left:4px solid #1976d2;">
-              <strong style="color:#1976d2;">💡 Tip:</strong> 
-              <span style="color:#666;">Click on any cell value in the table below to find and group all rows that share that value.</span>
-            </div>
-            
-            <div id="proofing-edit-controls" style="display:none; background:#fff3cd; padding:15px; border-radius:6px; margin-bottom:15px; border:2px solid #ffc107;">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="proofing-section" style="margin-bottom:0;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
                 <div>
-                  <strong style="color:var(--color-primary-navy);">✏️ Edit Mode Active</strong> 
-                  <span style="color:#666;">- Click any cell to edit. Changes are highlighted in yellow.</span>
+                  <h3 style="margin:0 0 10px 0;">✏️ Step 5: View & Edit</h3>
+                  <div style="color:var(--color-primary-navy); font-weight:600; font-size:1.1em;">
+                    Showing <span id="proofing-row-count" style="color:var(--color-primary-orange);">0</span> rows
+                  </div>
                 </div>
+                
+                <div style="flex-grow:1; max-width:300px;">
+                  <input type="text" id="proofing-table-search" class="form-input" placeholder="🔎 Quick search table data..." onkeyup="handleTableSearch()" style="width:100%;">
+                </div>
+  
                 <div style="display:flex; gap:10px;">
-                  <button class="button-secondary" onclick="handleCancelProofingEdits()">Cancel</button>
-                  <button id="btn-save-proofing-edits" class="button-success" onclick="handleSaveProofingEdits()">Save All Changes</button>
+                  <button id="btn-toggle-proofing-edit" class="button-secondary" onclick="handleToggleProofingEdit()">Enable Edit Mode</button>
+                  <button id="btn-export-proofing" class="button-primary" onclick="handleExportProofing()">Export Displayed Data</button>
                 </div>
               </div>
-            </div>
-            
-            <div style="overflow-x:auto; max-height:600px; overflow-y:auto; border:2px solid var(--color-primary-navy); border-radius:8px;">
-              <table id="proofing-data-table" class="data-table" style="width:100%; border-collapse:collapse;">
-                <thead id="proofing-table-head"></thead>
-                <tbody id="proofing-table-body"></tbody>
-              </table>
+              
+              <div style="background:#e3f2fd; padding:12px; border-radius:6px; margin-bottom:15px; border-left:4px solid #1976d2;">
+                <strong style="color:#1976d2;">💡 Tips:</strong> 
+                <span style="color:#666;">Drag <strong>⋮⋮</strong> in headers to reorder. Click headers to sort. Badges like <strong>[ TARGET ]</strong> show direct filter matches.</span>
+              </div>
+              
+              <div id="proofing-edit-controls" style="display:none; background:#fff3cd; padding:15px; border-radius:6px; margin-bottom:15px; border:2px solid #ffc107;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong style="color:var(--color-primary-navy);">✏️ Edit Mode Active</strong> 
+                    <span style="color:#666;">- Click data text to edit. Changes highlight in yellow.</span>
+                  </div>
+                  <div style="display:flex; gap:10px;">
+                    <button class="button-secondary" onclick="handleCancelProofingEdits()">Cancel</button>
+                    <button id="btn-save-proofing-edits" class="button-success" onclick="handleSaveProofingEdits()">Save All Changes</button>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="overflow-x:auto; max-height:600px; overflow-y:auto; border:2px solid var(--color-primary-navy); border-radius:8px; position: relative;">
+                <table id="proofing-data-table" class="data-table" style="width:100%; border-collapse:collapse; margin-top:0;">
+                  <thead id="proofing-table-head"></thead>
+                  <tbody id="proofing-table-body"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    `;
-    
-    loadSavedSheetInfo();
-  }
-}
-
-function loadSavedSheetInfo() {
-  try {
-    const savedUrl = localStorage.getItem('proofing-sheet-url');
-    const savedTab = localStorage.getItem('proofing-tab-name');
-    
-    if (savedUrl) {
-      document.getElementById('proofing-sheet-url').value = savedUrl;
-    }
-    if (savedTab) {
-      document.getElementById('proofing-tab-name').value = savedTab;
-    }
-  } catch (e) {
-    console.warn('Could not load saved sheet info:', e);
-  }
-}
-
-function saveSheetInfo(url, tab) {
-  try {
-    localStorage.setItem('proofing-sheet-url', url);
-    localStorage.setItem('proofing-tab-name', tab);
-  } catch (e) {
-    console.warn('Could not save sheet info:', e);
-  }
-}
-
-function handleLoadProofingSheetData() {
-  const urlInput = document.getElementById('proofing-sheet-url');
-  const tabInput = document.getElementById('proofing-tab-name');
-  const btn = document.getElementById('btn-load-proofing-data');
-  const feedback = document.getElementById('proofing-load-feedback');
-  
-  const sheetUrl = urlInput.value.trim();
-  const tabName = tabInput.value.trim() || '';
-  
-  if (!sheetUrl) {
-    feedback.innerHTML = '<div style="color:#dc3545; font-weight:600;">⚠️ Please paste a Google Sheet URL.</div>';
-    return;
-  }
-  
-  proofingToolsState.sheetUrl = sheetUrl;
-  proofingToolsState.tabName = tabName;
-  
-  saveSheetInfo(sheetUrl, tabName);
-  
-  btn.disabled = true;
-  btn.textContent = 'Loading...';
-  feedback.innerHTML = '<div style="color:#666;">🔄 Fetching sheet data...</div>';
-  
-  google.script.run
-    .withSuccessHandler(response => {
-      btn.disabled = false;
-      btn.textContent = 'Load Data';
-      
-      if (response.success) {
-        proofingToolsState.headers = response.headers;
-        proofingToolsState.rawData = response.rows;
-        proofingToolsState.filteredData = response.rows;
-        proofingToolsState.filters = {};
-        proofingToolsState.groupByColumn = null;
-        proofingToolsState.selectedHeaders = response.headers.map((h, i) => i);
-        proofingToolsState.crossReferenceActive = false;
-        
-        feedback.innerHTML = `<div style="color:#28a745; font-weight:600;">✅ Loaded ${response.rows.length} rows with ${response.headers.length} columns.</div>`;
-        
-        document.getElementById('proofing-header-selection').style.display = 'block';
-        document.getElementById('proofing-filter-section').style.display = 'block';
-        document.getElementById('proofing-grouping-section').style.display = 'block';
-        document.getElementById('proofing-data-section').style.display = 'block';
-        
-        renderHeaderCheckboxes();
-        renderProofingFilters();
-        renderGroupByDropdown();
-        renderProofingDataTable();
-      } else {
-        feedback.innerHTML = `<div style="color:#dc3545; font-weight:600;">❌ Error: ${response.message}</div>`;
-      }
-    })
-    .withFailureHandler(err => {
-      btn.disabled = false;
-      btn.textContent = 'Load Data';
-      feedback.innerHTML = `<div style="color:#dc3545; font-weight:600;">❌ Server Error: ${err.message}</div>`;
-    })
-    .api_lookup_getData(sheetUrl, tabName);
-}
-
-function renderHeaderCheckboxes() {
-  const container = document.getElementById('proofing-header-checkboxes');
-  container.innerHTML = '';
-  
-  proofingToolsState.headers.forEach((header, index) => {
-    const isChecked = proofingToolsState.selectedHeaders.includes(index);
-    
-    const label = document.createElement('label');
-    label.className = `proofing-header-checkbox ${isChecked ? 'checked' : ''}`;
-    label.innerHTML = `
-      <input type="checkbox" 
-        ${isChecked ? 'checked' : ''} 
-        onchange="handleHeaderToggle(${index}, this.checked)">
-      <span>${escapeProofingHtml(header)}</span>
-    `;
-    container.appendChild(label);
-  });
-  
-  updateHeaderCount();
-}
-
-function handleHeaderToggle(index, isChecked) {
-  if (isChecked) {
-    if (!proofingToolsState.selectedHeaders.includes(index)) {
-      proofingToolsState.selectedHeaders.push(index);
-    }
-  } else {
-    proofingToolsState.selectedHeaders = proofingToolsState.selectedHeaders.filter(i => i !== index);
-  }
-  
-  const checkboxes = document.querySelectorAll('.proofing-header-checkbox');
-  checkboxes[index].classList.toggle('checked', isChecked);
-  
-  updateHeaderCount();
-  renderProofingFilters();
-  renderGroupByDropdown();
-  renderProofingDataTable();
-}
-
-function handleSelectAllHeaders() {
-  proofingToolsState.selectedHeaders = proofingToolsState.headers.map((h, i) => i);
-  renderHeaderCheckboxes();
-  renderProofingFilters();
-  renderGroupByDropdown();
-  renderProofingDataTable();
-}
-
-function handleDeselectAllHeaders() {
-  proofingToolsState.selectedHeaders = [];
-  renderHeaderCheckboxes();
-  renderProofingFilters();
-  renderGroupByDropdown();
-  renderProofingDataTable();
-}
-
-function updateHeaderCount() {
-  document.getElementById('proofing-selected-count').textContent = proofingToolsState.selectedHeaders.length;
-  document.getElementById('proofing-total-count').textContent = proofingToolsState.headers.length;
-}
-
-function renderProofingFilters() {
-  const container = document.getElementById('proofing-filters-container');
-  container.innerHTML = '';
-  
-  proofingToolsState.selectedHeaders.forEach(colIndex => {
-    const header = proofingToolsState.headers[colIndex];
-    const uniqueValues = [...new Set(proofingToolsState.rawData.map(row => row[colIndex]))].sort();
-    
-    const accordionDiv = document.createElement('div');
-    accordionDiv.className = 'proofing-accordion';
-    accordionDiv.innerHTML = `
-      <div class="proofing-accordion-header" onclick="toggleProofingAccordion(${colIndex})">
-        <span>${escapeProofingHtml(header)}</span>
-        <span>
-          <span class="proofing-badge" id="proofing-badge-${colIndex}">0</span>
-          <span class="proofing-accordion-arrow">▶</span>
-        </span>
-      </div>
-      <div class="proofing-accordion-body" id="proofing-accordion-${colIndex}">
-        <select class="form-input" id="proofing-filter-${colIndex}" multiple 
-          onchange="handleProofingFilterChange(${colIndex})" 
-          style="width:100%; height:140px; border:2px solid var(--color-primary-navy);">
-          ${uniqueValues.map(val => `<option value="${escapeProofingHtml(val)}">${escapeProofingHtml(val)}</option>`).join('')}
-        </select>
-      </div>
-    `;
-    container.appendChild(accordionDiv);
-  });
-  
-  if (proofingToolsState.selectedHeaders.length === 0) {
-    container.innerHTML = '<div style="padding:20px; text-align:center; color:#888; background:#f9f9f9; border-radius:6px;">No columns selected. Please select at least one column above.</div>';
-  }
-}
-
-function toggleProofingAccordion(colIndex) {
-  const header = document.querySelector(`#proofing-accordion-${colIndex}`).previousElementSibling;
-  const body = document.getElementById(`proofing-accordion-${colIndex}`);
-  
-  header.classList.toggle('active');
-  body.classList.toggle('open');
-}
-
-function renderGroupByDropdown() {
-  const select = document.getElementById('proofing-group-by-select');
-  select.innerHTML = '<option value="">-- No Grouping --</option>';
-  
-  proofingToolsState.selectedHeaders.forEach(index => {
-    const header = proofingToolsState.headers[index];
-    select.innerHTML += `<option value="${index}">${escapeProofingHtml(header)}</option>`;
-  });
-}
-
-function handleProofingFilterChange(colIndex) {
-  const selectElement = document.getElementById(`proofing-filter-${colIndex}`);
-  const selectedValues = Array.from(selectElement.selectedOptions).map(opt => opt.value);
-  
-  const badge = document.getElementById(`proofing-badge-${colIndex}`);
-  badge.textContent = selectedValues.length;
-  
-  if (selectedValues.length === 0) {
-    delete proofingToolsState.filters[colIndex];
-  } else {
-    proofingToolsState.filters[colIndex] = selectedValues;
-  }
-  
-  applyProofingFiltersWithGroupExpansion();
-  renderProofingDataTable();
-}
-
-function applyProofingFiltersWithGroupExpansion() {
-  // Step 1: Apply basic filters to find matching rows
-  const basicFilteredRows = proofingToolsState.rawData.filter(row => {
-    for (let colIndex in proofingToolsState.filters) {
-      const allowedValues = proofingToolsState.filters[colIndex];
-      if (!allowedValues.includes(row[colIndex])) {
-        return false;
-      }
-    }
-    return true;
-  });
-  
-  // Step 2: If grouping is active, expand to include all rows in those groups
-  if (proofingToolsState.groupByColumn !== null && Object.keys(proofingToolsState.filters).length > 0) {
-    // Extract unique group values from filtered rows
-    const groupValues = new Set(
-      basicFilteredRows.map(row => row[proofingToolsState.groupByColumn])
-    );
-    
-    // Show ALL rows that have any of those group values
-    proofingToolsState.filteredData = proofingToolsState.rawData.filter(row => 
-      groupValues.has(row[proofingToolsState.groupByColumn])
-    );
-    
-    // Show legend when expansion is active
-    document.getElementById('proofing-legend').style.display = 'flex';
-  } else {
-    // No grouping or no filters - just show filtered rows
-    proofingToolsState.filteredData = basicFilteredRows;
-    document.getElementById('proofing-legend').style.display = 'none';
-  }
-}
-
-function handleClearProofingFilters() {
-  proofingToolsState.filters = {};
-  proofingToolsState.filteredData = proofingToolsState.rawData;
-  
-  proofingToolsState.headers.forEach((header, index) => {
-    const selectEl = document.getElementById(`proofing-filter-${index}`);
-    if (selectEl) {
-      Array.from(selectEl.options).forEach(opt => opt.selected = false);
-    }
-    
-    const badge = document.getElementById(`proofing-badge-${index}`);
-    if (badge) badge.textContent = '0';
-    
-    const accordion = document.getElementById(`proofing-accordion-${index}`);
-    const accordionHeader = accordion ? accordion.previousElementSibling : null;
-    if (accordion) accordion.classList.remove('open');
-    if (accordionHeader) accordionHeader.classList.remove('active');
-  });
-  
-  document.getElementById('proofing-legend').style.display = 'none';
-  renderProofingDataTable();
-}
-
-function handleGroupByChange() {
-  const select = document.getElementById('proofing-group-by-select');
-  const value = select.value;
-  
-  if (value === '') {
-    proofingToolsState.groupByColumn = null;
-  } else {
-    proofingToolsState.groupByColumn = parseInt(value);
-  }
-  
-  // Reapply filters with group expansion
-  applyProofingFiltersWithGroupExpansion();
-  renderProofingDataTable();
-}
-
-function handleClearGrouping() {
-  proofingToolsState.groupByColumn = null;
-  document.getElementById('proofing-group-by-select').value = '';
-  document.getElementById('proofing-legend').style.display = 'none';
-  applyProofingFiltersWithGroupExpansion();
-  renderProofingDataTable();
-}
-
-function handleCellClick(rowIdx, colIdx) {
-  if (proofingToolsState.editMode) return;
-  
-  const cellValue = proofingToolsState.filteredData[rowIdx][colIdx];
-  const columnName = proofingToolsState.headers[colIdx];
-  
-  proofingToolsState.crossReferenceActive = true;
-  proofingToolsState.crossReferenceColumn = colIdx;
-  proofingToolsState.crossReferenceValue = cellValue;
-  
-  document.getElementById('cross-ref-column-name').textContent = columnName;
-  document.getElementById('cross-ref-value').textContent = cellValue;
-  document.getElementById('proofing-cross-ref-banner').style.display = 'flex';
-  
-  // Apply cross-reference as a filter
-  proofingToolsState.filters[colIdx] = [cellValue];
-  
-  // Update filter UI
-  const selectEl = document.getElementById(`proofing-filter-${colIdx}`);
-  if (selectEl) {
-    Array.from(selectEl.options).forEach(opt => {
-      opt.selected = opt.value === cellValue;
-    });
-    const badge = document.getElementById(`proofing-badge-${colIdx}`);
-    if (badge) badge.textContent = '1';
-  }
-  
-  // If no grouping is set, auto-group by this column
-  if (proofingToolsState.groupByColumn === null) {
-    proofingToolsState.groupByColumn = colIdx;
-    document.getElementById('proofing-group-by-select').value = colIdx;
-  }
-  
-  applyProofingFiltersWithGroupExpansion();
-  renderProofingDataTable();
-}
-
-function handleClearCrossReference() {
-  proofingToolsState.crossReferenceActive = false;
-  
-  if (proofingToolsState.crossReferenceColumn !== null) {
-    delete proofingToolsState.filters[proofingToolsState.crossReferenceColumn];
-    
-    const selectEl = document.getElementById(`proofing-filter-${proofingToolsState.crossReferenceColumn}`);
-    if (selectEl) {
-      Array.from(selectEl.options).forEach(opt => opt.selected = false);
-    }
-    const badge = document.getElementById(`proofing-badge-${proofingToolsState.crossReferenceColumn}`);
-    if (badge) badge.textContent = '0';
-  }
-  
-  proofingToolsState.crossReferenceColumn = null;
-  proofingToolsState.crossReferenceValue = null;
-  
-  document.getElementById('proofing-cross-ref-banner').style.display = 'none';
-  
-  applyProofingFiltersWithGroupExpansion();
-  renderProofingDataTable();
-}
-
-function renderProofingDataTable() {
-  const thead = document.getElementById('proofing-table-head');
-  const tbody = document.getElementById('proofing-table-body');
-  const rowCount = document.getElementById('proofing-row-count');
-  
-  rowCount.textContent = proofingToolsState.filteredData.length;
-  
-  const selectedHeadersData = proofingToolsState.selectedHeaders.map(i => proofingToolsState.headers[i]);
-  
-  thead.innerHTML = `
-    <tr>
-      ${selectedHeadersData.map(h => `<th style="background:var(--color-primary-navy); color:white; padding:12px; text-align:left; position:sticky; top:0; z-index:10; border-right:1px solid rgba(255,255,255,0.1);">${escapeProofingHtml(h)}</th>`).join('')}
-    </tr>
-  `;
-  
-  if (proofingToolsState.filteredData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="100" style="padding:40px; text-align:center; color:#888;">📭 No data matches your filters.</td></tr>';
-    return;
-  }
-  
-  if (proofingToolsState.selectedHeaders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="100" style="padding:40px; text-align:center; color:#888;">📭 No columns selected. Please select columns in Step 2.</td></tr>';
-    return;
-  }
-  
-  if (proofingToolsState.groupByColumn !== null) {
-    renderGroupedData(tbody);
-  } else {
-    renderUngroupedData(tbody);
-  }
-  
-  if (proofingToolsState.editMode) {
-    enableProofingCellEditing();
-  }
-}
-
-function renderUngroupedData(tbody) {
-  // Determine which rows actually matched the filter
-  const matchedRowSet = new Set();
-  if (Object.keys(proofingToolsState.filters).length > 0) {
-    proofingToolsState.filteredData.forEach((row, idx) => {
-      let matches = true;
-      for (let colIndex in proofingToolsState.filters) {
-        const allowedValues = proofingToolsState.filters[colIndex];
-        if (!allowedValues.includes(row[colIndex])) {
-          matches = false;
-          break;
-        }
-      }
-      if (matches) matchedRowSet.add(idx);
-    });
-  }
-  
-  tbody.innerHTML = proofingToolsState.filteredData.map((row, rowIdx) => {
-    const isMatched = matchedRowSet.has(rowIdx) || Object.keys(proofingToolsState.filters).length === 0;
-    const rowClass = isMatched ? '' : 'proofing-grouped-row-related';
-    
-    return `
-      <tr class="${rowClass}" style="border-bottom:1px solid #eee;">
-        ${proofingToolsState.selectedHeaders.map(colIdx => {
-          const cellId = `proofing-cell-${rowIdx}-${colIdx}`;
-          const isHighlighted = proofingToolsState.crossReferenceActive && 
-                               colIdx === proofingToolsState.crossReferenceColumn;
-          
-          return `<td id="${cellId}" 
-                     class="proofing-cell-clickable ${isHighlighted ? 'proofing-highlighted-cell' : ''}" 
-                     onclick="handleCellClick(${rowIdx}, ${colIdx})"
-                     style="padding:10px; border-right:1px solid #f0f0f0; position:relative;">
-                    ${escapeProofingHtml(row[colIdx])}
-                    <span class="proofing-find-icon">🔗</span>
-                  </td>`;
-        }).join('')}
-      </tr>
-    `;
-  }).join('');
-}
-
-function renderGroupedData(tbody) {
-  const groupCol = proofingToolsState.groupByColumn;
-  const groupedData = {};
-  
-  // Determine which rows actually matched the filter (before group expansion)
-  const matchedRowIndices = new Set();
-  proofingToolsState.filteredData.forEach((row, idx) => {
-    let matches = true;
-    for (let colIndex in proofingToolsState.filters) {
-      const allowedValues = proofingToolsState.filters[colIndex];
-      if (!allowedValues.includes(row[colIndex])) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) matchedRowIndices.add(idx);
-  });
-  
-  proofingToolsState.filteredData.forEach((row, idx) => {
-    const groupKey = row[groupCol];
-    if (!groupedData[groupKey]) {
-      groupedData[groupKey] = [];
-    }
-    groupedData[groupKey].push({ row, originalIndex: idx });
-  });
-  
-  let html = '';
-  let globalRowIdx = 0;
-  
-  Object.keys(groupedData).sort().forEach(groupKey => {
-    const items = groupedData[groupKey];
-    const groupHeaderName = proofingToolsState.headers[groupCol];
-    
-    const matchedCount = items.filter(item => matchedRowIndices.has(item.originalIndex)).length;
-    const relatedCount = items.length - matchedCount;
-    
-    html += `
-      <tr>
-        <td colspan="${proofingToolsState.selectedHeaders.length}" class="proofing-grouped-header">
-          📌 ${escapeProofingHtml(groupHeaderName)}: <strong>${escapeProofingHtml(groupKey)}</strong>
-          <span style="opacity:0.8; font-weight:normal; margin-left:10px;">
-            (${matchedCount} matched${relatedCount > 0 ? `, ${relatedCount} related` : ''})
-          </span>
-        </td>
-      </tr>
-    `;
-    
-    items.forEach(item => {
-      const isMatched = matchedRowIndices.has(item.originalIndex) || Object.keys(proofingToolsState.filters).length === 0;
-      const rowClass = isMatched ? 'proofing-grouped-row-matched' : 'proofing-grouped-row-related';
-      
-      html += `
-        <tr class="${rowClass}">
-          ${proofingToolsState.selectedHeaders.map(colIdx => {
-            const cellId = `proofing-cell-${globalRowIdx}-${colIdx}`;
-            const isHighlighted = proofingToolsState.crossReferenceActive && 
-                                 colIdx === proofingToolsState.crossReferenceColumn;
-            
-            return `<td id="${cellId}" 
-                       class="proofing-cell-clickable ${isHighlighted ? 'proofing-highlighted-cell' : ''}" 
-                       onclick="handleCellClick(${item.originalIndex}, ${colIdx})"
-                       style="padding:10px; border-right:1px solid #e0e0e0; position:relative;">
-                      ${escapeProofingHtml(item.row[colIdx])}
-                      <span class="proofing-find-icon">🔗</span>
-                    </td>`;
-          }).join('')}
-        </tr>
       `;
-      globalRowIdx++;
+      loadSavedSheetInfo();
+    }
+  }
+  
+  function loadSavedSheetInfo() {
+    try {
+      const savedUrl = localStorage.getItem('proofing-sheet-url');
+      const savedTab = localStorage.getItem('proofing-tab-name');
+      if (savedUrl) document.getElementById('proofing-sheet-url').value = savedUrl;
+      if (savedTab) document.getElementById('proofing-tab-name').value = savedTab;
+    } catch (e) { console.warn('Could not load saved sheet info:', e); }
+  }
+  
+  function saveSheetInfo(url, tab) {
+    try {
+      localStorage.setItem('proofing-sheet-url', url);
+      localStorage.setItem('proofing-tab-name', tab);
+    } catch (e) { console.warn('Could not save sheet info:', e); }
+  }
+  
+  function handleLoadProofingSheetData() {
+    const urlInput = document.getElementById('proofing-sheet-url');
+    const tabInput = document.getElementById('proofing-tab-name');
+    const btn = document.getElementById('btn-load-proofing-data');
+    const feedback = document.getElementById('proofing-load-feedback');
+    
+    const sheetUrl = urlInput.value.trim();
+    const tabName = tabInput.value.trim() || '';
+    
+    if (!sheetUrl) {
+      feedback.innerHTML = '<div style="color:#dc3545; font-weight:600;">⚠️ Please paste a Google Sheet URL.</div>';
+      return;
+    }
+    
+    proofingToolsState.sheetUrl = sheetUrl;
+    proofingToolsState.tabName = tabName;
+    saveSheetInfo(sheetUrl, tabName);
+    
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+    feedback.innerHTML = '<div style="color:#666;">🔄 Fetching sheet data...</div>';
+    
+    google.script.run
+      .withSuccessHandler(response => {
+        btn.disabled = false;
+        btn.textContent = 'Load Data';
+        
+        if (response.success) {
+          proofingToolsState.headers = response.headers;
+          proofingToolsState.rawData = response.rows;
+          proofingToolsState.filteredData = response.rows;
+          proofingToolsState.filters = {};
+          proofingToolsState.groupByColumns = [];
+          proofingToolsState.showCrossListed = true;
+          proofingToolsState.selectedHeaders = response.headers.map((h, i) => i);
+          proofingToolsState.crossReferenceActive = false;
+          proofingToolsState.tableSearchQuery = '';
+          proofingToolsState.sortCol = null;
+          proofingToolsState.expandedGroups = {};
+          
+          document.getElementById('proofing-table-search').value = '';
+          document.getElementById('proofing-toggle-crosslisted').checked = true;
+          
+          feedback.innerHTML = `<div style="color:#28a745; font-weight:600;">✅ Loaded ${response.rows.length} rows with ${response.headers.length} columns.</div>`;
+          
+          document.getElementById('proofing-header-selection').style.display = 'block';
+          document.getElementById('proofing-filter-section').style.display = 'block';
+          document.getElementById('proofing-grouping-section').style.display = 'block';
+          document.getElementById('proofing-data-section').style.display = 'block';
+          
+          renderHeaderCheckboxes();
+          renderProofingFilters();
+          renderGroupByDropdown();
+          renderProofingDataTable();
+        } else {
+          feedback.innerHTML = `<div style="color:#dc3545; font-weight:600;">❌ Error: ${response.message}</div>`;
+        }
+      })
+      .withFailureHandler(err => {
+        btn.disabled = false;
+        btn.textContent = 'Load Data';
+        feedback.innerHTML = `<div style="color:#dc3545; font-weight:600;">❌ Server Error: ${err.message}</div>`;
+      })
+      .api_fetchSheetData(sheetUrl, tabName);
+  }
+  
+  function renderHeaderCheckboxes() {
+    const container = document.getElementById('proofing-header-checkboxes');
+    container.innerHTML = '';
+    
+    proofingToolsState.headers.forEach((header, index) => {
+      const isChecked = proofingToolsState.selectedHeaders.includes(index);
+      const label = document.createElement('label');
+      label.className = `proofing-header-checkbox ${isChecked ? 'checked' : ''}`;
+      label.setAttribute('data-header-name', header.toLowerCase());
+      label.innerHTML = `
+        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="handleHeaderToggle(${index}, this.checked)">
+        <span>${escapeProofingHtml(header)}</span>
+      `;
+      container.appendChild(label);
     });
-  });
+    updateHeaderCount();
+  }
   
-  tbody.innerHTML = html;
-}
-
-function handleToggleProofingEdit() {
-  proofingToolsState.editMode = !proofingToolsState.editMode;
-  const btn = document.getElementById('btn-toggle-proofing-edit');
-  const controls = document.getElementById('proofing-edit-controls');
+  function filterColumnCheckboxes() {
+    const query = document.getElementById('proofing-column-search').value.toLowerCase();
+    const checkboxes = document.querySelectorAll('.proofing-header-checkbox');
+    checkboxes.forEach(cb => {
+      cb.style.display = cb.getAttribute('data-header-name').includes(query) ? 'inline-flex' : 'none';
+    });
+  }
   
-  if (proofingToolsState.editMode) {
-    btn.textContent = 'Disable Edit Mode';
-    btn.classList.remove('button-secondary');
-    btn.classList.add('button-warning');
-    controls.style.display = 'block';
-    enableProofingCellEditing();
-  } else {
-    btn.textContent = 'Enable Edit Mode';
-    btn.classList.remove('button-warning');
-    btn.classList.add('button-secondary');
-    controls.style.display = 'none';
-    proofingToolsState.pendingEdits = [];
+  function handleHeaderToggle(index, isChecked) {
+    if (isChecked) {
+      if (!proofingToolsState.selectedHeaders.includes(index)) proofingToolsState.selectedHeaders.push(index);
+    } else {
+      proofingToolsState.selectedHeaders = proofingToolsState.selectedHeaders.filter(i => i !== index);
+    }
+    
+    const checkboxes = document.querySelectorAll('.proofing-header-checkbox');
+    checkboxes[index].classList.toggle('checked', isChecked);
+    
+    updateHeaderCount();
+    renderProofingFilters();
+    renderGroupByDropdown();
     renderProofingDataTable();
   }
-}
-
-function enableProofingCellEditing() {
-  proofingToolsState.filteredData.forEach((row, rowIdx) => {
-    proofingToolsState.selectedHeaders.forEach(colIdx => {
-      const cellEl = document.getElementById(`proofing-cell-${rowIdx}-${colIdx}`);
-      if (cellEl) {
-        cellEl.contentEditable = true;
-        cellEl.style.cursor = 'text';
-        cellEl.style.minWidth = '100px';
-        cellEl.onclick = null;
-        
-        cellEl.addEventListener('blur', function() {
-          const newValue = this.textContent.trim();
-          const oldValue = row[colIdx];
-          
-          if (newValue !== oldValue) {
-            this.style.backgroundColor = '#fff3cd';
-            this.style.borderLeft = '3px solid var(--color-primary-orange)';
-            
-            const editIndex = proofingToolsState.pendingEdits.findIndex(e => e.rowIdx === rowIdx && e.colIdx === colIdx);
-            if (editIndex > -1) {
-              proofingToolsState.pendingEdits[editIndex].newValue = newValue;
-            } else {
-              proofingToolsState.pendingEdits.push({ rowIdx, colIdx, oldValue, newValue });
-            }
+  
+  function handleSelectAllHeaders() {
+    const query = document.getElementById('proofing-column-search').value.toLowerCase();
+    proofingToolsState.headers.forEach((header, index) => {
+      if (header.toLowerCase().includes(query)) {
+        if (!proofingToolsState.selectedHeaders.includes(index)) proofingToolsState.selectedHeaders.push(index);
+      }
+    });
+    renderHeaderCheckboxes();
+    renderProofingFilters();
+    renderGroupByDropdown();
+    renderProofingDataTable();
+  }
+  
+  function handleDeselectAllHeaders() {
+    const query = document.getElementById('proofing-column-search').value.toLowerCase();
+    proofingToolsState.selectedHeaders = proofingToolsState.selectedHeaders.filter(index => {
+      const header = proofingToolsState.headers[index];
+      return !header.toLowerCase().includes(query);
+    });
+    renderHeaderCheckboxes();
+    renderProofingFilters();
+    renderGroupByDropdown();
+    renderProofingDataTable();
+  }
+  
+  function updateHeaderCount() {
+    document.getElementById('proofing-selected-count').textContent = proofingToolsState.selectedHeaders.length;
+    document.getElementById('proofing-total-count').textContent = proofingToolsState.headers.length;
+  }
+  
+  function renderProofingFilters() {
+    const container = document.getElementById('proofing-filters-container');
+    container.innerHTML = '';
+    
+    proofingToolsState.selectedHeaders.forEach(colIndex => {
+      const header = proofingToolsState.headers[colIndex];
+      const uniqueValues = [...new Set(proofingToolsState.rawData.map(row => row.data[colIndex]))].sort();
+      
+      const accordionDiv = document.createElement('div');
+      accordionDiv.className = 'proofing-accordion';
+      accordionDiv.innerHTML = `
+        <div class="proofing-accordion-header" onclick="toggleProofingAccordion(${colIndex})">
+          <span>${escapeProofingHtml(header)}</span>
+          <span>
+            <span class="proofing-badge" id="proofing-badge-${colIndex}">0</span>
+            <span class="proofing-accordion-arrow">▶</span>
+          </span>
+        </div>
+        <div class="proofing-accordion-body" id="proofing-accordion-${colIndex}">
+          <select class="form-input" id="proofing-filter-${colIndex}" multiple 
+            onchange="handleProofingFilterChange(${colIndex})" 
+            style="width:100%; height:140px; border:2px solid var(--color-primary-navy);">
+            ${uniqueValues.map(val => `<option value="${escapeProofingHtml(val)}">${escapeProofingHtml(val)}</option>`).join('')}
+          </select>
+        </div>
+      `;
+      container.appendChild(accordionDiv);
+    });
+    
+    if (proofingToolsState.selectedHeaders.length === 0) {
+      container.innerHTML = '<div style="padding:20px; text-align:center; color:#888; background:#f9f9f9; border-radius:6px;">No columns selected. Please select at least one column above.</div>';
+    }
+  }
+  
+  function toggleProofingAccordion(colIndex) {
+    const header = document.querySelector(`#proofing-accordion-${colIndex}`).previousElementSibling;
+    const body = document.getElementById(`proofing-accordion-${colIndex}`);
+    header.classList.toggle('active');
+    body.classList.toggle('open');
+  }
+  
+  function renderGroupByDropdown() {
+    const select = document.getElementById('proofing-group-by-select');
+    select.innerHTML = '';
+    
+    proofingToolsState.selectedHeaders.forEach(index => {
+      const header = proofingToolsState.headers[index];
+      const isSelected = proofingToolsState.groupByColumns.includes(index) ? 'selected' : '';
+      select.innerHTML += `<option value="${index}" ${isSelected}>${escapeProofingHtml(header)}</option>`;
+    });
+  }
+  
+  function handleProofingFilterChange(colIndex) {
+    const selectElement = document.getElementById(`proofing-filter-${colIndex}`);
+    const selectedValues = Array.from(selectElement.selectedOptions).map(opt => opt.value);
+    
+    const badge = document.getElementById(`proofing-badge-${colIndex}`);
+    badge.textContent = selectedValues.length;
+    
+    if (selectedValues.length === 0) {
+      delete proofingToolsState.filters[colIndex];
+    } else {
+      proofingToolsState.filters[colIndex] = selectedValues;
+    }
+    applyProofingFiltersWithGroupExpansion();
+  }
+  
+  function handleToggleCrossListed() {
+    proofingToolsState.showCrossListed = document.getElementById('proofing-toggle-crosslisted').checked;
+    applyProofingFiltersWithGroupExpansion();
+  }
+  
+  function handleGroupByChange() {
+    const select = document.getElementById('proofing-group-by-select');
+    proofingToolsState.groupByColumns = Array.from(select.selectedOptions).map(opt => parseInt(opt.value));
+    proofingToolsState.expandedGroups = {}; // Reset expansion state
+    applyProofingFiltersWithGroupExpansion();
+  }
+  
+  function handleClearGrouping() {
+    proofingToolsState.groupByColumns = [];
+    const select = document.getElementById('proofing-group-by-select');
+    Array.from(select.options).forEach(opt => opt.selected = false);
+    applyProofingFiltersWithGroupExpansion();
+  }
+  
+  // Helper: generate compound key for a row
+  function getRowCompoundKey(rowObj) {
+    if (proofingToolsState.groupByColumns.length === 0) return null;
+    return proofingToolsState.groupByColumns.map(colIdx => rowObj.data[colIdx] || '(Blank)').join(' ||| ');
+  }
+  
+  // Formats the compound key into a readable group header
+  function formatCompoundHeader(rowObj) {
+    return proofingToolsState.groupByColumns.map(colIdx => {
+      const headerName = proofingToolsState.headers[colIdx];
+      const val = rowObj.data[colIdx] || '(Blank)';
+      return `${headerName}: ${val}`;
+    }).join(' • ');
+  }
+  
+  function applyProofingFiltersWithGroupExpansion() {
+    // Step 1: Find strict matches
+    const basicFilteredRows = proofingToolsState.rawData.filter(rowObj => {
+      for (let colIndex in proofingToolsState.filters) {
+        if (!proofingToolsState.filters[colIndex].includes(rowObj.data[colIndex])) return false;
+      }
+      return true;
+    });
+    
+    // Step 2: Expand if requested and grouped
+    if (proofingToolsState.showCrossListed && proofingToolsState.groupByColumns.length > 0 && Object.keys(proofingToolsState.filters).length > 0) {
+      // Collect all valid compound keys from our exact matches
+      const validGroupKeys = new Set(basicFilteredRows.map(rowObj => getRowCompoundKey(rowObj)));
+      
+      // Pull any row from raw data that shares a valid compound key
+      proofingToolsState.filteredData = proofingToolsState.rawData.filter(rowObj => 
+        validGroupKeys.has(getRowCompoundKey(rowObj))
+      );
+    } else {
+      proofingToolsState.filteredData = basicFilteredRows;
+    }
+    
+    renderProofingDataTable();
+  }
+  
+  function handleClearProofingFilters() {
+    proofingToolsState.filters = {};
+    proofingToolsState.filteredData = proofingToolsState.rawData;
+    
+    proofingToolsState.headers.forEach((header, index) => {
+      const selectEl = document.getElementById(`proofing-filter-${index}`);
+      if (selectEl) Array.from(selectEl.options).forEach(opt => opt.selected = false);
+      const badge = document.getElementById(`proofing-badge-${index}`);
+      if (badge) badge.textContent = '0';
+      const accordion = document.getElementById(`proofing-accordion-${index}`);
+      if (accordion) {
+        accordion.classList.remove('open');
+        accordion.previousElementSibling.classList.remove('active');
+      }
+    });
+    
+    document.getElementById('proofing-table-search').value = '';
+    proofingToolsState.tableSearchQuery = '';
+    applyProofingFiltersWithGroupExpansion();
+  }
+  
+  function handleCellClick(rowOriginalIndex, colIdx) {
+    if (proofingToolsState.editMode) return;
+    
+    const rowObj = proofingToolsState.rawData.find(r => r.rowIndex === rowOriginalIndex);
+    if (!rowObj) return;
+    
+    const cellValue = rowObj.data[colIdx];
+    proofingToolsState.crossReferenceActive = true;
+    proofingToolsState.crossReferenceColumn = colIdx;
+    proofingToolsState.crossReferenceValue = cellValue;
+    
+    document.getElementById('cross-ref-column-name').textContent = proofingToolsState.headers[colIdx];
+    document.getElementById('cross-ref-value').textContent = cellValue;
+    document.getElementById('proofing-cross-ref-banner').style.display = 'flex';
+    
+    // Apply Non-Destructive Filter
+    proofingToolsState.filters[colIdx] = [cellValue];
+    const selectEl = document.getElementById(`proofing-filter-${colIdx}`);
+    if (selectEl) {
+      Array.from(selectEl.options).forEach(opt => opt.selected = opt.value === cellValue);
+      document.getElementById(`proofing-badge-${colIdx}`).textContent = '1';
+    }
+    
+    applyProofingFiltersWithGroupExpansion();
+  }
+  
+  function handleClearCrossReference() {
+    proofingToolsState.crossReferenceActive = false;
+    if (proofingToolsState.crossReferenceColumn !== null) {
+      delete proofingToolsState.filters[proofingToolsState.crossReferenceColumn];
+      const selectEl = document.getElementById(`proofing-filter-${proofingToolsState.crossReferenceColumn}`);
+      if (selectEl) Array.from(selectEl.options).forEach(opt => opt.selected = false);
+      const badge = document.getElementById(`proofing-badge-${proofingToolsState.crossReferenceColumn}`);
+      if (badge) badge.textContent = '0';
+    }
+    proofingToolsState.crossReferenceColumn = null;
+    proofingToolsState.crossReferenceValue = null;
+    document.getElementById('proofing-cross-ref-banner').style.display = 'none';
+    applyProofingFiltersWithGroupExpansion();
+  }
+  
+  function handleTableSearch() {
+    proofingToolsState.tableSearchQuery = document.getElementById('proofing-table-search').value.toLowerCase();
+    renderProofingDataTable();
+  }
+  
+  function handleSort(colIdx) {
+    if (proofingToolsState.editMode) return;
+    if (proofingToolsState.sortCol === colIdx) {
+      proofingToolsState.sortAsc = !proofingToolsState.sortAsc;
+    } else {
+      proofingToolsState.sortCol = colIdx;
+      proofingToolsState.sortAsc = true;
+    }
+    renderProofingDataTable();
+  }
+  
+  function toggleGroupCollapse(groupKey) {
+    proofingToolsState.expandedGroups[groupKey] = !proofingToolsState.expandedGroups[groupKey];
+    renderProofingDataTable();
+  }
+  
+  /* =========================================================
+     DRAG AND DROP LOGIC FOR HEADERS
+  ========================================================= */
+  function handleDragStart(e, visualIdx) {
+    proofingToolsState.draggedVisualIndex = visualIdx;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function handleDragOver(e) {
+    e.preventDefault(); 
+    e.dataTransfer.dropEffect = 'move';
+  }
+  function handleDragEnter(e) { e.currentTarget.classList.add('drag-over'); }
+  function handleDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+  function handleDrop(e, targetVisualIdx) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    const draggedIdx = proofingToolsState.draggedVisualIndex;
+    if (draggedIdx === null || draggedIdx === targetVisualIdx) return;
+  
+    const item = proofingToolsState.selectedHeaders.splice(draggedIdx, 1)[0];
+    proofingToolsState.selectedHeaders.splice(targetVisualIdx, 0, item);
+    
+    proofingToolsState.draggedVisualIndex = null;
+    renderProofingDataTable();
+  }
+  
+  function getFinalViewData() {
+    let dataToRender = [...proofingToolsState.filteredData];
+    
+    if (proofingToolsState.tableSearchQuery) {
+      dataToRender = dataToRender.filter(rowObj => {
+        return proofingToolsState.selectedHeaders.some(colIdx => {
+          const val = rowObj.data[colIdx];
+          return val !== null && val !== undefined && String(val).toLowerCase().includes(proofingToolsState.tableSearchQuery);
+        });
+      });
+    }
+    
+    if (proofingToolsState.sortCol !== null) {
+      dataToRender.sort((a, b) => {
+        let valA = a.data[proofingToolsState.sortCol] || '';
+        let valB = b.data[proofingToolsState.sortCol] || '';
+        if (!isNaN(valA) && !isNaN(valB) && valA !== '' && valB !== '') {
+          valA = Number(valA); valB = Number(valB);
+        } else {
+          valA = String(valA).toLowerCase(); valB = String(valB).toLowerCase();
+        }
+        if (valA < valB) return proofingToolsState.sortAsc ? -1 : 1;
+        if (valA > valB) return proofingToolsState.sortAsc ? 1 : -1;
+        return 0;
+      });
+    }
+    return dataToRender;
+  }
+  
+  function getMatchedRowIndices() {
+    const matched = new Set();
+    if (Object.keys(proofingToolsState.filters).length > 0) {
+      proofingToolsState.rawData.forEach(rowObj => {
+        let matches = true;
+        for (let colIndex in proofingToolsState.filters) {
+          if (!proofingToolsState.filters[colIndex].includes(rowObj.data[colIndex])) {
+            matches = false; break;
           }
+        }
+        if (matches) matched.add(rowObj.rowIndex);
+      });
+    }
+    return matched;
+  }
+  
+  function renderProofingDataTable() {
+    const thead = document.getElementById('proofing-table-head');
+    const tbody = document.getElementById('proofing-table-body');
+    const finalData = getFinalViewData();
+    
+    document.getElementById('proofing-row-count').textContent = finalData.length;
+    
+    // RENDER HEADERS
+    let headerHtml = '<tr>';
+    proofingToolsState.selectedHeaders.forEach((colIdx, visualIdx) => {
+      const h = proofingToolsState.headers[colIdx];
+      const isSortCol = proofingToolsState.sortCol === colIdx;
+      const sortIcon = isSortCol ? (proofingToolsState.sortAsc ? ' 🔼' : ' 🔽') : '';
+      const stickyClass = visualIdx === 0 ? 'sticky-col' : '';
+      
+      headerHtml += `
+        <th class="proofing-table-header-cell ${stickyClass}" 
+            ondragover="handleDragOver(event)" ondragenter="handleDragEnter(event)" 
+            ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${visualIdx})">
+            <span class="drag-handle" draggable="true" ondragstart="handleDragStart(event, ${visualIdx})" title="Drag to reorder">⋮⋮</span>
+            <span onclick="handleSort(${colIdx})" style="cursor:pointer;" title="Click to sort">
+              ${escapeProofingHtml(h)}${sortIcon}
+            </span>
+        </th>`;
+    });
+    headerHtml += '</tr>';
+    thead.innerHTML = headerHtml;
+    
+    // RENDER BODY
+    if (finalData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="100" style="padding:40px; text-align:center; color:#888;">📭 No data matches your filters/search.</td></tr>';
+      return;
+    }
+    if (proofingToolsState.selectedHeaders.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="100" style="padding:40px; text-align:center; color:#888;">📭 No columns selected. Please select columns in Step 2.</td></tr>';
+      return;
+    }
+    
+    if (proofingToolsState.groupByColumns.length > 0) {
+      renderGroupedData(tbody, finalData);
+    } else {
+      renderUngroupedData(tbody, finalData);
+    }
+    
+    if (proofingToolsState.editMode) enableProofingCellEditing();
+  }
+  
+  function buildCellHtml(rowObj, colIdx, visualIdx, isMatched) {
+    const stickyClass = visualIdx === 0 ? 'sticky-col' : '';
+    const isHighlighted = proofingToolsState.crossReferenceActive && colIdx === proofingToolsState.crossReferenceColumn;
+    
+    // Only inject badges on the FIRST visible column, and ONLY if we are expanding related cross-listed records via a filter
+    let badgeHtml = '';
+    if (visualIdx === 0 && Object.keys(proofingToolsState.filters).length > 0 && proofingToolsState.groupByColumns.length > 0 && proofingToolsState.showCrossListed) {
+      badgeHtml = isMatched 
+        ? '<span class="badge-inline badge-target" contenteditable="false" title="Exact match to your filter">[ TARGET ]</span>' 
+        : '<span class="badge-inline badge-cross" contenteditable="false" title="Brought in because it shares group criteria">[ CROSS-LISTED ]</span>';
+    }
+  
+    return `
+      <td class="proofing-cell-clickable ${stickyClass} ${isHighlighted ? 'proofing-highlighted-cell' : ''}" 
+          onclick="handleCellClick(${rowObj.rowIndex}, ${colIdx})"
+          style="padding:10px; border-right:1px solid #f0f0f0;">
+        ${badgeHtml}
+        <span id="proofing-cell-${rowObj.rowIndex}-${colIdx}" class="proofing-data-span">${escapeProofingHtml(rowObj.data[colIdx])}</span>
+        ${!proofingToolsState.editMode ? '<span class="proofing-find-icon">🔗</span>' : ''}
+      </td>
+    `;
+  }
+  
+  function renderUngroupedData(tbody, finalData) {
+    const matchedRowIndices = getMatchedRowIndices();
+    
+    tbody.innerHTML = finalData.map(rowObj => {
+      const isMatched = matchedRowIndices.has(rowObj.rowIndex) || Object.keys(proofingToolsState.filters).length === 0;
+      const rowClass = isMatched ? 'proofing-grouped-row-matched' : 'proofing-grouped-row-related';
+      
+      return `<tr class="${rowClass}" style="border-bottom:1px solid #eee;">
+        ${proofingToolsState.selectedHeaders.map((colIdx, visualIdx) => buildCellHtml(rowObj, colIdx, visualIdx, isMatched)).join('')}
+      </tr>`;
+    }).join('');
+  }
+  
+  function renderGroupedData(tbody, finalData) {
+    const groupedData = {};
+    const matchedRowIndices = getMatchedRowIndices();
+    
+    // Group by compound key
+    finalData.forEach(rowObj => {
+      const groupKey = getRowCompoundKey(rowObj) || '(Blank)';
+      if (!groupedData[groupKey]) groupedData[groupKey] = { items: [], headerText: formatCompoundHeader(rowObj) };
+      groupedData[groupKey].items.push(rowObj);
+    });
+    
+    let html = '';
+    Object.keys(groupedData).sort().forEach(groupKey => {
+      const groupData = groupedData[groupKey];
+      const items = groupData.items;
+      
+      const matchedCount = items.filter(item => matchedRowIndices.has(item.rowIndex)).length;
+      const relatedCount = items.length - matchedCount;
+      const isExpanded = proofingToolsState.expandedGroups[groupKey] === true;
+      const arrow = isExpanded ? '▼' : '▶';
+      
+      html += `<tr>
+        <td colspan="${proofingToolsState.selectedHeaders.length}" class="proofing-grouped-header" onclick="toggleGroupCollapse('${escapeProofingHtml(groupKey)}')">
+          <span style="display:inline-block; width:20px; text-align:center;">${arrow}</span> 
+          📌 <strong>Group:</strong> ${escapeProofingHtml(groupData.headerText)}
+          <span style="opacity:0.8; font-weight:normal; margin-left:10px;">
+            (${matchedCount} target${relatedCount > 0 ? `, ${relatedCount} cross-listed` : ''})
+          </span>
+        </td>
+      </tr>`;
+      
+      if (isExpanded) {
+        items.forEach(rowObj => {
+          const isMatched = matchedRowIndices.has(rowObj.rowIndex) || Object.keys(proofingToolsState.filters).length === 0;
+          const rowClass = isMatched ? 'proofing-grouped-row-matched' : 'proofing-grouped-row-related';
+          
+          html += `<tr class="${rowClass}">
+            ${proofingToolsState.selectedHeaders.map((colIdx, visualIdx) => buildCellHtml(rowObj, colIdx, visualIdx, isMatched)).join('')}
+          </tr>`;
         });
       }
     });
-  });
-}
-
-function handleCancelProofingEdits() {
-  if (proofingToolsState.pendingEdits.length > 0) {
-    if (!confirm(`Discard ${proofingToolsState.pendingEdits.length} unsaved changes?`)) {
-      return;
+    tbody.innerHTML = html;
+  }
+  
+  function handleToggleProofingEdit() {
+    proofingToolsState.editMode = !proofingToolsState.editMode;
+    const btn = document.getElementById('btn-toggle-proofing-edit');
+    const controls = document.getElementById('proofing-edit-controls');
+    
+    if (proofingToolsState.editMode) {
+      btn.textContent = 'Disable Edit Mode';
+      btn.classList.replace('button-secondary', 'button-warning');
+      controls.style.display = 'block';
+    } else {
+      btn.textContent = 'Enable Edit Mode';
+      btn.classList.replace('button-warning', 'button-secondary');
+      controls.style.display = 'none';
+      proofingToolsState.pendingEdits = [];
     }
+    renderProofingDataTable();
   }
   
-  proofingToolsState.pendingEdits = [];
-  proofingToolsState.editMode = false;
-  document.getElementById('btn-toggle-proofing-edit').textContent = 'Enable Edit Mode';
-  document.getElementById('btn-toggle-proofing-edit').classList.remove('button-warning');
-  document.getElementById('btn-toggle-proofing-edit').classList.add('button-secondary');
-  document.getElementById('proofing-edit-controls').style.display = 'none';
-  renderProofingDataTable();
-}
-
-function handleSaveProofingEdits() {
-  if (proofingToolsState.pendingEdits.length === 0) {
-    alert('No changes to save.');
-    return;
+  function enableProofingCellEditing() {
+    const finalData = getFinalViewData();
+    finalData.forEach(rowObj => {
+      proofingToolsState.selectedHeaders.forEach(colIdx => {
+        // EDIT THE DATA SPAN, NOT THE TD. This protects the Badges from being overwritten.
+        const spanEl = document.getElementById(`proofing-cell-${rowObj.rowIndex}-${colIdx}`);
+        const tdEl = spanEl ? spanEl.parentElement : null;
+        
+        if (spanEl && tdEl) {
+          spanEl.contentEditable = true;
+          tdEl.style.cursor = 'text';
+          tdEl.onclick = null; // Disable cross ref click during edit
+          
+          const icon = tdEl.querySelector('.proofing-find-icon');
+          if(icon) icon.remove();
+  
+          const existingEdit = proofingToolsState.pendingEdits.find(e => e.rowIndex === rowObj.rowIndex && e.colIndex === colIdx);
+          if (existingEdit) {
+             tdEl.style.backgroundColor = '#fff3cd';
+             tdEl.style.borderLeft = '3px solid var(--color-primary-orange)';
+             spanEl.textContent = existingEdit.newValue;
+          }
+          
+          spanEl.addEventListener('blur', function() {
+            const newValue = this.textContent.trim();
+            const oldValue = rowObj.data[colIdx];
+            
+            if (newValue !== String(oldValue).trim()) {
+              tdEl.style.backgroundColor = '#fff3cd';
+              tdEl.style.borderLeft = '3px solid var(--color-primary-orange)';
+              
+              const editIndex = proofingToolsState.pendingEdits.findIndex(e => e.rowIndex === rowObj.rowIndex && e.colIndex === colIdx);
+              if (editIndex > -1) {
+                proofingToolsState.pendingEdits[editIndex].newValue = newValue;
+              } else {
+                proofingToolsState.pendingEdits.push({ rowIndex: rowObj.rowIndex, colIndex: colIdx, oldValue, newValue });
+              }
+            }
+          });
+        }
+      });
+    });
   }
   
-  if (!confirm(`Save ${proofingToolsState.pendingEdits.length} changes to the Google Sheet?`)) {
-    return;
+  function handleCancelProofingEdits() {
+    if (proofingToolsState.pendingEdits.length > 0 && !confirm(`Discard ${proofingToolsState.pendingEdits.length} unsaved changes?`)) return;
+    proofingToolsState.pendingEdits = [];
+    proofingToolsState.editMode = false;
+    const btn = document.getElementById('btn-toggle-proofing-edit');
+    btn.textContent = 'Enable Edit Mode';
+    btn.classList.replace('button-warning', 'button-secondary');
+    document.getElementById('proofing-edit-controls').style.display = 'none';
+    renderProofingDataTable();
   }
   
-  const btn = document.getElementById('btn-save-proofing-edits');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-  
-  const updates = proofingToolsState.pendingEdits.map(edit => ({
-    rowIndex: edit.rowIdx + 2,
-    colIndex: edit.colIdx,
-    value: edit.newValue
-  }));
-  
-  google.script.run
-    .withSuccessHandler(response => {
-      btn.disabled = false;
-      btn.textContent = 'Save All Changes';
-      
-      if (response.success) {
-        showNotification(`✓ Saved ${proofingToolsState.pendingEdits.length} changes`, 'success');
-        proofingToolsState.pendingEdits = [];
-        handleLoadProofingSheetData();
-      } else {
-        showNotification('Error: ' + response.message, 'error');
-      }
-    })
-    .withFailureHandler(err => {
-      btn.disabled = false;
-      btn.textContent = 'Save All Changes';
-      showNotification('Server error: ' + err.message, 'error');
-    })
-    .api_bulkUpdateSheet(proofingToolsState.sheetUrl, proofingToolsState.tabName, updates);
-}
-
-function handleExportProofing() {
-  if (proofingToolsState.filteredData.length === 0) {
-    alert('No data to export.');
-    return;
+  function handleSaveProofingEdits() {
+    if (proofingToolsState.pendingEdits.length === 0) return alert('No changes to save.');
+    if (!confirm(`Save ${proofingToolsState.pendingEdits.length} changes to the Google Sheet?`)) return;
+    
+    const btn = document.getElementById('btn-save-proofing-edits');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    
+    const updates = proofingToolsState.pendingEdits.map(edit => ({
+      rowIndex: edit.rowIndex,
+      colIndex: edit.colIndex,
+      value: edit.newValue
+    }));
+    
+    google.script.run
+      .withSuccessHandler(response => {
+        btn.disabled = false;
+        btn.textContent = 'Save All Changes';
+        if (response.success) {
+          showNotification(`✓ Saved ${proofingToolsState.pendingEdits.length} changes`, 'success');
+          proofingToolsState.pendingEdits = [];
+          handleLoadProofingSheetData();
+        } else {
+          showNotification('Error: ' + response.message, 'error');
+        }
+      })
+      .withFailureHandler(err => {
+        btn.disabled = false;
+        btn.textContent = 'Save All Changes';
+        showNotification('Server error: ' + err.message, 'error');
+      })
+      .api_bulkUpdateSheet(proofingToolsState.sheetUrl, proofingToolsState.tabName, updates);
   }
   
-  const btn = document.getElementById('btn-export-proofing');
-  btn.disabled = true;
-  btn.textContent = 'Exporting...';
+  function handleExportProofing() {
+    const finalData = getFinalViewData();
+    if (finalData.length === 0) return alert('No data to export.');
+    
+    const btn = document.getElementById('btn-export-proofing');
+    btn.disabled = true;
+    btn.textContent = 'Exporting...';
+    
+    const selectedHeadersData = proofingToolsState.selectedHeaders.map(i => proofingToolsState.headers[i]);
+    const exportRows = finalData.map(rowObj => proofingToolsState.selectedHeaders.map(i => rowObj.data[i]));
+    
+    google.script.run
+      .withSuccessHandler(response => {
+        btn.disabled = false;
+        btn.textContent = 'Export Displayed Data';
+        if (response.success) {
+          showNotification('✓ Export complete!', 'success');
+          window.open(response.url, '_blank');
+        } else {
+          showNotification('Export failed: ' + response.error, 'error');
+        }
+      })
+      .withFailureHandler(err => {
+        btn.disabled = false;
+        btn.textContent = 'Export Displayed Data';
+        showNotification('Server error: ' + err.message, 'error');
+      })
+      .exportToSheet(selectedHeadersData, exportRows);
+  }
   
-  const selectedHeadersData = proofingToolsState.selectedHeaders.map(i => proofingToolsState.headers[i]);
-  const filteredRows = proofingToolsState.filteredData.map(row => 
-    proofingToolsState.selectedHeaders.map(i => row[i])
-  );
-  
-  google.script.run
-    .withSuccessHandler(response => {
-      btn.disabled = false;
-      btn.textContent = 'Export Filtered Data';
-      
-      if (response.success) {
-        showNotification('✓ Export complete!', 'success');
-        window.open(response.url, '_blank');
-      } else {
-        showNotification('Export failed: ' + response.error, 'error');
-      }
-    })
-    .withFailureHandler(err => {
-      btn.disabled = false;
-      btn.textContent = 'Export Filtered Data';
-      showNotification('Server error: ' + err.message, 'error');
-    })
-    .exportToSheet(selectedHeadersData, filteredRows);
-}
-
-function escapeProofingHtml(text) {
-  if (text === null || text === undefined) return '';
-  const div = document.createElement('div');
-  div.textContent = String(text);
-  return div.innerHTML;
-}
-</script>
+  function escapeProofingHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+  }
+  </script>
