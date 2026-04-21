@@ -3,94 +3,59 @@
     <div id="custom-modal-box" style="background-color: white; border-radius: 8px; width: 90%; max-width: 400px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); text-align: center;">
         <div id="modal-message" style="margin-bottom: 20px; font-size: 1.1em;">Are you sure?</div>
         <div id="modal-buttons" style="display: flex; justify-content: center; gap: 15px;">
-            <button class="button modal-btn cancel" id="modal-cancel-btn" onclick="closeConfirmationModal()">Cancel</button>
-            <button class="button modal-btn confirm danger" id="modal-confirm-btn" onclick="confirmModalAction()">Confirm</button>
+            <button class="button-secondary" onclick="closeConfirmationModal()">Cancel</button>
+            <button class="button-danger" id="modal-confirm-btn" onclick="confirmModalAction()">Confirm</button>
         </div>
     </div>
 </div>
 
-<div id="add-course-modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
-    <div id="add-course-modal-box" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
-        <h3>Add New Class</h3>
-        <form id="add-course-form">
-            <div id="add-course-status" class="status-message"></div>
-            <div class="form-group"><label>Session</label><select id="add-course-session"></select></div>
-            <div class="form-group inline-group">
-                <div style="width: 48%;"><label>Start Date</label><input type="date" id="add-course-start-date"></div>
-                <div style="width: 48%;"><label>End Date</label><input type="date" id="add-course-end-date"></div>
+<!-- CONSOLIDATED COURSE MODAL -->
+<div id="course-modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
+    <div id="course-modal-box" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); max-height: 90vh; overflow-y: auto;">
+        <h3 id="course-modal-title" style="margin-top:0; color:var(--color-primary-navy);">Add/Edit Class</h3>
+        <form id="course-modal-form">
+            <input type="hidden" id="modal-course-id">
+            
+            <div class="form-group"><label>Session</label><input type="text" id="modal-course-session" class="form-input" placeholder="e.g., Fall 2026"></div>
+            
+            <div style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex:1;"><label>Start Date</label><input type="date" id="modal-course-start-date" class="form-input"></div>
+                <div class="form-group" style="flex:1;"><label>End Date</label><input type="date" id="modal-course-end-date" class="form-input"></div>
             </div>
-            <div class="form-group"><label>Day(s) of Week</label><select id="add-course-day" multiple></select></div>
-            <div class="form-group"><label>Course Title</label><input type="text" id="add-course-title"></div>
-            <div class="form-group"><label>Faculty</label><input type="text" id="add-course-faculty"></div>
-            <div class="form-group inline-group">
-                <div style="width: 48%;"><label>Run Time</label><input type="text" id="add-course-runtime"></div>
-                <div style="width: 48%;"><label>Time of Day</label><select id="add-course-time-of-day"></select></div>
+            
+            <div class="form-group"><label>Day(s) of Week</label><input type="text" id="modal-course-day" class="form-input" placeholder="e.g., M/W/F"></div>
+            <div class="form-group"><label>Course Title</label><input type="text" id="modal-course-title" class="form-input" required placeholder="e.g., BIO 101"></div>
+            <div class="form-group"><label>Faculty</label><input type="text" id="modal-course-faculty" class="form-input"></div>
+            
+            <div style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex:1;"><label>Start Time</label><input type="text" id="modal-course-start-time" class="form-input" placeholder="e.g., 9:00 AM"></div>
+                <div class="form-group" style="flex:1;"><label>End Time</label><input type="text" id="modal-course-end-time" class="form-input" placeholder="e.g., 10:30 AM"></div>
             </div>
-            <div class="form-group"><label>Classroom</label><select id="add-course-location"></select></div>
-            <div class="form-group"><label>Staff Assigned</label><select id="add-course-staff-assigned"></select></div>
-            <div class="form-group"><label>Zoom Link</label><input type="text" id="add-course-zoom-link"></div>
+            
+            <div class="form-group"><label>Classroom (BX Location)</label><input type="text" id="modal-course-location" class="form-input"></div>
+            <div class="form-group"><label>Zoom Link</label><input type="text" id="modal-course-zoom-link" class="form-input"></div>
+            <div class="form-group"><label>Note</label><input type="text" id="modal-course-note" class="form-input"></div>
         </form>
-        <div class="modal-buttons">
-            <button class="button modal-btn cancel" onclick="closeAddCourseModal()">Cancel</button>
-            <button class="button modal-btn confirm" onclick="handleAddCourse()">Save Class</button>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="button-secondary" onclick="closeCourseModal()">Cancel</button>
+            <button class="button-primary" id="modal-course-save-btn" onclick="saveCourseModal(this)">Save Class</button>
         </div>
     </div>
 </div>
 
-<div id="edit-course-modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
-    <div id="edit-course-modal-box" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
-        <h3>Edit Class</h3>
-        <form id="edit-course-form">
-            <div id="edit-course-status" class_ ="status-message"></div>
-            <input type="hidden" id="edit-course-id">
-            <div class="form-group"><label>Session</label><select id="edit-course-session"></select></div>
-            <div class="form-group inline-group">
-                <div style="width: 48%;"><label>Start Date</label><input type="date" id="edit-course-start-date"></div>
-                <div style="width: 48%;"><label>End Date</label><input type="date" id="edit-course-end-date"></div>
-            </div>
-            <div class="form-group"><label>Day(s) of Week</label><select id="edit-course-day" multiple></select></div>
-            <div class="form-group"><label>Course Title</label><input type="text" id="edit-course-title"></div>
-            <div class="form-group"><label>Faculty</label><input type="text" id="edit-course-faculty"></div>
-            <div class="form-group inline-group">
-                <div style="width: 48%;"><label>Run Time</label><input type="text" id="edit-course-runtime"></div>
-                <div style="width: 48%;"><label>Time of Day</label><select id="edit-course-time-of-day"></select></div>
-            </div>
-            <div class="form-group"><label>Classroom</label><select id="edit-course-location"></select></div>
-            <div class="form-group"><label>Staff Assigned</label><select id="edit-course-staff-assigned"></select></div>
-            <div class="form-group"><label>Zoom Link</label><input type="text" id="edit-course-zoom-link"></div>
-        </form>
-        <div class="modal-buttons">
-            <button class="button modal-btn cancel" onclick="closeEditCourseModal()">Cancel</button>
-            <button class="button modal-btn confirm" onclick="handleUpdateCourse()">Save Changes</button>
-        </div>
-    </div>
-</div>
-
-
+<!-- EDIT STAFF MODAL (Preserved for legacy compatibility) -->
 <div id="edit-staff-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1001;">
     <div id="edit-staff-modal" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
         <h3>Edit Staff Member Details</h3>
-        <div class="form-group"><label>Full Name</label><input type="text" id="edit-staff-modal-name" required></div>
-        <div class="form-group"><label>Staff ID (Email)</label><input type="text" id="edit-staff-modal-id" required></div>
+        <div class="form-group"><label>Full Name</label><input type="text" id="edit-staff-modal-name" class="form-input" required></div>
+        <div class="form-group"><label>Staff ID (Email)</label><input type="text" id="edit-staff-modal-id" class="form-input" required></div>
         <div class="form-group">
             <label>Primary Role</label>
-            <input type="text" id="edit-staff-modal-primary-role" disabled style="background: #eee; color: #555;">
-            <p style="font-size:0.8em; color:#666;">(Change Primary Role in the main list)</p>
-        </div>
-        <div class="form-group">
-            <label>Additional Duties (Sub-Roles)</label>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 5px; border: 1px solid #eee; border-radius: 4px;">
-                <label style="font-weight: normal; cursor: pointer;"><input type="checkbox" class="sub-role-check" value="Tech Hub"> Tech Hub</label>
-                <label style="font-weight: normal; cursor: pointer;"><input type="checkbox" class="sub-role-check" value="MST"> MST</label>
-                <label style="font-weight: normal; cursor: pointer;"><input type="checkbox" class="sub-role-check" value="Proctor"> Proctor</label>
-                <label style="font-weight: normal; cursor: pointer;"><input type="checkbox" class="sub-role-check" value="FDC"> FDC</label>
-            </div>
+            <input type="text" id="edit-staff-modal-primary-role" class="form-input" disabled style="background: #eee; color: #555;">
         </div>
         <input type="hidden" id="edit-staff-modal-old-id"><input type="hidden" id="edit-staff-modal-row">
-        <div id="edit-staff-status" class="status-message"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px;">
-            <button class="button modal-btn cancel" onclick="handleCancelStaffEdit()">Cancel</button>
-            <button class="button modal-btn confirm" onclick="handleSaveStaffEdit()">Save Changes</button>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="button-secondary" onclick="document.getElementById('edit-staff-overlay').style.display='none'">Cancel</button>
         </div>
     </div>
 </div>
