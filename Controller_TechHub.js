@@ -374,7 +374,7 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
 function api_commitTechHubSync(targetCalendarId, eventsToSync) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole(['Tech Hub', 'Admin']);
+        requireRole('Tech Hub', 'Admin', 'Lead');
 
         const cal = CalendarApp.getCalendarById(targetCalendarId);
         const stats = { created: 0, updated: 0, errors: 0 };
@@ -482,7 +482,7 @@ function getNextDayOccurrence(startDate, dayName) {
 function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole(['Tech Hub', 'Admin']);
+        requireRole('Tech Hub', 'Admin', 'Lead');
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
@@ -539,7 +539,7 @@ function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
 function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole(['Tech Hub', 'Admin']);
+        requireRole('Tech Hub', 'Admin', 'Lead');
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
@@ -604,7 +604,7 @@ function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
 function addTechHubShift(shiftData) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole(['Tech Hub', 'Admin']);
+        requireRole('Tech Hub', 'Admin', 'Lead');
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
@@ -632,7 +632,7 @@ function addTechHubShift(shiftData) {
 function deleteTechHubShift(shiftId) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole(['Tech Hub', 'Admin']);
+        requireRole('Tech Hub', 'Admin', 'Lead');
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {

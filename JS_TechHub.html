@@ -1,470 +1,559 @@
 <style>
-    /* Card Styles */
-    .th-sync-card {
-        background: #fff; border: 1px solid #ddd; border-radius: 6px;
-        padding: 10px;
-        margin-bottom: 10px; display: flex; flex-direction: column;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .th-sync-card.status-new { border-left: 5px solid #28a745;
-    }
-    .th-sync-card.status-update { border-left: 5px solid #f39c12; }
-    .th-sync-card.status-synced { border-left: 5px solid #bdc3c7; opacity: 0.7; }
-    
-    .th-card-header { font-weight: bold; display: flex;
-        justify-content: space-between; margin-bottom: 5px; }
-    .th-card-body { font-size: 0.9em; color: #555; }
-    .th-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75em;
-        color: #fff; }
-    .th-badge.new { background: #28a745; }
-    .th-badge.update { background: #f39c12; }
-    .th-badge.synced { background: #999;
-    }
-    
-    /* Conflict Flyout Styles */
-    #th-conflict-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.6); z-index: 5000;
-        display: none; justify-content: center; align-items: center;
-    }
-    .th-conflict-box {
-        background: white; width: 450px;
-        border-radius: 8px; padding: 25px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;
-    }
-    .th-warning-icon { font-size: 40px; color: #d9534f; margin-bottom: 15px;
-    }
-    .th-conflict-msg { margin-bottom: 20px; line-height: 1.5; color: #333; }
-    .th-conflict-actions { display: flex; justify-content: center; gap: 15px;
-    }
-    </style>
-    
-    <div id="th-conflict-overlay">
-        <div class="th-conflict-box">
-            <div class="th-warning-icon">⚠️</div>
-            <h3 style="margin-top:0;">Scheduling Conflict</h3>
-            <div id="th-conflict-text" class="th-conflict-msg"></div>
-            <div class="th-conflict-actions">
-                <button class="button-secondary" onclick="closeConflictWarning()">Cancel</button>
-                <button class="button-danger" id="th-confirm-btn">Schedule Anyway</button>
-            </div>
+/* Card Styles */
+.th-sync-card {
+    background: #fff; border: 1px solid #ddd; border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px; display: flex; flex-direction: column;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.th-sync-card.status-new { border-left: 5px solid #28a745;
+}
+.th-sync-card.status-update { border-left: 5px solid #f39c12; }
+.th-sync-card.status-synced { border-left: 5px solid #bdc3c7; opacity: 0.7; }
+
+.th-card-header { font-weight: bold; display: flex;
+    justify-content: space-between; margin-bottom: 5px; }
+.th-card-body { font-size: 0.9em; color: #555; }
+.th-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75em;
+    color: #fff; }
+.th-badge.new { background: #28a745; }
+.th-badge.update { background: #f39c12; }
+.th-badge.synced { background: #999;
+}
+
+/* Conflict Flyout Styles */
+#th-conflict-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6); z-index: 5000;
+    display: none; justify-content: center; align-items: center;
+}
+.th-conflict-box {
+    background: white; width: 450px;
+    border-radius: 8px; padding: 25px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;
+}
+.th-warning-icon { font-size: 40px; color: #d9534f; margin-bottom: 15px;
+}
+.th-conflict-msg { margin-bottom: 20px; line-height: 1.5; color: #333; }
+.th-conflict-actions { display: flex; justify-content: center; gap: 15px;
+}
+</style>
+
+<div id="th-conflict-overlay">
+    <div class="th-conflict-box">
+        <div class="th-warning-icon">⚠️</div>
+        <h3 style="margin-top:0;">Scheduling Conflict</h3>
+        <div id="th-conflict-text" class="th-conflict-msg"></div>
+        <div class="th-conflict-actions">
+            <button class="button-secondary" onclick="closeConflictWarning()">Cancel</button>
+            <button class="button-danger" id="th-confirm-btn">Schedule Anyway</button>
         </div>
     </div>
+</div>
+
+<script>
+  /**
+   * ------------------------------------------------------------------
+   * TECH HUB CONTROLLER (Frontend)
+   * ------------------------------------------------------------------
+   */
+
+  let techHubState = {
+    data: null,
+    isLoading: false,
+    syncData:[]
+  };
+
+  function loadTechHubPage() {
+    const container = document.getElementById('page-TechHub');
     
-    <script>
-      /**
-       * ------------------------------------------------------------------
-       * TECH HUB CONTROLLER (Frontend)
-       * ------------------------------------------------------------------
-       */
-    
-      let techHubState = {
-        data: null,
-        isLoading: false,
-        syncData: []
-      };
-    
-      function loadTechHubPage() {
-        const container = document.getElementById('page-TechHub');
-        
-        // Only build layout if empty
-        if (container.childElementCount === 0) {
-            container.innerHTML = `
-              <div class="widget">
-                <div class="tab-bar" style="margin-bottom: 20px; border-bottom: 1px solid #ddd;">
-                    <button class="tab-link active" onclick="switchTechHubTab('roster')">Semester Roster</button>
-                    <button class="tab-link" onclick="switchTechHubTab('sync')">Calendar Sync</button>
-                    <button class="tab-link" onclick="switchTechHubTab('manage')">Manage Shifts</button>
-                </div>
-    
-                <div id="th-tab-roster" class="tab-content" style="display:block;">
-                    <div class="loader-ring"></div> 
-                </div>
-                <div id="th-tab-sync" class="tab-content" style="display:none;">
-                     <div class="loader-ring"></div>
-                </div>
-                <div id="th-tab-manage" class="tab-content" style="display:none;">
-                    <div class="loader-ring"></div>
-                </div>
-              </div>
-            `;
-        }
-    
-        // LAZY LOAD: Check if data is already cached
-        if (techHubState.data) {
-            renderTechHubRoster();
-            // We render sync/manage lazily when tabs are clicked or now if you prefer
-            // For simplicity, we render roster now, others are handled by switchTechHubTab
-            document.getElementById('th-tab-roster').querySelector('.loader-ring')?.remove();
-        } else {
-            fetchTechHubData();
-        }
-      }
-    
-      function fetchTechHubData() {
-        techHubState.isLoading = true;
-        google.script.run
-          .withSuccessHandler(response => {
-            techHubState.isLoading = false;
-            if (response.success) {
-              techHubState.data = response.data;
-              renderTechHubRoster();
-              renderTechHubManager();
-              // We don't render sync here, we wait for the tab click to check calendars
-            } else {
-              showNotification("Error: " + response.message, 'error');
-              document.getElementById('th-tab-roster').innerHTML = `<div class="error-message">${response.message}</div>`;
-            }
-          })
-          .withFailureHandler(error => {
-            techHubState.isLoading = false;
-            showNotification("Server Error: " + error.message, 'error');
-          })
-          .api_getTechHubViewData();
-      }
-    
-      function switchTechHubTab(tabName) {
-        document.querySelectorAll('#page-TechHub .tab-content').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('#page-TechHub .tab-link').forEach(el => el.classList.remove('active'));
-        document.getElementById(`th-tab-${tabName}`).style.display = 'block';
-        
-        const btns = document.querySelectorAll('#page-TechHub .tab-link');
-        if(tabName === 'roster') btns[0].classList.add('active');
-        if(tabName === 'sync') {
-            btns[1].classList.add('active');
-            renderTechHubSync(); // Check/Load calendars
-        }
-        if(tabName === 'manage') {
-            btns[2].classList.add('active');
-            renderTechHubManager();
-        }
-      }
-    
-      /* ==========================================================================
-         ROSTER VIEW & CONFLICT LOGIC
-         ========================================================================== */
-    
-      function renderTechHubRoster() {
-        const container = document.getElementById('th-tab-roster');
-        if (!techHubState.data) return; // Wait for data
-        
-        const rosterData = techHubState.data.roster || [];
-    
-        const startD = new Date();
-        const endD = new Date();
-        endD.setMonth(endD.getMonth() + 4);
-        const startStr = startD.toISOString().split('T')[0];
-        const endStr = endD.toISOString().split('T')[0];
-    
-        let html = `
-          <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin-bottom:15px;">
-            <h4 style="margin-top:0;">Semester Settings</h4>
-            <div style="display:flex; gap:15px; align-items:flex-end;">
-                <div class="form-group" style="margin-bottom:0;"><label>Semester Start</label><input type="date" id="th-sem-start" class="form-input" value="${startStr}"></div>
-                <div class="form-group" style="margin-bottom:0;"><label>Semester End</label><input type="date" id="th-sem-end" class="form-input" value="${endStr}"></div>
-                <div style="flex-grow:1; text-align:right;"><button class="button-primary" onclick="handleSaveRoster(this)">Save Full Roster</button></div>
+    // Only build layout if empty
+    if (container.childElementCount === 0) {
+        container.innerHTML = `
+          <div class="widget">
+            <div class="tab-bar" style="margin-bottom: 20px; border-bottom: 1px solid #ddd;">
+                <button class="tab-link active" onclick="switchTechHubTab('roster')">Semester Roster</button>
+                <button class="tab-link" onclick="switchTechHubTab('sync')">Calendar Sync</button>
+                <button class="tab-link" onclick="switchTechHubTab('manage')">Manage Shifts</button>
+            </div>
+
+            <div id="th-tab-roster" class="tab-content" style="display:block;">
+                <div class="loader-ring"></div> 
+            </div>
+            <div id="th-tab-sync" class="tab-content" style="display:none;">
+                 <div class="loader-ring"></div>
+            </div>
+            <div id="th-tab-manage" class="tab-content" style="display:none;">
+                <div class="loader-ring"></div>
             </div>
           </div>
-          <table class="data-table">
-            <thead><tr><th>Day</th><th>Time</th><th>Shift</th><th>Assigned Staff</th></tr></thead>
-            <tbody>
         `;
-        if (rosterData.length === 0) {
-            html += `<tr><td colspan="4" style="text-align:center; padding:20px;">No shifts configured.</td></tr>`;
-        } else {
-            rosterData.forEach(shift => {
-                let optionsHtml = `<option value="">-- Unassigned --</option>`;
-                shift.smartList.forEach(staff => {
-                    const isSelected = String(staff.id) === String(shift.assignedStaffId);
-                    let style = "";
-                    
-                    let label = staff.name;
-                    
-                    if (staff.isBlocked) {
-                        label = label + " (Unavailable)";
-                        style = "color: #d9534f; font-style: italic;"; 
-                    } else if (staff.preference === "Yes Please") {
-                        label = "★ " + label;
-                        style = "color: green; font-weight: bold;";
-                    } else if (staff.preference === "No Thanks") {
-                        label = "⚠ " + label;
-                        style = "color: #e67e22;"; 
-                    }
-                    
-                    optionsHtml += `<option value="${staff.id}" style="${style}" ${isSelected ? 'selected' : ''}>${label}</option>`;
-                });
-    
-                html += `
-                    <tr>
-                        <td><strong>${shift.day}</strong></td>
-                        <td>${shift.start} - ${shift.end}</td>
-                        <td>${shift.description}</td>
-                        <td>
-                            <div style="display:flex; gap:5px;">
-                                <select class="form-input th-assignment-select" data-shift-id="${shift.shiftId}" style="flex-grow:1;">${optionsHtml}</select>
-                                <button class="button-secondary" style="padding: 5px 10px;"
-                                onclick="validateAndSave(this, '${shift.shiftId}')">Save</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-      }
-    
-      // --- CONFLICT VALIDATION ---
-    
-      function validateAndSave(btn, shiftId) {
-          const select = btn.closest('tr').querySelector('select');
-          const staffId = select.value;
-          if (!staffId) { executeSaveSingle(btn, shiftId, staffId); return;
-          }
-    
-          // Find staff metadata from the local state
-          const shift = techHubState.data.roster.find(s => s.shiftId === shiftId);
-          const staff = shift.smartList.find(s => s.id === staffId);
-    
-          if (staff.isBlocked || staff.preference === "No Thanks") {
-              let warnMsg = `<strong>${staff.name}</strong> has a conflict for this shift:<br><br>`;
-              if (staff.isBlocked) warnMsg += `❌ They have listed this time as <strong>UNAVAILABLE</strong>.<br>`;
-              if (staff.preference === "No Thanks") warnMsg += `⚠ This is a time block they <strong>prefer NOT to work</strong>.<br>`;
-              openConflictWarning(warnMsg, () => {
-                  executeSaveSingle(btn, shiftId, staffId);
-                  closeConflictWarning();
-              });
-          } else {
-              executeSaveSingle(btn, shiftId, staffId);
-          }
-      }
-    
-      function executeSaveSingle(btn, shiftId, staffId) {
-          const startVal = document.getElementById('th-sem-start').value;
-          const endVal = document.getElementById('th-sem-end').value;
-          const originalText = btn.textContent;
-          btn.disabled = true; btn.textContent = "...";
-          google.script.run
-            .withSuccessHandler(res => {
-                if (res.success) {
-                    btn.textContent = "Saved!"; btn.style.backgroundColor = "#28a745"; btn.style.color = "white";
-                    setTimeout(() => { btn.disabled = false; btn.textContent = originalText; btn.style.backgroundColor = ""; btn.style.color = ""; }, 2000);
-                } else { showNotification(res.message, "error"); btn.disabled = false; 
-                btn.textContent = originalText; }
-            })
-            .withFailureHandler(err => { showNotification(err.message, "error"); btn.disabled = false; btn.textContent = originalText; })
-            .api_saveSingleTechHubAssignment(shiftId, staffId, startVal, endVal);
-      }
-    
-      function openConflictWarning(msg, onConfirm) {
-          document.getElementById('th-conflict-text').innerHTML = msg;
-          const confirmBtn = document.getElementById('th-confirm-btn');
-          confirmBtn.onclick = onConfirm;
-          document.getElementById('th-conflict-overlay').style.display = 'flex';
-      }
-    
-      function closeConflictWarning() {
-          document.getElementById('th-conflict-overlay').style.display = 'none';
-      }
-    
-      function handleSaveRoster(btn) {
-        const startVal = document.getElementById('th-sem-start').value;
-        const endVal = document.getElementById('th-sem-end').value;
-        
-        const selects = document.querySelectorAll('.th-assignment-select');
-        const assignments = [];
-        let hasConflict = false;
-    
-        selects.forEach(sel => {
-            const shiftId = sel.dataset.shiftId;
-            const staffId = sel.value;
-            if(staffId) {
-                const shift = techHubState.data.roster.find(s => s.shiftId === shiftId);
-                const staff = shift.smartList.find(s => s.id === staffId);
-                if(staff.isBlocked || staff.preference === "No Thanks") hasConflict = true;
-     
-                assignments.push({ shiftId, staffId });
-            }
-        });
-        if (hasConflict) {
-            openConflictWarning("One or more assignments in this roster have <strong>Conflicts</strong> or <strong>Negative Preferences</strong>.", () => {
-                executeBulkSave(btn, assignments, startVal, endVal);
-                closeConflictWarning();
-            });
-        } else {
-            executeBulkSave(btn, assignments, startVal, endVal);
-        }
-      }
-    
-      function executeBulkSave(btn, assignments, startVal, endVal) {
-          btn.disabled = true;
-          btn.textContent = "Saving...";
-          google.script.run
-            .withSuccessHandler(res => {
-                btn.disabled = false; btn.textContent = "Save Full Roster";
-                if (res.success) showNotification("Roster saved!", "success");
-                else showNotification(res.message, "error");
-            })
-            .api_saveAllTechHubAssignments(assignments, new Date(startVal), new Date(endVal));
-      }
-    
-      /* ==========================================================================
-         CALENDAR SYNC VIEW
-         ========================================================================== */
-    
-      function renderTechHubSync() {
-          const container = document.getElementById('th-tab-sync');
-          
-          // LAZY LOAD: Calendars (null means not fetched yet)
-          if (g.writableCalendars === null) {
-              container.innerHTML = '<div class="loader-container" style="position:relative; height:200px; background:transparent;"><div class="loader-ring"></div></div>';
-              google.script.run.withSuccessHandler(res => {
-                  if (res.success) {
-                      g.writableCalendars = res.data;
-                      renderTechHubSyncControls(container);
-                  } else {
-                      container.innerHTML = `<div class="error-message">${res.message}</div>`;
-                  }
-              }).getWritableCalendars();
-          } else {
-              renderTechHubSyncControls(container);
-          }
-      }
-    
-      function renderTechHubSyncControls(container) {
-          if (container.querySelector('#th-sync-cal-select')) return; // Already rendered
-    
-          // Gracefully handle if user has 0 writable calendars
-          let calOptions = '<option value="">-- No Calendars Found --</option>';
-          if (g.writableCalendars && g.writableCalendars.length > 0) {
-              calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-          }
+    }
 
-          container.innerHTML = `
-            <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
-                <h4 style="margin-top:0;">Sync to Google Calendar</h4>
-                <div style="display:flex; gap:15px; align-items:flex-end;">
-                    <div class="form-group" style="flex-grow:1; margin-bottom:0;"><label>Target Calendar</label><select id="th-sync-cal-select" class="form-input">${calOptions}</select></div>
-                    <button class="button-primary" onclick="handlePreviewSync(this)">Preview Changes</button>
-                </div>
-            </div>
-            <div id="th-sync-results"></div>
-          `;
-      }
+    // LAZY LOAD: Check if data is already cached
+    if (techHubState.data) {
+        renderTechHubRoster();
+        // We render sync/manage lazily when tabs are clicked or now if you prefer
+        // For simplicity, we render roster now, others are handled by switchTechHubTab
+        document.getElementById('th-tab-roster').querySelector('.loader-ring')?.remove();
+    } else {
+        fetchTechHubData();
+    }
+  }
+
+  function fetchTechHubData() {
+    techHubState.isLoading = true;
+    google.script.run
+      .withSuccessHandler(response => {
+        techHubState.isLoading = false;
+        if (response.success) {
+          techHubState.data = response.data;
+          renderTechHubRoster();
+          renderTechHubManager();
+          // We don't render sync here, we wait for the tab click to check calendars
+        } else {
+          showNotification("Error: " + response.message, 'error');
+          document.getElementById('th-tab-roster').innerHTML = `<div class="error-message">${response.message}</div>`;
+        }
+      })
+      .withFailureHandler(error => {
+        techHubState.isLoading = false;
+        showNotification("Server Error: " + error.message, 'error');
+      })
+      .api_getTechHubViewData();
+  }
+
+  function switchTechHubTab(tabName) {
+    document.querySelectorAll('#page-TechHub .tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#page-TechHub .tab-link').forEach(el => el.classList.remove('active'));
+    document.getElementById(`th-tab-${tabName}`).style.display = 'block';
     
-      function handlePreviewSync(btn) {
-          const calId = document.getElementById('th-sync-cal-select').value;
-          if(!calId) {
-              alert("Please select a valid calendar.");
-              return false;
-          }
-          const startVal = document.getElementById('th-sem-start')?.value;
-          const endVal = document.getElementById('th-sem-end')?.value;
-          if(!startVal || !endVal) { showNotification("Set Semester Dates in Roster tab first.", "error"); switchTechHubTab('roster'); return;
-          }
+    const btns = document.querySelectorAll('#page-TechHub .tab-link');
+    if(tabName === 'roster') btns[0].classList.add('active');
+    if(tabName === 'sync') {
+        btns[1].classList.add('active');
+        renderTechHubSync(); // Check/Load calendars
+    }
+    if(tabName === 'manage') {
+        btns[2].classList.add('active');
+        renderTechHubManager();
+    }
+  }
+
+  /* ==========================================================================
+     ROSTER VIEW & CONFLICT LOGIC
+     ========================================================================== */
+
+  function renderTechHubRoster() {
+    const container = document.getElementById('th-tab-roster');
+    if (!techHubState.data) return; // Wait for data
     
-          btn.disabled = true; btn.textContent = "Scanning...";
-          document.getElementById('th-sync-results').innerHTML = '<div class="loader-ring"></div>';
-          google.script.run
-            .withSuccessHandler(res => {
-                btn.disabled = false; btn.textContent = "Preview Changes";
-                if(res.success) { techHubState.syncData = res.data; renderSyncCards(res.data); }
-                else { document.getElementById('th-sync-results').innerHTML = `<div class="error-message">${res.message}</div>`; }
-            })
-            .api_previewTechHubSync(calId, startVal, endVal);
-      }
-    
-      function renderSyncCards(events) {
-          const container = document.getElementById('th-sync-results');
-          if(events.length === 0) { container.innerHTML = '<p>No shifts found to sync.</p>'; return;
-          }
-    
-          let html = `
-            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                <strong>Found ${events.length} shifts</strong>
-                <button class="button-success" onclick="handleCommitSync(this)">Sync All</button>
-            </div>
-            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:10px;">
-          `;
-          events.forEach((evt, index) => {
-              try {
-                  const statusClass = evt.status.toLowerCase();
-                  let diffHtml = evt.diffs.length > 0 ? `<div style="background:#fff3cd; padding:5px; font-size:0.85em; margin-top:5px;">${evt.diffs.join('<br>')}</div>` : '';
-                  let timeStr = "";
-                  if (evt.payload && evt.payload.start) {
-                      const dStart = new Date(evt.payload.start); const dEnd = new Date(evt.payload.end);
-                      timeStr = `${dStart.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${dEnd.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-                  }
-    
-                  html += `
-                    <div class="th-sync-card status-${statusClass}">
-                        <div class="th-card-header"><span>${evt.title}</span><span class="th-badge ${statusClass}">${evt.status}</span></div>
-                        <div class="th-card-body"><div>${timeStr}</div>${diffHtml}
-                            <div style="margin-top:10px;
-                            text-align:right;"><button class="button-secondary" style="padding:4px 8px; font-size:0.8em;" onclick="handleSingleSync(this, ${index})">Sync This</button></div>
-                        </div>
-                    </div>
-                  `;
-              } catch(e) {}
-          });
-          container.innerHTML = html + `</div>`;
-      }
-    
-      function handleSingleSync(btn, index) {
-          const calId = document.getElementById('th-sync-cal-select').value;
-          const event = techHubState.syncData[index];
-          const originalText = btn.textContent;
-          btn.disabled = true; btn.textContent = "...";
-          google.script.run
-            .withSuccessHandler(res => { if(res.success) { btn.textContent = "Synced"; btn.style.backgroundColor = "#28a745"; btn.style.color = "white"; } else { alert(res.message); btn.disabled = false; btn.textContent = originalText; } })
-            .api_commitTechHubSync(calId, [event]);
-      }
-    
-      function handleCommitSync(btn) {
-          const calId = document.getElementById('th-sync-cal-select').value;
-          if(!confirm(`Sync ${techHubState.syncData.length} shifts?`)) return;
-          btn.disabled = true; btn.textContent = "Syncing...";
-          google.script.run.withSuccessHandler(res => { btn.disabled = false; btn.textContent = "Sync All"; alert("Complete!"); handlePreviewSync(document.querySelector('button[onclick="handlePreviewSync(this)"]')); })
-            .api_commitTechHubSync(calId, techHubState.syncData);
-      }
-    
-      /* ==========================================================================
-         MANAGER VIEW
-         ========================================================================== */
-    
-      function renderTechHubManager() {
-        const container = document.getElementById('th-tab-manage');
-        const shifts = techHubState.data.manageShifts || [];
-        let html = `
-          <div style="display:flex; gap: 20px;">
-            <div style="flex: 2;"><h3>Existing Shifts</h3><table class="data-table"><thead><tr><th>Day</th><th>Time</th><th>Description</th><th>Zoom</th><th>Action</th></tr></thead><tbody>
-        `;
-        if (shifts.length === 0) html += `<tr><td colspan="5" style="text-align:center;">No shifts found.</td></tr>`;
-        else shifts.forEach(shift => { html += `<tr><td>${shift.day}</td><td>${shift.start} - ${shift.end}</td><td>${shift.desc}</td><td>${shift.zoom ? '✅' : ''}</td><td><button class="button-danger" style="padding:2px 8px;" onclick="handleDeleteShift('${shift.id}')">Delete</button></td></tr>`; });
-        html += `</tbody></table></div>
-            <div style="flex: 1; background: #f4f4f4; padding: 20px; border-radius: 8px; height: fit-content;">
-                <h3 style="margin-top:0;">Add New Shift</h3>
-                <form id="th-add-shift-form">
-                    <div class="form-group"><label>Description</label><input type="text" name="description" class="form-input" required></div>
-                    <div class="form-group"><label>Day</label><select name="day" class="form-input"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option></select></div>
+    const rosterData = techHubState.data.roster ||[];
+
+    const startD = new Date();
+    const endD = new Date();
+    endD.setMonth(endD.getMonth() + 4);
+    const startStr = startD.toISOString().split('T')[0];
+    const endStr = endD.toISOString().split('T')[0];
+
+    let html = `
+      <div style="background:#f9f9f9; padding:15px; border-radius:8px; margin-bottom:15px;">
+        <h4 style="margin-top:0;">Semester Settings</h4>
+        <div style="display:flex; gap:15px; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;"><label>Semester Start</label><input type="date" id="th-sem-start" class="form-input" value="${startStr}"></div>
+            <div class="form-group" style="margin-bottom:0;"><label>Semester End</label><input type="date" id="th-sem-end" class="form-input" value="${endStr}"></div>
+            <div style="flex-grow:1; text-align:right;"><button class="button-primary" onclick="handleSaveRoster(this)">Save Full Roster</button></div>
+        </div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Day</th><th>Time</th><th>Shift</th><th>Assigned Staff</th></tr></thead>
+        <tbody>
+    `;
+    if (rosterData.length === 0) {
+        html += `<tr><td colspan="4" style="text-align:center; padding:20px;">No shifts configured.</td></tr>`;
+    } else {
+        rosterData.forEach(shift => {
+            let optionsHtml = `<option value="">-- Unassigned --</option>`;
+            shift.smartList.forEach(staff => {
+                const isSelected = String(staff.id) === String(shift.assignedStaffId);
+                let style = "";
                 
-                    <div class="form-group"><label>Start</label><input type="time" name="startTime" class="form-input" required></div>
-                    <div class="form-group"><label>End</label><input type="time" name="endTime" class="form-input" required></div>
-                    <div class="form-group"><label><input type="checkbox" name="zoom"> Is Zoom?</label></div>
-                    <button type="button" class="button-primary" style="width:100%" onclick="handleAddShift(this)">Add Shift</button>
-                </form>
-            </div></div>`;
-        container.innerHTML = html;
+                let label = staff.name;
+                
+                if (staff.isBlocked) {
+                    label = label + " (Unavailable)";
+                    style = "color: #d9534f; font-style: italic;"; 
+                } else if (staff.preference === "Yes Please") {
+                    label = "★ " + label;
+                    style = "color: green; font-weight: bold;";
+                } else if (staff.preference === "No Thanks") {
+                    label = "⚠ " + label;
+                    style = "color: #e67e22;"; 
+                }
+                
+                optionsHtml += `<option value="${staff.id}" style="${style}" ${isSelected ? 'selected' : ''}>${label}</option>`;
+            });
+
+            html += `
+                <tr>
+                    <td><strong>${shift.day}</strong></td>
+                    <td>${shift.start} - ${shift.end}</td>
+                    <td>${shift.description}</td>
+                    <td>
+                        <div style="display:flex; gap:5px;">
+                            <select class="form-input th-assignment-select" data-shift-id="${shift.shiftId}" style="flex-grow:1;">${optionsHtml}</select>
+                            <button class="button-secondary" style="padding: 5px 10px;"
+                            onclick="validateAndSave(this, '${shift.shiftId}')">Save</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  }
+
+  // --- CONFLICT VALIDATION ---
+
+  function validateAndSave(btn, shiftId) {
+      const select = btn.closest('tr').querySelector('select');
+      const staffId = select.value;
+      if (!staffId) { executeSaveSingle(btn, shiftId, staffId); return;
       }
+
+      // Find staff metadata from the local state
+      const shift = techHubState.data.roster.find(s => s.shiftId === shiftId);
+      const staff = shift.smartList.find(s => s.id === staffId);
+
+      if (staff.isBlocked || staff.preference === "No Thanks") {
+          let warnMsg = `<strong>${staff.name}</strong> has a conflict for this shift:<br><br>`;
+          if (staff.isBlocked) warnMsg += `❌ They have listed this time as <strong>UNAVAILABLE</strong>.<br>`;
+          if (staff.preference === "No Thanks") warnMsg += `⚠ This is a time block they <strong>prefer NOT to work</strong>.<br>`;
+          openConflictWarning(warnMsg, () => {
+              executeSaveSingle(btn, shiftId, staffId);
+              closeConflictWarning();
+          });
+      } else {
+          executeSaveSingle(btn, shiftId, staffId);
+      }
+  }
+
+  function executeSaveSingle(btn, shiftId, staffId) {
+      const startVal = document.getElementById('th-sem-start').value;
+      const endVal = document.getElementById('th-sem-end').value;
+      const originalText = btn.textContent;
+      btn.disabled = true; btn.textContent = "...";
+      google.script.run
+        .withSuccessHandler(res => {
+            if (res.success) {
+                btn.textContent = "Saved!"; btn.style.backgroundColor = "#28a745"; btn.style.color = "white";
+                setTimeout(() => { btn.disabled = false; btn.textContent = originalText; btn.style.backgroundColor = ""; btn.style.color = ""; }, 2000);
+            } else { showNotification(res.message, "error"); btn.disabled = false; 
+            btn.textContent = originalText; }
+        })
+        .withFailureHandler(err => { showNotification(err.message, "error"); btn.disabled = false; btn.textContent = originalText; })
+        .api_saveSingleTechHubAssignment(shiftId, staffId, startVal, endVal);
+  }
+
+  function openConflictWarning(msg, onConfirm) {
+      document.getElementById('th-conflict-text').innerHTML = msg;
+      const confirmBtn = document.getElementById('th-confirm-btn');
+      confirmBtn.onclick = onConfirm;
+      document.getElementById('th-conflict-overlay').style.display = 'flex';
+  }
+
+  function closeConflictWarning() {
+      document.getElementById('th-conflict-overlay').style.display = 'none';
+  }
+
+  function handleSaveRoster(btn) {
+    const startVal = document.getElementById('th-sem-start').value;
+    const endVal = document.getElementById('th-sem-end').value;
     
-      function handleAddShift(btn) {
-        const form = document.getElementById('th-add-shift-form');
-        if (!form.checkValidity()) return;
-        btn.disabled = true;
-        google.script.run.withSuccessHandler(() => fetchTechHubData()).addTechHubShift({ description: form.description.value, day: form.day.value, startTime: form.startTime.value, endTime: form.endTime.value, zoom: form.zoom.checked });
+    const selects = document.querySelectorAll('.th-assignment-select');
+    const assignments =[];
+    let hasConflict = false;
+
+    selects.forEach(sel => {
+        const shiftId = sel.dataset.shiftId;
+        const staffId = sel.value;
+        if(staffId) {
+            const shift = techHubState.data.roster.find(s => s.shiftId === shiftId);
+            const staff = shift.smartList.find(s => s.id === staffId);
+            if(staff.isBlocked || staff.preference === "No Thanks") hasConflict = true;
+ 
+            assignments.push({ shiftId, staffId });
+        }
+    });
+    if (hasConflict) {
+        openConflictWarning("One or more assignments in this roster have <strong>Conflicts</strong> or <strong>Negative Preferences</strong>.", () => {
+            executeBulkSave(btn, assignments, startVal, endVal);
+            closeConflictWarning();
+        });
+    } else {
+        executeBulkSave(btn, assignments, startVal, endVal);
+    }
+  }
+
+  function executeBulkSave(btn, assignments, startVal, endVal) {
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+      google.script.run
+        .withSuccessHandler(res => {
+            btn.disabled = false; btn.textContent = "Save Full Roster";
+            if (res.success) showNotification("Roster saved!", "success");
+            else showNotification(res.message, "error");
+        })
+        .api_saveAllTechHubAssignments(assignments, new Date(startVal), new Date(endVal));
+  }
+
+  /* ==========================================================================
+     CALENDAR SYNC VIEW
+     ========================================================================== */
+
+  function renderTechHubSync() {
+      const container = document.getElementById('th-tab-sync');
+      
+      // LAZY LOAD: Calendars (null means not fetched yet)
+      if (g.writableCalendars === null) {
+          container.innerHTML = '<div class="loader-container" style="position:relative; height:200px; background:transparent;"><div class="loader-ring"></div></div>';
+          google.script.run.withSuccessHandler(res => {
+              if (res.success) {
+                  g.writableCalendars = res.data;
+                  renderTechHubSyncControls(container);
+              } else {
+                  container.innerHTML = `<div class="error-message">${res.message}</div>`;
+              }
+          }).getWritableCalendars();
+      } else {
+          renderTechHubSyncControls(container);
       }
+  }
+
+  function renderTechHubSyncControls(container) {
+      if (container.querySelector('#th-sync-cal-select')) return; // Already rendered
+
+      // Gracefully handle if user has 0 writable calendars
+      let calOptions = '<option value="">-- No Calendars Found --</option>';
+      if (g.writableCalendars && g.writableCalendars.length > 0) {
+          calOptions = g.writableCalendars.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      }
+
+      container.innerHTML = `
+        <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:20px;">
+            <h4 style="margin-top:0;">Sync to Google Calendar</h4>
+            <div style="display:flex; gap:15px; align-items:flex-end;">
+                <div class="form-group" style="flex-grow:1; margin-bottom:0;"><label>Target Calendar</label><select id="th-sync-cal-select" class="form-input">${calOptions}</select></div>
+                <button class="button-primary" onclick="handlePreviewSync(this)">Preview Changes</button>
+            </div>
+        </div>
+        <div id="th-sync-results"></div>
+      `;
+  }
+
+  function handlePreviewSync(btn) {
+      const calId = document.getElementById('th-sync-cal-select').value;
+      if(!calId) {
+          alert("Please select a valid calendar.");
+          return false;
+      }
+      const startVal = document.getElementById('th-sem-start')?.value;
+      const endVal = document.getElementById('th-sem-end')?.value;
+      if(!startVal || !endVal) { showNotification("Set Semester Dates in Roster tab first.", "error"); switchTechHubTab('roster'); return;
+      }
+
+      btn.disabled = true; btn.textContent = "Scanning...";
+      document.getElementById('th-sync-results').innerHTML = '<div class="loader-ring"></div>';
+      google.script.run
+        .withSuccessHandler(res => {
+            btn.disabled = false; btn.textContent = "Preview Changes";
+            if(res.success) { techHubState.syncData = res.data; renderSyncCards(res.data); }
+            else { document.getElementById('th-sync-results').innerHTML = `<div class="error-message">${res.message}</div>`; }
+        })
+        .api_previewTechHubSync(calId, startVal, endVal);
+  }
+
+  function renderSyncCards(events) {
+      const container = document.getElementById('th-sync-results');
+      if(events.length === 0) { container.innerHTML = '<p>No shifts found to sync.</p>'; return;
+      }
+
+      let html = `
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <strong>Found ${events.length} shifts</strong>
+            <button class="button-success" onclick="handleCommitSync(this)">Sync All</button>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:10px;">
+      `;
+      events.forEach((evt, index) => {
+          try {
+              const statusClass = evt.status.toLowerCase();
+              let diffHtml = evt.diffs.length > 0 ? `<div style="background:#fff3cd; padding:5px; font-size:0.85em; margin-top:5px;">${evt.diffs.join('<br>')}</div>` : '';
+              let timeStr = "";
+              if (evt.payload && evt.payload.start) {
+                  const dStart = new Date(evt.payload.start); const dEnd = new Date(evt.payload.end);
+                  timeStr = `${dStart.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - ${dEnd.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+              }
+
+              html += `
+                <div class="th-sync-card status-${statusClass}">
+                    <div class="th-card-header"><span>${evt.title}</span><span class="th-badge ${statusClass}">${evt.status}</span></div>
+                    <div class="th-card-body"><div>${timeStr}</div>${diffHtml}
+                        <div style="margin-top:10px;
+                        text-align:right;"><button class="button-secondary" style="padding:4px 8px; font-size:0.8em;" onclick="handleSingleSync(this, ${index})">Sync This</button></div>
+                    </div>
+                </div>
+              `;
+          } catch(e) {}
+      });
+      container.innerHTML = html + `</div>`;
+  }
+
+  function handleSingleSync(btn, index) {
+      const calId = document.getElementById('th-sync-cal-select').value;
+      const event = techHubState.syncData[index];
+      const originalText = btn.textContent;
+      btn.disabled = true; btn.textContent = "...";
+      google.script.run
+        .withSuccessHandler(res => { if(res.success) { btn.textContent = "Synced"; btn.style.backgroundColor = "#28a745"; btn.style.color = "white"; } else { alert(res.message); btn.disabled = false; btn.textContent = originalText; } })
+        .api_commitTechHubSync(calId, [event]);
+  }
+
+  function handleCommitSync(btn) {
+      const calId = document.getElementById('th-sync-cal-select').value;
+      if(!confirm(`Sync ${techHubState.syncData.length} shifts?`)) return;
+      btn.disabled = true; btn.textContent = "Syncing...";
+      google.script.run.withSuccessHandler(res => { btn.disabled = false; btn.textContent = "Sync All"; alert("Complete!"); handlePreviewSync(document.querySelector('button[onclick="handlePreviewSync(this)"]')); })
+        .api_commitTechHubSync(calId, techHubState.syncData);
+  }
+
+  /* ==========================================================================
+     MANAGER VIEW
+     ========================================================================== */
+
+  function generateTimeOptions(defaultTimeStr = "") {
+      let options = '';
+      // Generate times from 7:00 AM (7) to 10:00 PM (22)
+      for(let h = 7; h <= 22; h++) {
+          for(let m of['00', '15', '30', '45']) {
+              let ampm = h >= 12 ? 'PM' : 'AM';
+              let displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+              let displayTime = `${displayH}:${m} ${ampm}`;
+              
+              let valH = h.toString().padStart(2, '0');
+              let valTime = `${valH}:${m}`;
+              
+              let selected = (valTime === defaultTimeStr) ? 'selected' : '';
+              options += `<option value="${valTime}" ${selected}>${displayTime}</option>`;
+          }
+      }
+      return options;
+  }
+
+  function renderTechHubManager() {
+    const container = document.getElementById('th-tab-manage');
+    const shifts = techHubState.data.manageShifts ||[];
+    let html = `
+      <div style="display:flex; gap: 20px;">
+        <div style="flex: 2;">
+            <h3>Existing Shifts</h3>
+            <table class="data-table">
+                <thead><tr><th>Day</th><th>Time</th><th>Description</th><th>Zoom</th><th>Action</th></tr></thead>
+                <tbody>
+    `;
     
-      function handleDeleteShift(id) {
-        if(confirm("Delete?")) google.script.run.withSuccessHandler(() => fetchTechHubData()).deleteTechHubShift(id);
-      }
-    </script>
+    if (shifts.length === 0) {
+        html += `<tr><td colspan="5" style="text-align:center;">No shifts found.</td></tr>`;
+    } else {
+        shifts.forEach(shift => { 
+            html += `<tr><td>${shift.day}</td><td>${shift.start} - ${shift.end}</td><td>${shift.desc}</td><td>${shift.zoom ? '✅' : ''}</td><td><button class="button-danger" style="padding:2px 8px;" onclick="handleDeleteShift('${shift.id}')">Delete</button></td></tr>`; 
+        });
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        <div style="flex: 1; background: #f4f4f4; padding: 20px; border-radius: 8px; height: fit-content;">
+            <h3 style="margin-top:0;">Add New Shift</h3>
+            <form id="th-add-shift-form">
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" class="form-input" placeholder="e.g. Morning Shift" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Day(s)</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <label><input type="checkbox" name="day" value="Monday" checked> Mon</label>
+                        <label><input type="checkbox" name="day" value="Tuesday"> Tue</label>
+                        <label><input type="checkbox" name="day" value="Wednesday"> Wed</label>
+                        <label><input type="checkbox" name="day" value="Thursday"> Thu</label>
+                        <label><input type="checkbox" name="day" value="Friday"> Fri</label>
+                    </div>
+                </div>
+            
+                <div style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Start</label>
+                        <select name="startTime" class="form-input" required>
+                            ${generateTimeOptions('08:00')}
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>End</label>
+                        <select name="endTime" class="form-input" required>
+                            ${generateTimeOptions('10:00')}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group"><label><input type="checkbox" name="zoom"> Is Zoom?</label></div>
+                <button type="button" class="button-primary" style="width:100%" onclick="handleAddShift(this)">Add Shift(s)</button>
+            </form>
+        </div>
+      </div>`;
+    container.innerHTML = html;
+  }
+
+  function handleAddShift(btn) {
+    const form = document.getElementById('th-add-shift-form');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    // Collect all selected day checkboxes
+    const checkedDays = Array.from(form.querySelectorAll('input[name="day"]:checked')).map(cb => cb.value);
+    
+    if (checkedDays.length === 0) {
+        alert("Please select at least one day for the shift.");
+        return;
+    }
+
+    if (form.startTime.value >= form.endTime.value) {
+        alert("The end time must be after the start time.");
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Adding...";
+    
+    google.script.run
+        .withSuccessHandler(() => {
+             fetchTechHubData();
+        })
+        .addTechHubShift({ 
+            description: form.description.value, 
+            days: checkedDays, // Pass as an array for multiple shifts at once
+            startTime: form.startTime.value, 
+            endTime: form.endTime.value, 
+            zoom: form.zoom.checked 
+        });
+  }
+
+  function handleDeleteShift(id) {
+    if(confirm("Delete?")) google.script.run.withSuccessHandler(() => fetchTechHubData()).deleteTechHubShift(id);
+  }
+</script>

@@ -112,7 +112,7 @@ function api_getNursingData() {
     const sheets = ss.getSheets();
     const rootFolder = DriveApp.getFolderById(config.folderId);
     const dbMap = getAccommodationsDBMap();
-    const courseData = [];
+    const courseData =[];
 
     sheets.forEach(sheet => {
       const sheetName = sheet.getName();
@@ -124,7 +124,7 @@ function api_getNursingData() {
       const meta = _parseCellA1(parsed.rawA1);
       
       let targetFolder = _findSubFolder(rootFolder, meta.folderKey);
-      const existingFiles = [];
+      const existingFiles =[];
       if (targetFolder) {
         const files = targetFolder.getFiles();
         while (files.hasNext()) {
@@ -193,7 +193,7 @@ function parseNursingSheet(sheet, dbMap) {
       const locHeaders = data[rosterHeaderIdx];
       locHeaders.forEach(h => {
           const locName = String(h).trim();
-          if (locName && !sheetRoster[locName]) sheetRoster[locName] = [];
+          if (locName && !sheetRoster[locName]) sheetRoster[locName] =[];
       });
       const rosterStartRow = rosterHeaderIdx + 3; 
       for (let r = rosterStartRow; r < data.length; r++) {
@@ -221,14 +221,40 @@ function parseNursingSheet(sheet, dbMap) {
       password: headers.findIndex(h => h.includes('password')),
       accommodations: headers.findIndex(h => h.includes('accommodations'))
   };
+  
   if (colMap.name === -1 || colMap.date === -1) return null;
-  const exams = [];
+  const exams =[];
+  
   for (let i = headerRowIndex + 1; i < scanEnd; i++) {
       const row = data[i];
       const examName = row[colMap.name];
       if (!examName || String(examName).trim() === '') continue;
       if (String(examName).toLowerCase().includes('total')) continue;
-      if (fontLines[i][colMap.date] === 'line-through' || fontLines[i][colMap.name] === 'line-through') continue;
+      
+      let isDone = false;
+      
+      // 1. Check for manual strikethrough (Standard way users mark things as cancelled/done)
+      if (fontLines[i][colMap.date] === 'line-through' || fontLines[i][colMap.name] === 'line-through') {
+          isDone = true;
+      }
+      
+      // 2. Automatically flag as done if the date has passed
+      const rawDate = row[colMap.date];
+      let dateObj;
+      if (rawDate instanceof Date) {
+          dateObj = rawDate;
+      } else {
+          const str = String(rawDate).replace(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|st|nd|rd|th),?/gi, "").trim();
+          dateObj = new Date(str);
+      }
+      
+      if (!isNaN(dateObj.getTime())) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // Reset to midnight for an accurate day comparison
+          if (dateObj < today) {
+              isDone = true;
+          }
+      }
       
       const dateVal = formatDateToPlainLanguage(row[colMap.date]);
       const siteTime = normalizeTime(row[colMap.timeSite]);
@@ -236,6 +262,7 @@ function parseNursingSheet(sheet, dbMap) {
 
       const dbKey = `${courseCode}|${String(examName).trim()}`; 
       const dbEntry = dbMap[dbKey] || { generalNotes: "", studentTags: {} };
+      
       exams.push({
           name: String(examName).trim(),
           date: dateVal, 
@@ -244,10 +271,10 @@ function parseNursingSheet(sheet, dbMap) {
           duration: colMap.duration > -1 ? row[colMap.duration] : '',
           room: colMap.room > -1 ? row[colMap.room] : '',
           password: colMap.password > -1 ? row[colMap.password] : '',
-  
           generalNotes: dbEntry.generalNotes || (colMap.accommodations > -1 ? row[colMap.accommodations] : ''),
           studentTags: dbEntry.studentTags, 
-          rosters: sheetRoster 
+          rosters: sheetRoster,
+          isDone: isDone // <--- NEW PROPERTY
       });
   }
   return { rawA1: a1, course: { code: courseCode, name: courseName }, exams: exams };
@@ -278,9 +305,6 @@ function createNursingProctoringDocuments(payload) {
         }
 
         // 2. If not found, fuzzy search in folder
-        // Logic: Checks if any file in this specific folder contains " - ExamName"
-        // developer_note: This assumes files in this folder are unique to this exam. 
-        // If duplicates exist (e.g. "Draft Exam 1" and "Exam 1"), this might pick the first one found.
         if (!targetFile) {
             const suffix = ` - ${exam.name}`;
             const files = targetFolder.getFiles();
@@ -480,7 +504,7 @@ function _findHeadingIndex(body, headingText) {
 
 function _updateImportantLinks(body) {
   const sectionTitle = "Important Links";
-  const links = [
+  const links =[
     { text: "Red Flag Reporting Form", url: "https://docs.google.com/forms/d/e/1FAIpQLSfORKCKol8SsRldNKfvsDy3ILNs9HcFv3gKb8TuxrNrlqxijw/viewform" },
     { text: "Nursing Protocol", url: "https://docs.google.com/document/d/1TgKtmoDFqXLK0lBFPNirOAz_TW4S3E_BFhS934VcjOo/edit" }
   ];
@@ -519,9 +543,6 @@ function _updateImportantLinks(body) {
   });
 }
 
-/**
- * Updated to highlight Date, Time, and Password lines in yellow (#ffff00)
- */
 function _updateKeyValueSection(body, sectionTitle, dataMap, headingLevel) {
   let sectionIndex = _findHeadingIndex(body, sectionTitle);
   
@@ -531,10 +552,8 @@ function _updateKeyValueSection(body, sectionTitle, dataMap, headingLevel) {
     body.insertParagraph(insertAt, sectionTitle).setHeading(headingLevel);
     sectionIndex = insertAt;
   } else {
-    // Update header level
     body.getChild(sectionIndex).asParagraph().setHeading(headingLevel);
     
-    // Clear existing content
     let scanIndex = sectionIndex + 1;
     while (scanIndex < body.getNumChildren()) {
       const child = body.getChild(scanIndex);
@@ -546,20 +565,16 @@ function _updateKeyValueSection(body, sectionTitle, dataMap, headingLevel) {
     }
   }
   
-  // Write fresh data
   let insertCount = 1;
   for (const [key, value] of Object.entries(dataMap)) {
     const text = `${key}: ${value}`;
     const li = body.insertListItem(sectionIndex + insertCount, text);
     li.setGlyphType(DocumentApp.GlyphType.BULLET);
 
-    // === HIGHLIGHTING LOGIC ===
     const keyCheck = key.toLowerCase();
     if (keyCheck.includes("date") || keyCheck.includes("time") || keyCheck.includes("password")) {
       li.setBackgroundColor('#ffff00');
     }
-    // ==========================
-    
     insertCount++;
   }
 }
@@ -653,7 +668,6 @@ function _updateLocationRosters(body, exam) {
     rostersIndex = body.getNumChildren();
     body.insertParagraph(rostersIndex, "Location Rosters").setHeading(DocumentApp.ParagraphHeading.HEADING2);
   } else {
-    // Enforce Heading 2
     body.getChild(rostersIndex).asParagraph().setHeading(DocumentApp.ParagraphHeading.HEADING2);
   }
   
@@ -673,7 +687,6 @@ function _updateLocationRosters(body, exam) {
       return !(tagData && typeof tagData === 'object' && tagData.excluded);
     });
     
-    // Find or Create Location Heading
     let locationIndex = -1;
     const locNorm = location.toLowerCase().replace(/[^a-z0-9]/g, '');
     
@@ -684,17 +697,14 @@ function _updateLocationRosters(body, exam) {
         const h = para.getHeading();
         const t = para.getText().toLowerCase().replace(/[^a-z0-9]/g, '');
         
-        // Fuzzy Match
         if (t.includes(locNorm) && (h === DocumentApp.ParagraphHeading.HEADING3 || h === DocumentApp.ParagraphHeading.HEADING2)) {
           locationIndex = i;
           break;
         }
-        // Stop at next main section (HEADING2)
         if (h === DocumentApp.ParagraphHeading.HEADING2 || h === DocumentApp.ParagraphHeading.HEADING1) break;
       }
     }
     
-    // Title Case the Location Name
     const displayLocation = _toTitleCase(location);
 
     if (locationIndex === -1) {
@@ -702,21 +712,18 @@ function _updateLocationRosters(body, exam) {
       locationIndex = currentIndex;
       currentIndex++;
     } else {
-      // Update style/text
       const para = body.getChild(locationIndex).asParagraph();
       para.setHeading(DocumentApp.ParagraphHeading.HEADING3);
       if (para.getText() !== displayLocation) para.setText(displayLocation);
       currentIndex = locationIndex + 1;
     }
     
-    // Map existing lines
-    const existingLines = [];
+    const existingLines =[];
     let scanIndex = currentIndex;
     while (scanIndex < body.getNumChildren()) {
       const child = body.getChild(scanIndex);
       if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
         const para = child.asParagraph();
-        // Stop at next heading (Any heading)
         if (para.getHeading() !== DocumentApp.ParagraphHeading.NORMAL) break;
       }
       if (child.getType() === DocumentApp.ElementType.LIST_ITEM) {
@@ -757,7 +764,6 @@ function _updateLocationRosters(body, exam) {
         processedDocIndices.add(foundLine.index);
         const li = foundLine.listItem;
 
-        // Lock Check: Only update if NOT locked
         if (!isLocked) {
           const expectedText = note ? `${studentName} [${note}]` : studentName;
           if (li.getText() !== expectedText) {
@@ -789,13 +795,12 @@ function _updateLocationRosters(body, exam) {
       }
     });
 
-    // Cleanup
     for (let i = existingLines.length - 1; i >= 0; i--) {
       const line = existingLines[i];
       if (!processedDocIndices.has(line.index)) {
         const elementIndex = body.getChildIndex(line.listItem);
         if (elementIndex === body.getNumChildren() - 1) {
-          body.appendParagraph(" "); // Safety buffer is now a space
+          body.appendParagraph(" "); 
         }
         body.removeChild(line.listItem);
         if (line.index < insertPosition) insertPosition--;

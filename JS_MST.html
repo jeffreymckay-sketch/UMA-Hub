@@ -1,3 +1,7 @@
+<!-- TABULATOR CDN LINKS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet">
+<script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
 <style>
   /* --- MST Card Layout & General Styles --- */
   
@@ -28,13 +32,9 @@
     background-color: #ccc; cursor: not-allowed; pointer-events: none;
   }
 
-  .data-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-  .data-table th { background-color: #f8f9fa; color: #333; font-weight: 600; text-align: left; padding: 8px 10px; border-bottom: 2px solid #ddd; }
-  .data-table td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
-  .data-table tr:hover { background-color: #f9f9f9; }
-  .assign-wrapper { display: flex; gap: 6px; align-items: center; }
-  .assign-select { padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; max-width: 150px; }
-  .zoom-input { width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  .assign-wrapper { display: flex; gap: 6px; align-items: center; width: 100%; }
+  .assign-select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; flex-grow: 1; min-width: 0; }
+  .zoom-input { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 0.95em; }
   .zoom-input.saved { border-color: #28a745; background-color: #f0fff4; }
 
   .proctoring-header {
@@ -107,12 +107,63 @@
   .sync-input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 1em; font-family: inherit; }
   .sync-input:focus { border-color: var(--color-primary-navy); outline: none; }
 
+  /* --- Tabulator Overrides for Readability & Resizing --- */
+  .tabulator {
+      border: 1px solid #f0f0f0;
+      background-color: transparent;
+      font-size: 15px; /* Clearer, larger font */
+      font-family: 'Roboto', Arial, sans-serif;
+      color: #333;
+  }
+  .tabulator .tabulator-header {
+      background-color: var(--color-primary-navy, #00274c) !important;
+      color: white !important;
+      border-bottom: 1px solid #e0e0e0;
+  }
+  .tabulator .tabulator-header .tabulator-col {
+      background-color: var(--color-primary-navy, #00274c) !important;
+      border-right: 1px solid rgba(255, 255, 255, 0.2); /* Guide line for resizing */
+  }
+  
+  /* ENHANCED RESIZE HANDLES */
+  .tabulator .tabulator-header .tabulator-col .tabulator-col-resize-handle {
+      width: 14px !important; /* Larger invisible grab area */
+      right: -7px !important; /* Center over the border */
+  }
+  .tabulator .tabulator-header .tabulator-col .tabulator-col-resize-handle:hover {
+      background-color: rgba(255, 255, 255, 0.15); /* Visual feedback when hovering over handle */
+      cursor: col-resize;
+  }
+  
+  .tabulator .tabulator-header .tabulator-col-content {
+      padding: 12px 10px;
+  }
+  .tabulator-row {
+      border-bottom: 1px solid #f4f4f4; /* Very subtle row border */
+  }
+  .tabulator-row .tabulator-cell {
+      padding: 14px 10px; /* Taller cells for breathability */
+      border-right: 1px solid #f4f4f4; /* Very subtle column border */
+      vertical-align: middle;
+  }
+  .tabulator-row.tabulator-row-even {
+      background-color: #fafafa; /* Extremely subtle alternating row color */
+  }
+  .tabulator-row:hover {
+      background-color: #e8f0fe !important;
+  }
+  .tabulator .tabulator-footer {
+      background-color: #f8f9fa;
+      border-top: 1px solid #f0f0f0;
+      padding: 10px;
+  }
 </style>
 
 <script>
 // --- Custom Modals & Globals ---
 let pendingMstConfirmAction = null;
 let mstSyncData =[];
+let mstTabulatorTable = null; // Global reference for the Tabulator instance
 
 function showCustomConfirm(message, callback) {
     let overlay = document.getElementById('mst-custom-confirm-overlay');
@@ -176,7 +227,15 @@ function loadMstPage() {
 
 function refreshMstData() {
     const classroomTab = document.getElementById('mst-classroom');
+    
+    // Destroy table properly before wiping the DOM to prevent memory leaks/errors
+    if (mstTabulatorTable) {
+        try { mstTabulatorTable.destroy(); } catch(e) { console.warn(e); }
+        mstTabulatorTable = null;
+    }
+
     classroomTab.innerHTML = '<div style="display:flex; justify-content:center; padding:40px;"><div class="loader-ring"></div></div>';
+    
     google.script.run
         .withSuccessHandler(res => {
             if (!res) {
@@ -205,46 +264,121 @@ function handleMstTabClick(e, pageContainer) {
   }
 }
 
-// --- Classroom Management Tab ---
+// --- Classroom Management Tab (Powered by Tabulator) ---
 function loadMstClassroomTab() {
   const container = document.getElementById('mst-classroom');
   if (!g.mstData || !g.mstData.data) return; 
-  renderScheduleTable(container, g.mstData.data.courseAssignments, g.mstData.data.mstStaffList);
+  
+  // If table already exists, just force a redraw to fix layout after being hidden
+  if (mstTabulatorTable && document.getElementById('mst-tabulator-table')) {
+      mstTabulatorTable.redraw(true);
+  } else {
+      renderScheduleTable(container, g.mstData.data.courseAssignments, g.mstData.data.mstStaffList);
+  }
 }
 
 function renderScheduleTable(container, schedule, staffList) {
+  // 1. Destroy existing instance BEFORE wiping DOM
+  if (mstTabulatorTable) {
+      try { mstTabulatorTable.destroy(); } catch(e){}
+      mstTabulatorTable = null;
+  }
+
+  // 2. Build the Header UI
   container.innerHTML = `
-    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-        <h3 style="margin:0;">Course Schedule</h3>
-        <button class="button-success" onclick="openAddCourseModal()">+ Add Manual Class</button>
+    <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
+        <div>
+            <h3 style="margin:0;">Course Schedule</h3>
+            <p style="margin:5px 0 0 0; color:#666; font-size:0.9em;">Click and drag borders between headers to resize columns. Use boxes below headers to filter.</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="button-secondary" onclick="if(mstTabulatorTable) mstTabulatorTable.clearFilter(true);">Clear Filters</button>
+            <button class="button-success" onclick="openAddCourseModal()">+ Add Manual Class</button>
+        </div>
     </div>
-    <table class="data-table">
-      <thead>
-        <tr><th>Course</th><th>Faculty</th><th>Dates</th><th>Day</th><th>Time</th><th>Location</th><th style="width:150px;">Zoom Link</th><th>Staff Assignment</th><th style="width:80px; text-align:center;">Actions</th></tr>
-      </thead>
-      <tbody>
-        ${schedule.map(item => {
-          const options = staffList.map(staff => `<option value="${staff.id}" ${String(staff.id) === String(item.staffId) ? 'selected' : ''}>${staff.name}</option>`).join('');
-          return `
-          <tr data-course-id="${item.id}">
-            <td>${item.itemName}</td><td>${item.courseFaculty}</td>
-            <td style="white-space:nowrap; font-size:0.9em; color:#555; font-weight:bold;">${item.startDateStr || '?'} - ${item.endDateStr || '?'}</td>
-            <td>${item.courseDay}</td><td>${item.courseTime}</td><td>${item.location}</td>
-            <td><input type="text" class="zoom-input" id="zoom-${item.id}" value="${item.zoomLink || ''}" placeholder="Paste link..." onchange="updateZoomLink('${item.id}', this)"></td>
-            <td>
-              <div class="assign-wrapper">
-                <select id="select-staff-${item.id}" class="assign-select"><option value="">-- Unassigned --</option>${options}</select>
-                <button type="button" class="button-primary btn-sm" onclick="assignStaff('${item.id}', this)">Save</button>
-              </div>
-            </td>
-            <td style="text-align:center;">
-                <button class="button-secondary" style="padding:4px 8px; font-size:0.8em;" onclick="openEditCourseModal('${item.id}')">✎</button>
-                <button class="button-danger" style="padding:4px 8px; font-size:0.8em;" onclick="deleteCourse('${item.id}')">✖</button>
-            </td>
-          </tr>`;
-        }).join('') || '<tr><td colspan="9">No schedule data found.</td></tr>'}
-      </tbody>
-    </table>`;
+    <div id="mst-tabulator-table"></div>
+  `;
+
+  // 3. Prepare staff filter options for Tabulator
+  const staffFilterOptions = { "": "-- All Staff --" };
+  staffList.forEach(s => staffFilterOptions[s.id] = s.name);
+
+  // 4. Initialize Tabulator
+  mstTabulatorTable = new Tabulator("#mst-tabulator-table", {
+      data: schedule,
+      layout: "fitColumns", // Initially fit columns to container
+      resizableColumnFit: false, // CRITICAL: Setting to false allows columns to be resized freely without shrinking adjacent columns
+      columnDefaults: {
+          resizable: true, // Explicitly enable resizing
+          minWidth: 60     // Prevent columns from collapsing entirely
+      },
+      responsiveLayout: "collapse",
+      pagination: "local",
+      paginationSize: 25,
+      paginationSizeSelector:[25, 50, 100],
+      movableColumns: true,
+      columns:[
+          { title: "Course", field: "itemName", headerFilter: "input", minWidth: 150, widthGrow: 2 },
+          { title: "Faculty", field: "courseFaculty", headerFilter: "input", minWidth: 120, widthGrow: 2 },
+          { 
+              title: "Dates", 
+              field: "dates", 
+              headerSort: false,
+              minWidth: 120,
+              formatter: (cell) => {
+                  const d = cell.getData();
+                  return `<span style="white-space:nowrap; color:#444; font-weight:600;">${d.startDateStr || '?'} - ${d.endDateStr || '?'}</span>`;
+              }
+          },
+          { title: "Day", field: "courseDay", headerFilter: "input", minWidth: 80, widthGrow: 1 },
+          { title: "Time", field: "courseTime", headerFilter: "input", minWidth: 100, widthGrow: 1 },
+          { title: "Location", field: "location", headerFilter: "input", minWidth: 100, widthGrow: 1 },
+          { 
+              title: "Zoom Link", 
+              field: "zoomLink", 
+              minWidth: 150,
+              widthGrow: 2, 
+              headerSort: false,
+              formatter: (cell) => {
+                  const d = cell.getData();
+                  return `<input type="text" class="zoom-input" id="zoom-${d.id}" value="${d.zoomLink || ''}" placeholder="Paste link..." onchange="updateZoomLink('${d.id}', this)">`;
+              }
+          },
+          { 
+              title: "Staff Assignment", 
+              field: "staffId", 
+              headerFilter: "select", 
+              headerFilterParams: { values: staffFilterOptions }, 
+              width: 260, 
+              headerSort: false,
+              formatter: (cell) => {
+                  const d = cell.getData();
+                  const options = staffList.map(staff => 
+                      `<option value="${staff.id}" ${String(staff.id) === String(d.staffId) ? 'selected' : ''}>${staff.name}</option>`
+                  ).join('');
+                  
+                  return `
+                  <div class="assign-wrapper">
+                      <select id="select-staff-${d.id}" class="assign-select"><option value="">-- Unassigned --</option>${options}</select>
+                      <button type="button" class="button-primary btn-sm" style="padding: 6px 12px;" onclick="assignStaff('${d.id}', this)">Save</button>
+                  </div>`;
+              }
+          },
+          { 
+              title: "Actions", 
+              headerSort: false, 
+              width: 100, 
+              hozAlign: "center", 
+              formatter: (cell) => {
+                  const d = cell.getData();
+                  return `
+                      <button class="button-secondary" style="padding:6px 10px; font-size:0.85em;" onclick="openEditCourseModal('${d.id}')">✎</button>
+                      <button class="button-danger" style="padding:6px 10px; font-size:0.85em;" onclick="deleteCourse('${d.id}')">✖</button>
+                  `;
+              }
+          }
+      ]
+  });
 }
 
 // --- Modals for Adding / Editing / Deleting ---
@@ -382,6 +516,7 @@ function updateZoomLink(courseId, inputEl) {
             inputEl.disabled = false; inputEl.style.opacity = '1';
             if (res && res.success) { 
                 inputEl.classList.add('saved'); setTimeout(() => inputEl.classList.remove('saved'), 2000); 
+                // Silently update global state
                 google.script.run.withSuccessHandler(r => { if(r && r.success) g.mstData = r; }).api_getMstViewData();
             } else { 
                 showNotification("Failed to save Zoom link: " + (res ? res.message : "Unknown"), 'error'); 
@@ -661,7 +796,7 @@ function runMstCommit(e) {
                 const[sh, sm] = newStartStr.split(':');
                 startDt.setHours(sh, sm);
                 const endDt = new Date(original.payload.endTime);
-                const [eh, em] = newEndStr.split(':');
+                const[eh, em] = newEndStr.split(':');
                 endDt.setHours(eh, em);
                 
                 finalPayload.startTime = startDt.getTime();

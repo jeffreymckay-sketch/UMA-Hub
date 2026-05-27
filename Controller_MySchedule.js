@@ -44,67 +44,74 @@ function api_getMyScheduleData() {
             .filter(row => row[assignHeaders.assignmenttype] === 'Tech Hub')
             .map(row => String(row[assignHeaders.referenceid]).trim());
 
-        const allItems = [];
+        const allItems =[];
+        const tz = getMasterDataHub().getSpreadsheetTimeZone();
 
-        // 3. Fetch MST Courses
+        // 3. Fetch MST Courses (NOW USING THE MERGED OVERRIDE LAYER)
         if (courseIds.length > 0) {
-            const settings = getSettings();
-            let sourceTab = 'Course_Schedule';
-            
-            // Respect custom MST tab configurations if they exist
-            if (settings.mstSettings) {
-                try { sourceTab = JSON.parse(settings.mstSettings).sourceTabName || sourceTab; } catch(e){}
+            let mergedCourses =[];
+            try {
+                // This function lives in Controller_MST.js and handles all overrides
+                if (typeof getMergedMstData === 'function') {
+                    mergedCourses = getMergedMstData();
+                }
+            } catch(e) {
+                console.warn("Could not fetch merged MST data: " + e.message);
             }
-            
-            const courseSheet = getSheet(sourceTab);
-            if (courseSheet) {
-                const courseData = courseSheet.getDataRange().getValues();
-                const cHeaderRow = courseData.find(row => row.join('').toLowerCase().includes('eventid'));
-                
-                if (cHeaderRow) {
-                    const cHeaders = getColumnMap(cHeaderRow);
-                    const cHeaderIdx = courseData.indexOf(cHeaderRow);
-                    
-                    for (let i = cHeaderIdx + 1; i < courseData.length; i++) {
-                        const row = courseData[i];
-                        const id = String(row[cHeaders.eventid]).trim();
-                        
-                        if (courseIds.includes(id)) {
-                            // Extract dates for UI display
-                            let dateStr = "";
-                            const startD = row[cHeaders.startdate];
-                            const endD = row[cHeaders.enddate];
-                            if (startD && endD) {
-                                const sd = new Date(startD);
-                                const ed = new Date(endD);
-                                if (!isNaN(sd) && !isNaN(ed)) {
-                                    dateStr = `${sd.getMonth()+1}/${sd.getDate()} - ${ed.getMonth()+1}/${ed.getDate()}`;
-                                }
-                            }
 
-                            allItems.push({
-                                id: id,
-                                type: 'MST',
-                                title: `${row[cHeaders.course]} - ${row[cHeaders.faculty]}`,
-                                rawDay: String(row[cHeaders.day]),
-                                timeString: String(row[cHeaders.runtime] || 'TBD'),
-                                location: String(row[cHeaders.bxlocation] || ''),
-                                zoomLink: String(row[cHeaders.zoomlink] || ''),
-                                dateStr: dateStr
-                            });
+            mergedCourses.forEach(courseObj => {
+                const id = String(courseObj.eventid).trim();
+                
+                if (courseIds.includes(id)) {
+                    // Extract dates for UI display
+                    let dateStr = "";
+                    const startD = courseObj.startdate;
+                    const endD = courseObj.enddate;
+                    
+                    if (startD && endD) {
+                        const sd = new Date(startD);
+                        const ed = new Date(endD);
+                        if (!isNaN(sd.getTime()) && !isNaN(ed.getTime())) {
+                            dateStr = `${sd.getMonth()+1}/${sd.getDate()} - ${ed.getMonth()+1}/${ed.getDate()}`;
                         }
                     }
+
+                    // Extract and format times
+                    let timeDisplay = String(courseObj.runtime || 'TBD');
+                    if (courseObj.starttime && courseObj.endtime) {
+                        const formatTime = (t) => {
+                            if (!t) return '';
+                            if (t instanceof Date) return Utilities.formatDate(t, tz, 'h:mm a');
+                            if (typeof t === 'string' && t.includes('T')) {
+                                const d = new Date(t);
+                                if (!isNaN(d.getTime())) return Utilities.formatDate(d, tz, 'h:mm a');
+                            }
+                            return String(t);
+                        };
+                        timeDisplay = `${formatTime(courseObj.starttime)} - ${formatTime(courseObj.endtime)}`;
+                    }
+
+                    allItems.push({
+                        id: id,
+                        type: 'MST',
+                        title: `${courseObj.course || 'Untitled'} - ${courseObj.faculty || 'Unassigned'}`,
+                        rawDay: String(courseObj.day || ''),
+                        timeString: timeDisplay,
+                        location: String(courseObj.bxlocation || ''),
+                        zoomLink: String(courseObj.zoomlink || ''), // Now correctly pulls from overrides
+                        dateStr: dateStr
+                    });
                 }
-            }
+            });
         }
 
         // 4. Fetch Tech Hub Shifts
         if (shiftIds.length > 0) {
+            // FIXED: Using lowercase 's' to match your configuration key exactly
             const shiftSheet = getSheet('TechHub_shifts');
             if (shiftSheet) {
                 const shiftData = shiftSheet.getDataRange().getValues();
                 const sHeaders = getColumnMap(shiftData[0]);
-                const tz = getMasterDataHub().getSpreadsheetTimeZone();
                 
                 for (let i = 1; i < shiftData.length; i++) {
                     const row = shiftData[i];
@@ -120,6 +127,9 @@ function api_getMyScheduleData() {
                         
                         const isZoom = String(row[sHeaders.zoom]).toLowerCase() === 'true';
                         
+                        // --- Inject standard Tech Hub Zoom link if shift is marked as Zoom ---
+                        const thZoomLink = isZoom ? "https://maine.zoom.us/j/2076213123" : "";
+                        
                         allItems.push({
                             id: id,
                             type: 'TechHub',
@@ -127,7 +137,7 @@ function api_getMyScheduleData() {
                             rawDay: String(row[sHeaders.day] || row[sHeaders.dayofweek] || ''),
                             timeString: `${startDisplay} - ${endDisplay}`,
                             location: isZoom ? 'Zoom' : 'Tech Hub Desk',
-                            zoomLink: '',
+                            zoomLink: thZoomLink,
                             dateStr: '' // Shifts don't use this specific date range display
                         });
                     }
@@ -139,14 +149,14 @@ function api_getMyScheduleData() {
         const schedule = {
             Monday: [],
             Tuesday: [],
-            Wednesday: [],
+            Wednesday:[],
             Thursday: [],
-            Friday: []
+            Friday:[]
         };
 
         // Helper to accurately map various text formats (e.g. "M/W", "T/Th", "Tuesday") to standard days
         const mapDaysToStandard = (dayString) => {
-            const mapped = [];
+            const mapped =[];
             if (!dayString) return mapped;
             
             // Replace slashes/commas with spaces so word boundaries work perfectly

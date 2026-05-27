@@ -10,8 +10,8 @@
  */
 function api_getFullStaffList() {
   try {
-    // Security: Only Admins should see the full list with roles
-    requireRole('Admin'); 
+    // Security: Only Admins and Leads should see the full list with roles
+    requireRole('Admin', 'Lead'); 
 
     const sheet = getSheet('Staff_List');
     if (!sheet) throw new Error("Staff_List sheet not found.");
@@ -41,8 +41,8 @@ function api_getFullStaffList() {
  */
 function api_addStaffMember(staffObj) {
   try {
-    // Security: Only Admins can add staff
-    requireRole('Admin');
+    // Security: Only Admins and Leads can add staff
+    requireRole('Admin', 'Lead');
 
     const sheet = getSheet('Staff_List');
     
@@ -70,8 +70,8 @@ function api_addStaffMember(staffObj) {
  */
 function api_updateStaffMember(staffObj) {
   try {
-    // Security: Only Admins can update staff details
-    requireRole('Admin');
+    // Security: Only Admins and Leads can update staff details
+    requireRole('Admin', 'Lead');
 
     const sheet = getSheet('Staff_List');
     const data = sheet.getDataRange().getValues();
@@ -106,8 +106,8 @@ function api_updateStaffMember(staffObj) {
 function api_bulkUpdateStaff(staffArray) {
   const lock = LockService.getScriptLock();
   try {
-    // Security: Only Admins can bulk update
-    requireRole('Admin');
+    // Security: Only Admins and leads can bulk update
+    requireRole('Admin', 'Lead');
 
     lock.waitLock(30000); // Wait up to 30 seconds for other processes to finish
     

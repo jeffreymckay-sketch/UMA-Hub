@@ -16,6 +16,23 @@
       gap: 10px;
       align-items: center;
     }
+
+    .toggle-done-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9em;
+        color: #555;
+        font-weight: 600;
+        background: #f0f0f0;
+        padding: 6px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s;
+    }
+    .toggle-done-container:hover { background: #e0e0e0; }
+    .toggle-done-container input { cursor: pointer; }
     
     /* Course Accordion Sections */
     .course-section {
@@ -87,10 +104,33 @@
         display: flex;
         flex-direction: column;
         background-color: #fff;
-        /* NEW: Bold Purple Border */
         border: 3px solid var(--color-accent-purple, #583583); 
         overflow: hidden;
-        /* Ensures header background doesn't bleed out */
+    }
+
+    /* --- "DONE" STATE STYLING --- */
+    .exam-card.is-done {
+        opacity: 0.65;
+        background-color: #fcfcfc;
+        border-color: #ccc;
+        position: relative;
+    }
+    .exam-card.is-done .exam-card-header {
+        background-color: #9e9e9e !important; /* Override standard colors */
+        color: #fff;
+    }
+    .exam-card.is-done::after {
+        content: 'DONE';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-20deg);
+        font-size: 4em;
+        font-weight: 900;
+        color: rgba(0, 0, 0, 0.08);
+        pointer-events: none; /* Let clicks pass through to buttons */
+        letter-spacing: 8px;
+        z-index: 10;
     }
 
     .exam-card-header {
@@ -129,7 +169,6 @@
       margin-bottom: 8px;
       padding-bottom: 8px;
       border-bottom: 1px dashed #ddd;
-      /* Lighter dashed line */
     }
     .exam-info-row:last-child { border-bottom: none; margin-bottom: 0;
     }
@@ -152,7 +191,6 @@
     .exam-card-footer {
       padding: 12px 15px;
       background: #fff;
-      /* Cleaner look than gray */
       border-top: 1px solid #eee;
       display: flex;
       justify-content: space-between;
@@ -199,7 +237,7 @@
     /* Inactive Update Button (Light Green) */
     .button-update-inactive {
         background-color: var(--color-accent-lightgreen, #EDF7DF);
-        color: #555 !important; /* Darker text for readability on light background */
+        color: #555 !important; 
         cursor: not-allowed;
         opacity: 0.8;
     }
@@ -223,7 +261,7 @@
 <script>
     // --- Global State for Batching ---
     let batchState = {
-        queue: [],
+        queue:[],
         total: 0,
         processed: 0,
         action: '', 
@@ -271,9 +309,13 @@
         header.innerHTML = `
             <h2 style="margin:0; color: var(--color-primary-navy);">Nursing Doc Management</h2>
             <div class="proctoring-actions">
-            <input type="text" id="exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterExams()" style="width:200px">
-            <button id="nursing-create-btn" class="button-primary" onclick="handleBulkAction('create')">Generate All</button>
-            <button id="nursing-update-btn" class="button-secondary" onclick="handleBulkAction('update')">Update All</button>
+                <label class="toggle-done-container" title="Show or hide exams that have already happened">
+                    <input type="checkbox" id="toggle-done-exams" onchange="filterExams()">
+                    Hide Past Exams
+                </label>
+                <input type="text" id="exam-search" class="form-input" placeholder="Search exams..." onkeyup="filterExams()" style="width:200px">
+                <button id="nursing-create-btn" class="button-primary" onclick="handleBulkAction('create')">Generate All</button>
+                <button id="nursing-update-btn" class="button-secondary" onclick="handleBulkAction('update')">Update All</button>
             </div>
         `;
         view.appendChild(header);
@@ -284,7 +326,7 @@
             response.data.sheets.forEach(sheet => {
                 const code = sheet.course.code || "Unknown";
                 if (!courses[code]) {
-                    courses[code] = { name: sheet.course.name, exams: [] };
+                    courses[code] = { name: sheet.course.name, exams:[] };
                 }
                 // Add sheetName to exam object for easy access in callbacks
                 sheet.exams.forEach(e => courses[code].exams.push({ ...e, _sheetName: sheet.sheetName }));
@@ -302,6 +344,9 @@
             container.appendChild(buildCourseSection(code, data.name, data.exams));
         }
         view.appendChild(container);
+        
+        // Run initial filter to respect the default state of the toggle
+        filterExams();
     }
 
     function buildCourseSection(code, name, exams) {
@@ -337,31 +382,28 @@
 
     function buildExamCard(exam) {
         const hasDoc = !!exam.docUrl;
-        // 1. Determine Header Color Class
         const headerClass = hasDoc ? 'header-created' : 'header-not-created';
+        const doneClass = exam.isDone ? 'is-done' : '';
         
         const card = document.createElement('div');
-        card.className = 'exam-card';
-        // Border is now applied to all via CSS
+        card.className = `exam-card ${doneClass}`;
         card.dataset.examName = (exam.name || '').toLowerCase();
+        card.dataset.isDone = exam.isDone ? 'true' : 'false';
+        
         const safeSheet = (exam._sheetName || '').replace(/'/g, "\\'");
         const safeExam = (exam.name || '').replace(/'/g, "\\'");
 
-        // 2. Configure Buttons based on new specs
+        // Configure Buttons
         let updateButton, createOrViewButton;
         if (hasDoc) {
-            // Update Active: Navy Blue
             updateButton = `<button class="btn-sm btn-std button-update-active" onclick="handleSingleAction(this, 'update', '${safeSheet}', '${safeExam}')">Update</button>`;
-            // View: Green
             createOrViewButton = `<a href="${exam.docUrl}" target="_blank" class="btn-sm btn-std button-view">View</a>`;
         } else {
-            // Update Inactive: Light Green (#EDF7DF)
             updateButton = `<button class="btn-sm btn-std button-update-inactive" disabled>Update</button>`;
-            // Create: Bright Orange
             createOrViewButton = `<button class="btn-sm btn-std button-create" onclick="handleSingleAction(this, 'create', '${safeSheet}', '${safeExam}')">Create</button>`;
         }
 
-        // 3. Render Card HTML
+        // Render Card HTML
         card.innerHTML = `
             <div class="exam-card-header ${headerClass}"><h4>${exam.name}</h4></div>
             <div class="exam-card-body">
@@ -433,14 +475,20 @@
     function handleBulkAction(action) {
         if (!g.nursingData || !g.nursingData.data) return;
 
-        const allExams = [];
+        const allExams =[];
         g.nursingData.data.sheets.forEach(sheet => {
             sheet.exams.forEach(exam => {
-                allExams.push({ sheetName: sheet.sheetName, course: sheet.course, exam: exam });
+                // SAFETY FEATURE: Skip past/done exams during bulk actions to save time & preserve history
+                if (!exam.isDone) {
+                    allExams.push({ sheetName: sheet.sheetName, course: sheet.course, exam: exam });
+                }
             });
         });
 
-        if (allExams.length === 0) { showNotification("No exams found.", "error"); return; }
+        if (allExams.length === 0) { 
+            showNotification("No pending future exams found.", "error"); 
+            return; 
+        }
         
         batchState = { queue: allExams, total: allExams.length, processed: 0, action: action, isRunning: true };
 
@@ -476,9 +524,8 @@
                 if (res.success) { 
                     // Update URLs locally if returned
                     if(res.createdUrls) {
-                        for(const [eName, eUrl] of Object.entries(res.createdUrls)) {
+                        for(const[eName, eUrl] of Object.entries(res.createdUrls)) {
                             // Find the exam in global data and update URL
-                            // This is a rough look up, but effective for batch
                             g.nursingData.data.sheets.forEach(s => {
                                 const found = s.exams.find(e => e.name === eName);
                                 if(found) found.docUrl = eUrl;
@@ -523,21 +570,22 @@
         el.style.display = show ? 'flex' : 'none';
     }
 
-    function updateProgressUI(current, total, message) {
-        const pct = Math.round((current / total) * 100);
-        document.getElementById('progress-stats').textContent = `${current} / ${total}`;
-        document.getElementById('progress-fill').style.width = `${pct}%`;
-        document.getElementById('progress-subtext').textContent = message;
-    }
-
     function filterExams() {
         const term = document.getElementById('exam-search').value.toLowerCase();
+        const hideDone = document.getElementById('toggle-done-exams').checked;
+        
         document.querySelectorAll('.course-section').forEach(section => {
             let visible = 0;
             section.querySelectorAll('.exam-card').forEach(card => {
-                if(card.dataset.examName.includes(term)) {
-                    card.style.display = 'flex'; visible++;
-                } else { card.style.display = 'none'; }
+                const matchesSearch = card.dataset.examName.includes(term);
+                const isDone = card.dataset.isDone === 'true';
+                
+                if (matchesSearch && (!hideDone || !isDone)) {
+                    card.style.display = 'flex'; 
+                    visible++;
+                } else { 
+                    card.style.display = 'none'; 
+                }
             });
             section.style.display = visible ? 'block' : 'none';
             if(term && visible) section.classList.add('open');
