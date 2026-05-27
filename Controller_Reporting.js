@@ -207,9 +207,9 @@ function api_generateStaffReport(startDateString, endDateString) {
         const shiftData = shiftDataSheet.getDataRange().getValues();
         const courseData = courseDataSheet.getDataRange().getValues();
         
-        const staffMap = createDataMap(staffList, 0);
-        const shiftMap = createDataMap(shiftData, 0);
-        const courseMap = createDataMap(courseData, 0);
+        const staffMap = createLookupMap(staffList, "Staff ID", "Full Name");
+        const shiftMap = createLookupMap(shiftData, "Shift ID", "Shift Name");
+        const courseMap = createLookupMap(courseData, "Course ID", "Course Name");
 
         const reportRows = [];
         for (const assignmentRow of staffAssignments) {

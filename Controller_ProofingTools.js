@@ -136,6 +136,7 @@ function api_fetchSheetData(customUrl, customTab) {
  * BULK EDITOR: Apply Updates
  */
 function api_bulkUpdateSheet(customUrl, customTab, updates) {
+    requireRole(['Lead']);
   try {
     // Security Check: Ensure user has permission (Admin or Lead)
     // Assuming Proofing Tools is restricted to Admins/Leads in the UI, 

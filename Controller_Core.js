@@ -278,25 +278,3 @@ function getSheet(sheetKey) {
     }
 }
 
-function getColumnMap(headers) {
-    var map = {};
-    if (!headers) return map;
-    headers.forEach(function(header, index) {
-        var normalizedHeader = String(header).toLowerCase().replace(/[\s_]/g, '');
-        if (normalizedHeader) map[normalizedHeader] = index;
-    });
-    return map;
-}
-
-function createDataMap(data, keyIndex) {
-    const map = {};
-    if (!data || data.length < 2) return map; 
-    for (let i = 1; i < data.length; i++) {
-        const row = data[i];
-        const key = row[keyIndex];
-        if (key) {
-            map[key] = row;
-        }
-    }
-    return map;
-}

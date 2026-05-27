@@ -458,9 +458,6 @@ function parseTimeContext(val, timezone) {
     return 0;
 }
 
-    row.forEach((cell, i) => map[String(cell).toLowerCase().replace(/[\s_]/g, '')] = i);
-    return map;
-}
 
 function getNextDayOccurrence(startDate, dayName) {
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];

@@ -95,18 +95,30 @@ function api_deleteAvailability(recordId) {
     try {
         const email = Session.getActiveUser().getEmail();
         const sheet = getSheet('Staff_Availability');
-        // Using getDisplayValues() to ensure IDs are compared as strings.
-        const data = sheet.getDataRange().getDisplayValues();
-
-        for (let i = data.length - 1; i >= 1; i--) {
-            // Security: STRICT check that the record belongs to the current user
-            if (data[i][0] === recordId && data[i][1] === email) {
-                sheet.deleteRow(i + 1);
-                return { success: true, message: "Availability slot has been deleted." };
-            }
+        
+        // Grab the entire data set as an array
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) throw new Error("No records to process.");
+        
+        const header = data[0];
+        
+        // Filter OUT the row that matches the record ID AND belongs to the user
+        const originalLength = data.length;
+        const newData = data.filter((row, index) => {
+            if (index === 0) return true; // Always keep the header
+            const isMatch = (String(row[0]) === String(recordId) && String(row[1]) === String(email));
+            return !isMatch; // Keep if it's NOT a match
+        });
+        
+        if (newData.length === originalLength) {
+             throw new Error("Record not found or permission denied.");
         }
-        // Throw an error if the record was not found for this user
-        throw new Error("Record not found or permission denied.");
+
+        // Clear the entire sheet and write the newly filtered array back in bulk
+        sheet.clearContents();
+        sheet.getRange(1, 1, newData.length, header.length).setValues(newData);
+
+        return { success: true, message: "Availability slot has been deleted." };
     } catch (e) {
         console.error("api_deleteAvailability Error: " + e.stack);
         return { success: false, message: `Failed to delete availability. Error: ${e.message}` };
@@ -126,14 +138,16 @@ function api_updateStaffPreferences(preferences) {
     try {
         const email = Session.getActiveUser().getEmail();
         const sheet = getSheet('Staff_Preferences');
-        const data = sheet.getDataRange().getValues(); // getValues is ok here as we delete and rewrite
-
-        // To keep the logic simple and robust, we remove all old preferences and add the new ones.
-        for (let i = data.length - 1; i >= 1; i--) {
-            if (data[i][0] === email) {
-                sheet.deleteRow(i + 1);
-            }
-        }
+        
+        // Grab the entire data set as an array
+        const data = sheet.getDataRange().getValues();
+        const header = data.length > 0 ? data[0] : ["Staff ID", "Time Block", "Preference"]; 
+        
+        // Filter OUT all existing preferences for this user
+        const newData = data.filter((row, index) => {
+            if (index === 0) return true; // Always keep the header
+            return String(row[0]) !== String(email); 
+        });
         
         // Add back the new preferences, skipping the neutral ones which are default
         for (const timeBlock in preferences) {
@@ -141,8 +155,23 @@ function api_updateStaffPreferences(preferences) {
             const sanitizedBlock = sanitizeInput(timeBlock);
             
             if (preference !== 'Eh, Sure') {
-                sheet.appendRow([email, sanitizedBlock, preference]);
+                newData.push([email, sanitizedBlock, preference]);
             }
+        }
+
+        // Clear the entire sheet and write the updated array back in bulk
+        sheet.clearContents();
+        
+        // If there's no data (just a header), we only write the header back
+        if (newData.length > 0) {
+            // Fill any missing columns in the new rows with blank strings so the array is perfectly rectangular
+            const maxCols = header.length;
+            const rectangularData = newData.map(row => {
+                const newRow = [...row];
+                while(newRow.length < maxCols) newRow.push("");
+                return newRow;
+            });
+            sheet.getRange(1, 1, rectangularData.length, maxCols).setValues(rectangularData);
         }
 
         return { success: true, message: "Preferences have been saved successfully!" };
