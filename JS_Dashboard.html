@@ -45,7 +45,6 @@
     border: 2px solid #e0e0e0;
     border-radius: 8px;
     margin-bottom: 25px;
-    overflow: hidden;
     transition: all 0.3s ease;
   }
 
@@ -190,7 +189,7 @@
 
   function buildAvailabilityHtml(availabilityData, isOpen) {
     const timeOptions = generateTimeOptions();
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const days =["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const dayOptions = days.map(d => `<option value="${d}">${d}</option>`).join('');
 
     let cardsHtml = '';
@@ -216,11 +215,13 @@
     }
 
     const openClass = isOpen ? 'open' : '';
+    const isExpanded = isOpen ? 'true' : 'false';
+    const inertAttr = isOpen ? '' : 'inert';
 
     return `
       <h3 style="color:#555; border-bottom:1px solid #eee; padding-bottom:10px;">My Unavailable Times (Blackouts)</h3>
       <p style="color:#666; margin-bottom:20px; font-size:0.95em;">
-        Add times when you strictly <strong>cannot</strong> work (classes, other jobs). This is for long standing weekly commitments, <strong>not</strong> one off time off rerquests.  
+        Add times when you strictly <strong>cannot</strong> work (classes, other jobs).
       </p>
 
       <div class="avail-grid" id="avail-card-grid">
@@ -228,11 +229,11 @@
       </div>
 
       <div class="dashboard-accordion ${openClass}" id="add-block-acc">
-        <div class="accordion-header" onclick="toggleAccordion('add-block-acc')">
+        <div class="accordion-header" tabindex="0" role="button" aria-expanded="${isExpanded}" onclick="toggleAccordion('add-block-acc')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('add-block-acc'); }">
             <span>+ Block New Time</span>
             <span class="accordion-icon">+</span>
         </div>
-        <div class="accordion-content">
+        <div class="accordion-content" ${inertAttr}>
             <form id="add-availability-form" class="modern-form">
                 <div class="input-group">
                     <label>Day of Week</label>
@@ -254,13 +255,13 @@
   }
 
   function buildPreferencesHtml(preferencesData, isOpen) {
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-    const timeSlots = [
+    const days =["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    const timeSlots =[
         { key: "Morning", label: "Morning (<12pm)" }, 
         { key: "Afternoon", label: "Afternoon (12-5pm)" }, 
         { key: "Evening", label: "Evening (>5pm)" }
     ];
-    const options = ["Yes Please", "No Thanks", "Eh, Sure"];
+    const options =["Yes Please", "No Thanks", "Eh, Sure"];
 
     let tableRows = days.map(day => {
       let cells = timeSlots.map(slot => {
@@ -288,14 +289,16 @@
     }).join('');
 
     const openClass = isOpen ? 'open' : '';
+    const isExpanded = isOpen ? 'true' : 'false';
+    const inertAttr = isOpen ? '' : 'inert';
 
     return `
       <div class="dashboard-accordion ${openClass}" id="pref-acc">
-          <div class="accordion-header" onclick="toggleAccordion('pref-acc')">
+          <div class="accordion-header" tabindex="0" role="button" aria-expanded="${isExpanded}" onclick="toggleAccordion('pref-acc')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('pref-acc'); }">
               <span>Shift Preferences</span>
               <span class="accordion-icon">+</span>
           </div>
-          <div class="accordion-content">
+          <div class="accordion-content" ${inertAttr}>
               <div class="pref-wrapper">
                   <p style="color:#666; margin-top:0;">Rank your preferred working times to help us build a better schedule.</p>
                   <form id="preferences-form">
@@ -322,7 +325,18 @@
 
   function toggleAccordion(id) {
       const acc = document.getElementById(id);
-      acc.classList.toggle('open');
+      if (acc) {
+          const isOpen = acc.classList.toggle('open');
+          const header = acc.querySelector('.accordion-header');
+          if (header) {
+              header.setAttribute('aria-expanded', isOpen);
+          }
+          // ACCESSIBILITY FIX: Add/Remove padlock
+          const content = acc.querySelector('.accordion-content');
+          if (content) {
+              content.inert = !isOpen;
+          }
+      }
   }
 
   function updatePrefColor(selectEl) {
@@ -356,7 +370,7 @@
 
   function formatTimeDisplay(timeStr) {
       if(!timeStr) return 'N/A';
-      const [h, m] = timeStr.split(':');
+      const[h, m] = timeStr.split(':');
       const hour = parseInt(h);
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const hour12 = hour % 12 || 12;

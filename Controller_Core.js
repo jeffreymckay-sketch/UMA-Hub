@@ -100,41 +100,6 @@ function api_saveSettings(key, settingsObject) {
     }
 }
 
-function api_getDashboardData() {
-    try {
-        const email = Session.getActiveUser().getEmail();
-        const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
-
-        const availabilitySheet = getSheet(sheetTabs.Staff_Availability);
-        if (!availabilitySheet) throw new Error("Sheet 'Staff_Availability' not found.");
-        const availabilityData = availabilitySheet.getDataRange().getValues();
-        const userAvailability = [];
-        for (let i = 1; i < availabilityData.length; i++) {
-            if (availabilityData[i][1] === email) {
-                let start = availabilityData[i][3];
-                let end = availabilityData[i][4];
-                if (start instanceof Date) start = Utilities.formatDate(start, Session.getScriptTimeZone(), "HH:mm");
-                if (end instanceof Date) end = Utilities.formatDate(end, Session.getScriptTimeZone(), "HH:mm");
-                userAvailability.push({ id: availabilityData[i][0], day: availabilityData[i][2], start, end });
-            }
-        }
-
-        const preferencesSheet = getSheet(sheetTabs.Staff_Preferences);
-        const userPreferences = {};
-        if (preferencesSheet) {
-            const preferencesData = preferencesSheet.getDataRange().getValues();
-            for (let i = 1; i < preferencesData.length; i++) {
-                if (preferencesData[i][0] === email) {
-                    userPreferences[preferencesData[i][1]] = preferencesData[i][2];
-                }
-            }
-        }
-
-        return { success: true, data: { availability: userAvailability, preferences: userPreferences } };
-    } catch (e) {
-        return { success: false, message: e.message };
-    }
-}
 
 // --- MST DATA LOGIC (Called via Lazy Load now) ---
 

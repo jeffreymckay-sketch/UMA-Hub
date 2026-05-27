@@ -80,27 +80,3 @@ function api_getCalendarTargetName() {
     return { success: false, message: e.message };
   }
 }
-
-/**
- * PREVIEW LOGIC: Used by MST Tool to compare Sheet vs Calendar.
- */
-function api_previewMstCalendarSync(targetCalendarId) {
-  // Pass through to the core logic function (assumed to be in Controller_Calendar or similar)
-  // For this project structure, we will include the core logic here to ensure it works.
-  return core_syncLogic(null, true, null, targetCalendarId);
-}
-
-function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
-    // We reuse the commit logic from the Controller_MST if separated, 
-    // but typically the sync logic resides here for the Calendar API.
-    // Ensure the helper 'api_commitMstCalendarEvents' in JS_MST calls this.
-    
-    // NOTE: If your sync logic was in Controller_MST.js, ensure that file remains.
-    // If it was here, we need to preserve the heavy lifting functions.
-    // Based on previous context, specific sync logic for MST was in Controller_MST.js.
-    // This file focuses on the LISTING and ACCESS of calendars.
-    
-    // However, the MST Controller calls `api_commitMstCalendarEvents`. 
-    // If that logic was in Controller_MST.js, do not duplicate it here.
-    return { success: false, message: "Sync logic should be in Controller_MST.js" };
-}

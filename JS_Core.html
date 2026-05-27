@@ -17,12 +17,12 @@
    * MENU CONFIGURATION
    * Integrated Google Material Symbol icon strings
    */
-  const menuItems = [
+  const menuItems =[
     { 
       id: 'Dashboard', 
       title: 'Dashboard', 
       icon: 'space_dashboard',
-      children: [
+      children:[
         { id: 'MySchedule', title: 'My Schedule' },
         { id: 'Availability', title: 'Availability' },
         { id: 'UserGuide', title: 'User Guide' }
@@ -32,7 +32,7 @@
       id: 'Logistics',
       title: 'Logistics',
       icon: 'event_available',
-      children: [
+      children:[
         { id: 'MST', title: 'MST' },
         { id: 'TechHub', title: 'Tech Hub' }
       ]
@@ -41,10 +41,10 @@
       id: 'Proctoring',
       title: 'Proctoring',
       icon: 'edit_document',
-      children: [
+      children:[
         { id: 'Nursing', title: 'Nursing' },
         { id: 'MLT', title: 'MLT' },
-        { id: 'SingleDoc', title: 'New Exams' }, // <-- Title Changed Here
+        { id: 'SingleDoc', title: 'New Exams' },
         { id: 'ProctorSchedule', title: 'Master Schedule' }
       ]
     },
@@ -52,7 +52,7 @@
       id: 'Reporting', 
       title: 'Stats & Reports',
       icon: 'bar_chart',
-      children: [
+      children:[
         { id: 'Reporting', title: 'Calendar Stats' },
         { id: 'ProofingTools', title: 'Proofing Tools' }
       ]
@@ -145,13 +145,18 @@
         parentLi.id = `nav-toggle-${item.id}`;
         parentLi.dataset.tooltip = item.title;
         
+        // ACCESSIBILITY FIX: Make parent item focusable
+        parentLi.tabIndex = 0;
+        parentLi.setAttribute('role', 'button');
+        parentLi.setAttribute('aria-expanded', 'false');
+        
         parentLi.innerHTML = `
           <span class="material-symbols-outlined nav-icon">${item.icon}</span>
           <span class="nav-text">${item.title}</span>
           <span class="material-symbols-outlined submenu-arrow">chevron_right</span>
         `;
         
-        parentLi.onclick = () => {
+        parentLi.onclick = (e) => {
             const sidebar = document.getElementById('app-sidebar');
             if (sidebar.classList.contains('collapsed')) {
                 toggleSidebar();
@@ -161,15 +166,32 @@
             }
         };
 
+        // ACCESSIBILITY FIX: Allow keyboard to trigger the onclick
+        parentLi.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                parentLi.click();
+            }
+        };
+
         const subUl = document.createElement('ul');
         subUl.className = 'sub-menu';
         subUl.id = `submenu-${item.id}`;
+        
+        // ACCESSIBILITY FIX: Padlock the submenu by default so keyboard skips it
+        subUl.inert = true;
 
         item.children.forEach(child => {
           if (checkAccess(child.id)) {
               const childLi = document.createElement('li');
               childLi.className = 'nav-item';
               childLi.dataset.pageId = child.id;
+              
+              // ACCESSIBILITY FIX: Make child item focusable
+              childLi.tabIndex = 0;
+              childLi.setAttribute('role', 'button');
+              
               childLi.innerHTML = `<span class="nav-text">${child.title}</span>`;
               subUl.appendChild(childLi);
           }
@@ -182,6 +204,11 @@
         li.className = 'nav-item';
         li.dataset.pageId = item.id;
         li.dataset.tooltip = item.title;
+        
+        // ACCESSIBILITY FIX: Make single item focusable
+        li.tabIndex = 0;
+        li.setAttribute('role', 'button');
+        
         li.innerHTML = `
           <span class="material-symbols-outlined nav-icon">${item.icon}</span>
           <span class="nav-text">${item.title}</span>
@@ -190,10 +217,22 @@
       }
     });
 
+    // Mouse click delegation
     menu.onclick = function(e) {
       const target = e.target.closest('.nav-item');
       if (target && target.dataset.pageId) {
           navigateToPage(target.dataset.pageId);
+      }
+    };
+    
+    // ACCESSIBILITY FIX: Keyboard delegation
+    menu.onkeydown = function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+          const target = e.target.closest('.nav-item');
+          if (target && target.dataset.pageId) {
+              e.preventDefault();
+              navigateToPage(target.dataset.pageId);
+          }
       }
     };
   }
@@ -202,8 +241,12 @@
     const link = document.getElementById(`nav-toggle-${menuId}`);
     const submenu = document.getElementById(`submenu-${menuId}`);
     if (link && submenu) {
-      link.classList.toggle('open');
+      const isOpen = link.classList.toggle('open');
+      link.setAttribute('aria-expanded', isOpen);
       submenu.classList.toggle('open');
+      
+      // ACCESSIBILITY FIX: Add/Remove the padlock based on whether it is open
+      submenu.inert = !isOpen;
     }
   }
 
@@ -257,6 +300,9 @@
       activeItem.classList.add('active');
       const parentSubMenu = activeItem.closest('.sub-menu');
       if (parentSubMenu) {
+        // ACCESSIBILITY FIX: If a page loads inside a submenu, ensure the padlock is removed
+        parentSubMenu.inert = false; 
+        
         const parentId = parentSubMenu.id.replace('submenu-', '');
         const parentLink = document.getElementById(`nav-toggle-${parentId}`);
         if (parentLink) {

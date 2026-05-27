@@ -222,10 +222,10 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
         const assignData = assignSheet.getDataRange().getValues();
         const staffData = staffSheet.getDataRange().getValues();
 
-        const assignHeader = createHeaderMap(assignData[0]);
+        const assignHeader = getColumnMap(assignData[0]);
         const assignmentsMap = {}; 
         
-        const staffHeader = createHeaderMap(staffData[0]);
+        const staffHeader = getColumnMap(staffData[0]);
         const staffInfoMap = {}; // ID -> { email, name }
         for(let i=1; i<staffData.length; i++) {
             const id = String(staffData[i][staffHeader.staffid]);
@@ -247,7 +247,7 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
         }
 
         const proposals = [];
-        const shiftsHeader = createHeaderMap(shiftsData[0]);
+        const shiftsHeader = getColumnMap(shiftsData[0]);
         
         const semesterStart = new Date(semesterStartStr);
         const semesterEnd = new Date(semesterEndStr);
@@ -374,7 +374,7 @@ function api_previewTechHubSync(targetCalendarId, semesterStartStr, semesterEndS
 function api_commitTechHubSync(targetCalendarId, eventsToSync) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole('Tech Hub', 'Admin', 'Lead');
+        requireRole(['Tech Hub', 'Admin']);
 
         const cal = CalendarApp.getCalendarById(targetCalendarId);
         const stats = { created: 0, updated: 0, errors: 0 };
@@ -458,8 +458,6 @@ function parseTimeContext(val, timezone) {
     return 0;
 }
 
-function createHeaderMap(row) {
-    const map = {};
     row.forEach((cell, i) => map[String(cell).toLowerCase().replace(/[\s_]/g, '')] = i);
     return map;
 }
@@ -482,7 +480,7 @@ function getNextDayOccurrence(startDate, dayName) {
 function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole('Tech Hub', 'Admin', 'Lead');
+        requireRole(['Tech Hub', 'Admin']);
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
@@ -539,7 +537,7 @@ function api_saveSingleTechHubAssignment(shiftId, staffId, startStr, endStr) {
 function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole('Tech Hub', 'Admin', 'Lead');
+        requireRole(['Tech Hub', 'Admin']);
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
@@ -604,7 +602,7 @@ function saveAllTechHubAssignments(assignmentList, startDate, endDate) {
 function addTechHubShift(shiftData) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole('Tech Hub', 'Admin', 'Lead');
+        requireRole(['Tech Hub', 'Admin']);
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
@@ -632,7 +630,7 @@ function addTechHubShift(shiftData) {
 function deleteTechHubShift(shiftId) {
     try {
         // Security: Must be Tech Hub Lead or Admin
-        requireRole('Tech Hub', 'Admin', 'Lead');
+        requireRole(['Tech Hub', 'Admin']);
 
         const sheetTabs = JSON.parse(getSettings().sheetTabs || '{}');
         const findKey = (target) => {
