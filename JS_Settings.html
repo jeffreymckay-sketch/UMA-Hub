@@ -64,6 +64,17 @@
         <div id="settings-app" class="tab-content" style="display:block; padding-top:20px;">
           <h3>App Configuration</h3>
           <p>Global app settings and ID mapping can be managed here.</p>
+          <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9;">
+            <label class="role-pill" id="pill-beta-nursing" style="display: inline-flex; font-size: 14px; padding: 5px 10px;">
+              <input type="checkbox" id="beta-nursing-toggle" onchange="toggleBetaNursing(this)">
+              Enable Beta Nursing Page
+            </label>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">(Visible to Admins only. Toggles access to the new Nursing backend.)</p>
+          </div>
+          <button class="button-secondary" onclick="runAdminMapTabs()">Refresh Sheet Mapping</button>
+        </div>
+          <h3>App Configuration</h3>
+          <p>Global app settings and ID mapping can be managed here.</p>
           <button class="button-secondary" onclick="runAdminMapTabs()">Refresh Sheet Mapping</button>
         </div>
 
@@ -121,6 +132,25 @@
     if (tabName === 'settings-permissions') {
       fetchPermissionsMatrix();
     }
+    if (tabName === 'settings-app') {
+      initAppConfig();
+    }
+      fetchPermissionsMatrix();
+    }
+  }
+
+n  function initAppConfig() {
+    const toggle = document.getElementById('beta-nursing-toggle');
+    if (toggle && g.settings) {
+      toggle.checked = g.settings.enableBetaNursing === true || g.settings.enableBetaNursing === 'true';
+      togglePillClass(toggle, 'pill-beta-nursing');
+    }
+  }
+
+  function toggleBetaNursing(checkbox) {
+    togglePillClass(checkbox, 'pill-beta-nursing');
+    const isEnabled = checkbox.checked;
+    google.script.run.withSuccessHandler(res => { if(res.success) { g.settings = res.data; showNotification("Settings Saved", "success"); } else { showNotification(res.message, "error"); checkbox.checked = !isEnabled; togglePillClass(checkbox, 'pill-beta-nursing'); } }).api_saveSettings('enableBetaNursing', isEnabled);
   }
 
   // --- STAFF MANAGEMENT LOGIC ---

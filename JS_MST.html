@@ -303,23 +303,50 @@ function renderScheduleTable(container, schedule, staffList) {
   const staffFilterOptions = { "": "-- All Staff --" };
   staffList.forEach(s => staffFilterOptions[s.id] = s.name);
 
+  // Get unique courses for the groupBy dropdown
+  const uniqueCourses = [...new Set(schedule.map(item => item.itemName))].sort();
+
+  // Update the UI to include the Group By control
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
+        <div>
+            <h3 style="margin:0;">Course Schedule</h3>
+            <p style="margin:5px 0 0 0; color:#666; font-size:0.9em;">Click and drag borders between headers to resize columns. Use boxes below headers to filter.</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <label style="font-weight:600; color:#444;">Group By:</label>
+            <select id="mst-group-by-select" class="form-input" style="padding: 6px; width: 150px;">
+                <option value="">None</option>
+                <option value="courseDay">Day of Week</option>
+                <option value="itemName">Course</option>
+            </select>
+            <button class="button-secondary" onclick="if(mstTabulatorTable) mstTabulatorTable.clearFilter(true);">Clear Filters</button>
+            <button class="button-success" onclick="openAddCourseModal()">+ Add Manual Class</button>
+        </div>
+    </div>
+    <div id="mst-tabulator-table"></div>
+  `;
+
   // 4. Initialize Tabulator
   mstTabulatorTable = new Tabulator("#mst-tabulator-table", {
       data: schedule,
-      layout: "fitColumns", // Initially fit columns to container
-      resizableColumnFit: false, // CRITICAL: Setting to false allows columns to be resized freely without shrinking adjacent columns
+      layout: "fitColumns",
+      resizableColumnFit: false,
       columnDefaults: {
-          resizable: true, // Explicitly enable resizing
-          minWidth: 60     // Prevent columns from collapsing entirely
+          resizable: true,
+          minWidth: 60
       },
       responsiveLayout: "collapse",
       pagination: "local",
       paginationSize: 25,
       paginationSizeSelector:[25, 50, 100],
       movableColumns: true,
+      groupHeader: function(value, count, data, group){
+          return value + "<span style='color:#d00; margin-left:10px;'>(" + count + " item" + (count > 1 ? "s" : "") + ")</span>";
+      },
       columns:[
-          { title: "Course", field: "itemName", headerFilter: "input", minWidth: 150, widthGrow: 2 },
-          { title: "Faculty", field: "courseFaculty", headerFilter: "input", minWidth: 120, widthGrow: 2 },
+          { title: "Course", field: "itemName", headerFilter: "input", minWidth: 150, widthGrow: 2, headerSort: true },
+          { title: "Faculty", field: "courseFaculty", headerFilter: "input", minWidth: 120, widthGrow: 2, headerSort: true },
           { 
               title: "Dates", 
               field: "dates", 
@@ -330,9 +357,41 @@ function renderScheduleTable(container, schedule, staffList) {
                   return `<span style="white-space:nowrap; color:#444; font-weight:600;">${d.startDateStr || '?'} - ${d.endDateStr || '?'}</span>`;
               }
           },
-          { title: "Day", field: "courseDay", headerFilter: "input", minWidth: 80, widthGrow: 1 },
-          { title: "Time", field: "courseTime", headerFilter: "input", minWidth: 100, widthGrow: 1 },
-          { title: "Location", field: "location", headerFilter: "input", minWidth: 100, widthGrow: 1 },
+          { 
+              title: "Day", 
+              field: "courseDay", 
+              headerFilter: "input", 
+              minWidth: 80, 
+              widthGrow: 1,
+              headerSort: true,
+              sorter: function(a, b, aRow, bRow, column, dir, sorterParams) {
+                  const days = {"Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6, "Sunday":7};
+                  return (days[a] || 99) - (days[b] || 99);
+              }
+          },
+          { 
+              title: "Time", 
+              field: "courseTime", 
+              headerFilter: "input", 
+              minWidth: 100, 
+              widthGrow: 1,
+              headerSort: true,
+              sorter: function(a, b, aRow, bRow, column, dir, sorterParams) {
+                  const timeToMins = (t) => {
+                      if (!t) return 0;
+                      const match = String(t).match(/(d+):(d+)s*(AM|PM)/i);
+                      if(!match) return 0;
+                      let h = parseInt(match[1]);
+                      const m = parseInt(match[2]);
+                      const ampm = match[3].toUpperCase();
+                      if(ampm === 'PM' && h < 12) h += 12;
+                      if(ampm === 'AM' && h === 12) h = 0;
+                      return h * 60 + m;
+                  };
+                  return timeToMins(a) - timeToMins(b);
+              }
+          },
+          { title: "Location", field: "location", headerFilter: "input", minWidth: 100, widthGrow: 1, headerSort: true },
           { 
               title: "Zoom Link", 
               field: "zoomLink", 
@@ -378,6 +437,16 @@ function renderScheduleTable(container, schedule, staffList) {
               }
           }
       ]
+  });
+
+  // Attach event listener to the Group By dropdown
+  document.getElementById('mst-group-by-select').addEventListener('change', function(e) {
+      const field = e.target.value;
+      if (field) {
+          mstTabulatorTable.setGroupBy(field);
+      } else {
+          mstTabulatorTable.setGroupBy(false);
+      }
   });
 }
 

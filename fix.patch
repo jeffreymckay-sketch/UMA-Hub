@@ -1,0 +1,12 @@
+--- JS_Settings.html
++++ JS_Settings.html
+@@ -62,9 +62,6 @@
+           </div>
+           <button class="button-secondary" onclick="runAdminMapTabs()">Refresh Sheet Mapping</button>
+         </div>
+-          <h3>App Configuration</h3>
+-          <p>Global app settings and ID mapping can be managed here.</p>
+-          <button class="button-secondary" onclick="runAdminMapTabs()">Refresh Sheet Mapping</button>
+-        </div>
+ 
+         <div id="settings-staff" class="tab-content" style="display:none; padding-top:20px;">

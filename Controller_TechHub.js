@@ -609,9 +609,11 @@ function addTechHubShift(shiftData) {
         const sheet = getSheet(findKey('TechHub_Shifts'));
         const days = Array.isArray(shiftData.days) ? shiftData.days : [shiftData.day];
         
+        const zoomVal = shiftData.zoom === true ? 'TRUE' : 'FALSE';
+        const newRows = [];
+        
         days.forEach(day => {
-            const zoomVal = shiftData.zoom === true ? 'TRUE' : 'FALSE';
-            sheet.appendRow([
+            newRows.push([
                 'SH-' + Utilities.getUuid(), 
                 sanitizeInput(shiftData.description), 
                 sanitizeInput(day), 
@@ -620,6 +622,11 @@ function addTechHubShift(shiftData) {
                 zoomVal
             ]);
         });
+        
+        if (newRows.length > 0) {
+            sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+        }
+        
         return { success: true }; 
     } catch (e) { return { success: false, message: e.message }; }
 }
