@@ -80,7 +80,14 @@ const MLT_CONSTANTS = {
         const sheetName = sheet.getName();
         if (sheetName.startsWith("_")) return; 
         
-        const parsed = parseMLTSheet(sheet, settings, dbMap);
+        // NEW: Safety Switch Toggle
+        const isBetaEnabled = getSettings().enableBetaNursing === 'true' || getSettings().enableBetaNursing === true;
+        let parsed = null;
+        if (isBetaEnabled) {
+            parsed = parseMLTSheet_V2(sheet, settings, dbMap);
+        } else {
+            parsed = parseMLTSheet(sheet, settings, dbMap);
+        }
         if (!parsed) return;
         
         const folderKey = parsed.fullTitle; 
@@ -122,6 +129,175 @@ const MLT_CONSTANTS = {
     } catch (e) { return { success: false, message: e.message }; }
   }
   
+  /**
+   * V2 Parser: Uses Utility_SheetReader.js to extract MLT sheet data heuristically.
+   * Preserves exact JSON output shape and specific overrides.
+   */
+  function parseMLTSheet_V2(sheet, settings, dbMap) {
+    const range = sheet.getDataRange();
+    const data = range.getValues();
+    const fontLines = range.getFontLines();
+    const fontColors = range.getFontColors();
+    
+    if (!data || data.length < 5) return null;
+    
+    // --- Title & Course Code Parsing (Identical to V1) ---
+    let rawTitle = "";
+    try {
+        const cellD1 = sheet.getRange("D1").getValue();
+        if (cellD1 && String(cellD1).trim() !== "") rawTitle = String(cellD1).trim();
+    } catch(e) {}
+  
+    if (!rawTitle) {
+        try {
+            const cellA1 = sheet.getRange("A1").getValue();
+            if (cellA1 && String(cellA1).trim() !== "") rawTitle = String(cellA1).trim();
+        } catch(e) {}
+    }
+    if (!rawTitle) rawTitle = sheet.getName();
+    
+    let courseDisplay = rawTitle; 
+    let facultyName = "Faculty Unassigned";
+  
+    if (rawTitle.includes(':')) {
+        const parts = rawTitle.split(':');
+        courseDisplay = parts[0].trim(); 
+        facultyName = parts.slice(1).join(':').trim(); 
+    } else if (rawTitle.includes(' - ')) {
+        const parts = rawTitle.split(' - ');
+        courseDisplay = parts[0].trim();
+        facultyName = parts.slice(1).join(' - ').trim();
+    }
+  
+    const codeMatch = courseDisplay.match(/([A-Z]{2,4}\s?\d{3}[A-Z]?)/i);
+    let courseCode = "MLT";
+    if (codeMatch) courseCode = codeMatch[1].toUpperCase();
+    
+    // --- Header & Column Mapping (V2) ---
+    const config = settings.config;
+    const headerKeywords = [config.EXAM, config.DATE];
+    const headerRowIndex = SheetReader.findHeaderRowHeuristic(data, headerKeywords, 20);
+    
+    if (headerRowIndex === -1) return null;
+
+    // Create synonym map from user config
+    const synonymConfig = {
+        name: [config.EXAM],
+        date: [config.DATE],
+        startTime: [config.START_TIME, config.START_SITE], // Will match either
+        duration: [config.DURATION],
+        room: [config.ROOM],
+        password: [config.PASSWORD],
+        items: [config.ITEMS]
+    };
+
+    const colMap = SheetReader.mapColumnsBySynonyms(data[headerRowIndex], synonymConfig);
+    if (colMap.name === -1 || colMap.date === -1) return null;
+
+    // --- Roster Anchor & Mapping (V2) ---
+    const rosterKeyword = settings.rosterKeyword || "students";
+    const rosterHeaderIdx = SheetReader.findAnchorRow(data, [rosterKeyword], headerRowIndex + 1);
+    const scanEnd = (rosterHeaderIdx !== -1) ? rosterHeaderIdx : data.length;
+
+    // Roster Logic (Preserved exactly as V1 to maintain "Unassigned" logic)
+    const sheetRoster = {};
+    const allAssigned = new Set();
+    const masterList = [];
+    
+    if (rosterHeaderIdx !== -1) {
+      const locHeaders = data[rosterHeaderIdx];
+      locHeaders.forEach((h, idx) => {
+          if (idx === 0) return; 
+          const loc = String(h).trim();
+          if (loc && !sheetRoster[loc]) sheetRoster[loc] = [];
+      });
+      
+      const startRow = rosterHeaderIdx + 2; 
+      const maxScan = Math.min(startRow + 30, data.length);
+      
+      for (let r = startRow; r < maxScan; r++) {
+         const masterName = String(data[r][0]).trim();
+         if (masterName) masterList.push({ name: masterName, row: r });
+         
+         for (let c = 1; c < locHeaders.length; c++) { 
+             const loc = String(locHeaders[c]).trim();
+             if (!loc) continue;
+             const rawVal = data[r][c];
+             if (rawVal) {
+                 const name = String(rawVal).trim();
+                 if (name) {
+                    if (!sheetRoster[loc]) sheetRoster[loc] = [];
+                    sheetRoster[loc].push({ name: name, color: fontColors[r][c] });
+                    allAssigned.add(name.toLowerCase()); 
+                 }
+             }
+         }
+      }
+      
+      const unassigned = [];
+      masterList.forEach(student => {
+          if (!allAssigned.has(student.name.toLowerCase())) unassigned.push({ name: student.name, color: '#000000' });
+      });
+      if (unassigned.length > 0) sheetRoster['Unassigned'] = unassigned;
+    }
+
+    // --- Data Reading & Overrides (V2) ---
+    const exams = [];
+    const rawExams = SheetReader.readDynamicRoster(data.slice(0, scanEnd), headerRowIndex + 1, colMap.name, ['total'], 3);
+
+    rawExams.forEach(parsedRow => {
+        const rIndex = parsedRow.rowIndex;
+        const rowData = parsedRow.data;
+        const examName = parsedRow.name;
+
+        if (fontLines[rIndex][colMap.date] === 'line-through') return; // Skip cancelled
+        
+        const dbKey = `${courseCode}|${examName}`;
+        const dbEntry = dbMap[dbKey] || { generalNotes: "", studentTags: {} };
+        
+        // === MOVEMENT OVERRIDE LOGIC (CRITICAL) ===
+        const examRoster = JSON.parse(JSON.stringify(sheetRoster));
+        const studentTags = dbEntry.studentTags;
+  
+        if (studentTags) {
+            for (const [sName, sData] of Object.entries(studentTags)) {
+                if (sData.overrideLocation) {
+                    const targetLoc = sData.overrideLocation;
+                    let studentObj = null;
+                    for (const loc in examRoster) {
+                        const idx = examRoster[loc].findIndex(s => s.name === sName);
+                        if (idx > -1) {
+                            studentObj = examRoster[loc][idx];
+                            examRoster[loc].splice(idx, 1);
+                            break;
+                        }
+                    }
+                    if (studentObj) {
+                        if (!examRoster[targetLoc]) examRoster[targetLoc] = [];
+                        examRoster[targetLoc].push(studentObj);
+                    }
+                }
+            }
+        }
+        
+        const rawDate = rowData[colMap.date];
+        const dateVal = formatDateToPlainLanguage(rawDate !== 'TBD' ? rawDate : "");
+        const siteTimeStr = (colMap.startTime > -1 && rowData[colMap.startTime] !== 'TBD') ? rowData[colMap.startTime] : '';
+        const itemsVal = (colMap.items > -1 && rowData[colMap.items] !== 'TBD') ? String(rowData[colMap.items]).trim() : "";
+
+        exams.push({ 
+            name: examName, date: dateVal, siteTime: normalizeTime(siteTimeStr), 
+            duration: (colMap.duration > -1 && rowData[colMap.duration] !== 'TBD') ? rowData[colMap.duration] : "", 
+            room: (colMap.room > -1 && rowData[colMap.room] !== 'TBD') ? rowData[colMap.room] : "", 
+            password: (colMap.password > -1 && rowData[colMap.password] !== 'TBD') ? rowData[colMap.password] : "", 
+            itemsAllowed: itemsVal, generalNotes: dbEntry.generalNotes, studentTags: dbEntry.studentTags, rosters: examRoster 
+        });
+    });
+    
+    return { course: { code: courseCode, name: courseDisplay }, fullTitle: rawTitle, courseDisplay: courseDisplay, faculty: facultyName, exams: exams };
+  }
+
+
   function parseMLTSheet(sheet, settings, dbMap) {
     const data = sheet.getDataRange().getValues();
     const fontLines = sheet.getDataRange().getFontLines();

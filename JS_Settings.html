@@ -97,9 +97,6 @@
                 <h3 style="margin:0;">Permissions Matrix</h3>
                 <p style="margin:5px 0; color:#666; font-size:0.9em;">Control which roles can access specific tools and pages.</p>
              </div>
-             <button class="button-success" onclick="savePermissionsMatrix(this)">Save Permissions</button>
-           </div>
-           <div id="permissions-matrix-container">
               <div class="loader-ring"></div>
            </div>
         </div>
@@ -127,8 +124,6 @@
     evt.currentTarget.className += " active";
 
     if (tabName === 'settings-staff') {
-      fetchFullStaffList();
-    }
     if (tabName === 'settings-permissions') {
       fetchPermissionsMatrix();
     }
@@ -139,7 +134,7 @@
     }
   }
 
-n  function initAppConfig() {
+  function initAppConfig() {
     const toggle = document.getElementById('beta-nursing-toggle');
     if (toggle && g.settings) {
       toggle.checked = g.settings.enableBetaNursing === true || g.settings.enableBetaNursing === 'true';

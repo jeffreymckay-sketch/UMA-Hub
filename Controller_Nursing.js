@@ -117,7 +117,14 @@ function api_getNursingData() {
     sheets.forEach(sheet => {
       const sheetName = sheet.getName();
       if (sheetName.startsWith("_")) return; 
-      const parsed = parseNursingSheet(sheet, dbMap);
+      // NEW: Safety Switch Toggle
+      const isBetaEnabled = getSettings().enableBetaNursing === 'true' || getSettings().enableBetaNursing === true;
+      let parsed = null;
+      if (isBetaEnabled) {
+          parsed = parseNursingSheet_V2(sheet, dbMap);
+      } else {
+          parsed = parseNursingSheet(sheet, dbMap);
+      }
       if (!parsed) return;
       
       // Meta now contains the split variables
@@ -152,6 +159,138 @@ function api_getNursingData() {
   } catch (e) {
     return { success: false, message: e.message };
   }
+}
+
+/**
+ * V2 Parser: Uses Utility_SheetReader.js to extract Nursing sheet data heuristically.
+ * Outputs JSON exactly matching the shape of the original parseNursingSheet function.
+ */
+function parseNursingSheet_V2(sheet, dbMap) {
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  const fontColors = range.getFontColors();
+  const fontLines = range.getFontLines();
+  
+  if (!data || data.length < 5) return null;
+  
+  const a1 = String(data[0][0]).trim();
+  
+  let courseCode = "Unknown";
+  let courseName = a1;
+  const splitMatch = a1.match(/^([^:-]+)[:\s-](.+)/);
+  if (splitMatch) {
+      courseCode = splitMatch[1].trim();
+      courseName = splitMatch[2].trim();
+  }
+
+  const headerKeywords = ['exam', 'date'];
+  const headerRowIndex = SheetReader.findHeaderRowHeuristic(data, headerKeywords, 15);
+  
+  if (headerRowIndex === -1) return null;
+  
+  const synonymConfig = {
+      name: ['exam'],
+      date: ['date'],
+      timeSite: ['time', 'onsite time', 'on site time', 'site time'],
+      timeZoom: ['zoom time', 'zoom'],
+      duration: ['duration'],
+      room: ['room', 'location'],
+      password: ['password'],
+      accommodations: ['accommodations', 'notes']
+  };
+  
+  const colMap = SheetReader.mapColumnsBySynonyms(data[headerRowIndex], synonymConfig);
+  
+  const headers = data[headerRowIndex].map(h => String(h).trim().toLowerCase());
+  colMap.timeSite = headers.findIndex(h => h.includes('time') && !h.includes('zoom'));
+  colMap.timeZoom = headers.findIndex(h => h.includes('time') && h.includes('zoom'));
+  colMap.name = headers.findIndex(h => h.includes('exam'));
+
+  if (colMap.name === -1 || colMap.date === -1) return null;
+
+  const rosterHeaderIdx = SheetReader.findAnchorRow(data, ['augusta'], headerRowIndex + 1);
+  const scanEnd = (rosterHeaderIdx !== -1) ? rosterHeaderIdx : data.length;
+
+  const sheetRoster = {};
+  if (rosterHeaderIdx !== -1) {
+      const locHeaders = data[rosterHeaderIdx];
+      locHeaders.forEach(h => {
+          const locName = String(h).trim();
+          if (locName && !sheetRoster[locName]) sheetRoster[locName] = [];
+      });
+      const rosterStartRow = rosterHeaderIdx + 3;
+      for (let r = rosterStartRow; r < data.length; r++) {
+          for (let c = 0; c < locHeaders.length; c++) {
+              const loc = String(locHeaders[c]).trim();
+              const name = String(data[r][c]).trim();
+              const color = fontColors[r][c];
+              if (loc && name) {
+                  if (!sheetRoster[loc]) sheetRoster[loc] = [];
+                  sheetRoster[loc].push({ name: name, color: color });
+              }
+          }
+      }
+  }
+
+  const exams = [];
+  const rawExams = SheetReader.readDynamicRoster(data.slice(0, scanEnd), headerRowIndex + 1, colMap.name, ['total'], 3);
+  
+  rawExams.forEach(parsedRow => {
+      const rIndex = parsedRow.rowIndex;
+      const rowData = parsedRow.data;
+      const examName = parsedRow.name;
+      
+      let isDone = false;
+      if (fontLines[rIndex][colMap.date] === 'line-through' || fontLines[rIndex][colMap.name] === 'line-through') {
+          isDone = true;
+      }
+      
+      const rawDate = rowData[colMap.date];
+      let dateObj;
+      if (rawDate instanceof Date) { dateObj = rawDate; } 
+      else if (rawDate && rawDate !== 'TBD') {
+          const str = String(rawDate).replace(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|st|nd|rd|th),?/gi, "").trim();
+          dateObj = new Date(str);
+      }
+      
+      if (dateObj && !isNaN(dateObj.getTime())) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (dateObj < today) isDone = true;
+      }
+      
+      const dateVal = formatDateToPlainLanguage(rawDate !== 'TBD' ? rawDate : "");
+      
+      const siteTimeStr = (colMap.timeSite > -1 && rowData[colMap.timeSite] !== 'TBD') ? rowData[colMap.timeSite] : '';
+      const zoomTimeStr = (colMap.timeZoom > -1 && rowData[colMap.timeZoom] !== 'TBD') ? rowData[colMap.timeZoom] : '';
+      
+      const siteTime = normalizeTime(siteTimeStr);
+      const zoomTime = normalizeTime(zoomTimeStr);
+      
+      const dbKey = `${courseCode}|${examName}`;
+      const dbEntry = dbMap[dbKey] || { generalNotes: "", studentTags: {} };
+      
+      const durationVal = (colMap.duration > -1 && rowData[colMap.duration] !== 'TBD') ? rowData[colMap.duration] : '';
+      const roomVal = (colMap.room > -1 && rowData[colMap.room] !== 'TBD') ? rowData[colMap.room] : '';
+      const passVal = (colMap.password > -1 && rowData[colMap.password] !== 'TBD') ? rowData[colMap.password] : '';
+      const accVal = (colMap.accommodations > -1 && rowData[colMap.accommodations] !== 'TBD') ? rowData[colMap.accommodations] : '';
+
+      exams.push({
+          name: examName,
+          date: dateVal,
+          siteTime: siteTime,
+          zoomTime: zoomTime,
+          duration: durationVal,
+          room: roomVal,
+          password: passVal,
+          generalNotes: dbEntry.generalNotes || accVal,
+          studentTags: dbEntry.studentTags,
+          rosters: sheetRoster,
+          isDone: isDone
+      });
+  });
+
+  return { rawA1: a1, course: { code: courseCode, name: courseName }, exams: exams };
 }
 
 function parseNursingSheet(sheet, dbMap) {
