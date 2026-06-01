@@ -103,10 +103,15 @@
         if (!view) return;
     
         view.innerHTML = `
+            <div class="tab-bar">
+                <button class="tab-link active" onclick="openPSTab(event, 'ps-main')">Exam Database</button>
+                <button class="tab-link" onclick="openPSTab(event, 'ps-calendar')">Calendar Sync</button>
+            </div>
+            <div id="ps-main" class="tab-content" style="display:block; padding-top:20px;">
             <div class="widget">
                 <div class="ps-header-bar">
                     <div>
-                        <h2 style="margin:0; color:var(--color-primary-navy);">Master Schedule</h2>
+                        <h2 style="margin:0; color:var(--color-primary-navy);">Exam Schedule</h2>
                         <div id="ps-connection-status" style="font-size: 12px; color: #666; margin-top: 5px;">Checking connection...</div>
                     </div>
                     <div>
@@ -305,13 +310,13 @@
         modal.innerHTML = `
             <div class="modal-content" style="background-color: white; border-radius: 8px; width: 90%; max-width: 500px; padding: 25px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); position: relative;">
                 <span class="close" onclick="document.getElementById('${modalId}').style.display='none'" style="position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; color: #aaa;">&times;</span>
-                <h3>Master Schedule Settings</h3>
-                <p style="font-size: 13px; color: #666;">Configure where your Master Schedule database is saved.</p>
+                <h3>Exam Schedule Settings</h3>
+                <p style="font-size: 13px; color: #666;">Configure where your Exam Schedule database is saved.</p>
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display:block; font-weight:bold; margin-bottom:5px;">Target Folder ID / URL</label>
                     <input type="text" id="ps-set-folder" value="${ps_settings.folderId || ''}" style="width:100%; padding:8px; box-sizing:border-box;">
-                    <small style="color:#666;">Where should the Master Schedule spreadsheet be created?</small>
+                    <small style="color:#666;">Where should the Exam Schedule spreadsheet be created?</small>
                 </div>
                 
                 <div style="margin-bottom: 25px;">
