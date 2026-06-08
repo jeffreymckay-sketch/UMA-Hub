@@ -93,10 +93,11 @@
 
 <script>
     /**
-     * Logic for the Proctoring Master Schedule page.
+     * Logic for the Proctoring Exam Schedule page.
      */
     let ps_masterData = [];
     let ps_settings = {};
+    let ps_calendars = [];
 
     function loadProctorSchedulePage() {
         const view = document.getElementById('page-ProctorSchedule');
@@ -107,20 +108,57 @@
                 <button class="tab-link active" onclick="openPSTab(event, 'ps-main')">Exam Database</button>
                 <button class="tab-link" onclick="openPSTab(event, 'ps-calendar')">Calendar Sync</button>
             </div>
-            <div id="ps-main" class="tab-content" style="display:block; padding-top:20px;">
-            <div class="widget">
-                <div class="ps-header-bar">
-                    <div>
-                        <h2 style="margin:0; color:var(--color-primary-navy);">Exam Schedule</h2>
-                        <div id="ps-connection-status" style="font-size: 12px; color: #666; margin-top: 5px;">Checking connection...</div>
+            
+            <div id="ps-main" class="ps-tab-content" style="display:block; padding-top:20px;">
+                <div class="widget">
+                    <div class="ps-header-bar">
+                        <div>
+                            <h2 style="margin:0; color:var(--color-primary-navy);">Exam Schedule</h2>
+                            <div id="ps-connection-status" style="font-size: 12px; color: #666; margin-top: 5px;">Checking connection...</div>
+                        </div>
+                        <div>
+                            <button class="button-secondary" onclick="ps_showSettingsModal()">⚙️ Database Settings</button>
+                        </div>
                     </div>
-                    <div>
-                        <button class="button-secondary" onclick="ps_showSettingsModal()">⚙️ Settings</button>
+                    <div id="ps-main-content">
+                        <div class="loader-ring"></div>
+                        <div style="text-align:center; margin-top:10px; color:#666;">Loading Schedule Data...</div>
                     </div>
                 </div>
-                <div id="ps-main-content">
-                    <div class="loader-ring"></div>
-                    <div style="text-align:center; margin-top:10px; color:#666;">Loading Schedule Data...</div>
+            </div>
+            
+            <div id="ps-calendar" class="ps-tab-content" style="display:none; padding-top:20px;">
+                <div class="widget">
+                    <h2 style="margin-top:0; color:var(--color-primary-navy);">Calendar Sync</h2>
+                    <p style="color:#666; margin-bottom:20px;">Sync your Exam Schedule directly to a Google Calendar. Events will be automatically formatted and mapped.</p>
+                    
+                    <div style="background:#f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px;">
+                        <div style="margin-bottom: 25px;">
+                            <label style="display:block; font-weight:bold; margin-bottom:5px;">Target Calendar for Sync</label>
+                            <select id="ps-sync-cal-dropdown" style="width:100%; padding:8px; box-sizing:border-box; margin-bottom: 5px;">
+                                <option value="">-- Loading Calendars --</option>
+                            </select>
+                            <small style="color:#666;">Select the calendar to sync your exam schedule to. If you change this, you must click 'Save' below.</small>
+                            <div style="margin-top:10px;">
+                                <button class="button-secondary" onclick="ps_saveCalSetting(this)" style="font-size: 11px;">Save Calendar Choice</button>
+                            </div>
+                        </div>
+                        
+                        <div style="border-top: 1px solid #ccc; padding-top: 20px;">
+                            <button class="button-primary" id="ps-btn-sync-run" onclick="ps_generateSyncPreview(this)" style="width: 100%; padding: 12px; font-size: 16px;">🔍 Preview Calendar Sync</button>
+                            <div id="ps-sync-status" style="text-align:center; margin-top:15px; font-weight:bold;"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="ps-sync-preview-container" style="display:none; margin-top: 30px;">
+                        <h3 style="color:var(--color-primary-navy); border-bottom: 2px solid #ddd; padding-bottom: 5px;">Sync Preview</h3>
+                        <div style="margin-bottom: 10px; display:flex; justify-content:space-between; align-items:center;">
+                            <p style="margin:0; color:#666;">Review the events below. Uncheck any you do not want to sync.</p>
+                            <button class="button-success" id="ps-btn-commit-sync" onclick="ps_commitSync(this)">Commit Selected Events</button>
+                        </div>
+                        <div id="ps-sync-preview-table-container"></div>
+                    </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -134,12 +172,24 @@
                 if (res.success) {
                     ps_masterData = res.data;
                     ps_settings = res.settings;
+                    ps_calendars = res.calendars || [];
                     ps_renderUI();
                 } else {
                     document.getElementById('ps-main-content').innerHTML = `<div class="error-message">Error loading data: ${res.message}</div>`;
                 }
             })
             .api_getProctorScheduleData();
+    }
+
+    function openPSTab(evt, tabName) {
+        const contents = document.getElementsByClassName("ps-tab-content");
+        for (let i = 0; i < contents.length; i++) contents[i].style.display = "none";
+        
+        const links = document.getElementById('page-ProctorSchedule').getElementsByClassName("tab-link");
+        for (let i = 0; i < links.length; i++) links[i].className = links[i].className.replace(" active", "");
+        
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
     }
 
     function ps_renderUI() {
@@ -161,7 +211,10 @@
         let html = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
                 <strong>${ps_masterData.length} Exams Found</strong>
-                <button class="button-success" onclick="ps_saveAndExport(this)">Save & Export to Sheets</button>
+                <div>
+                    
+                    <button class="button-success" onclick="ps_saveAndExport(this)">Save & Export to Sheets</button>
+                </div>
             </div>
             <div id="ps-accordion-container">
         `;
@@ -243,7 +296,7 @@
                                 </div>
                             </div>
                             
-                            ${exam.isOrphan ? `<div style="margin-top:15px; font-size:12px; color:#d32f2f;"><strong>Warning:</strong> This exam exists in your Master Schedule but was removed from the original teacher's sheet. You can ignore this, or manually delete the row from your spreadsheet.</div>` : ''}
+                            ${exam.isOrphan ? `<div style="margin-top:15px; font-size:12px; color:#d32f2f;"><strong>Warning:</strong> This exam exists in your Exam Schedule but was removed from the original teacher's sheet. You can ignore this, or manually delete the row from your spreadsheet.</div>` : ''}
                         </div>
                     </div>
                 `;
@@ -251,6 +304,16 @@
         }
         html += `</div>`;
         document.getElementById('ps-main-content').innerHTML = html;
+        
+        // Populate Calendar Dropdown
+        const calDropdown = document.getElementById('ps-sync-cal-dropdown');
+        if (calDropdown) {
+            let calHtml = '<option value="">-- Select a Calendar --</option>';
+            ps_calendars.forEach(c => {
+                calHtml += `<option value="${c.id}" ${ps_settings.calendarId === c.id ? 'selected' : ''}>${c.name}</option>`;
+            });
+            calDropdown.innerHTML = calHtml;
+        }
     }
 
     function ps_toggleAccordion(index) {
@@ -325,6 +388,7 @@
                     <small style="color:#666;">This is generated automatically when you create a new sheet.</small>
                 </div>
                 
+
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <button class="button-primary" id="ps-btn-create" onclick="ps_createSheet()">Generate New Sheet</button>
                     <button class="button-success" onclick="ps_saveSettings()">Save Configuration</button>
@@ -348,7 +412,7 @@
                     showNotification(res.message, "error");
                 }
             })
-            .api_savePSSettings({ folderId: folder, sheetId: sheet });
+            .api_savePSSettings({ folderId: folder, sheetId: sheet, calendarId: ps_settings.calendarId });
     }
 
     function ps_createSheet() {
@@ -376,5 +440,136 @@
                 }
             })
             .api_createMasterSheet(folder);
+    }
+
+    function ps_saveCalSetting(btn) {
+        const calDropdown = document.getElementById('ps-sync-cal-dropdown');
+        const calId = calDropdown.value;
+        if (!calId) return;
+
+        const orig = btn.textContent;
+        btn.textContent = "Saving...";
+        btn.disabled = true;
+
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                if(res.success) {
+                    btn.textContent = "✅ Saved!";
+                    ps_settings.calendarId = calId;
+                    setTimeout(() => btn.textContent = orig, 2000);
+                } else {
+                    btn.textContent = orig;
+                    showNotification(res.message, "error");
+                }
+            })
+            .api_savePSSettings({ folderId: ps_settings.folderId, sheetId: ps_settings.sheetId, calendarId: calId });
+    }
+
+    let ps_syncProposals = [];
+
+    function ps_generateSyncPreview(btn) {
+        if (!ps_settings.calendarId) {
+            showNotification("No Calendar selected. Please choose a calendar and click Save.", "error");
+            return;
+        }
+        
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Generating Preview...";
+        
+        document.getElementById('ps-sync-preview-container').style.display = 'none';
+        
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+                
+                if (res.success) {
+                    ps_syncProposals = res.data;
+                    ps_renderSyncPreview();
+                } else {
+                    showNotification(res.message, "error");
+                }
+            })
+            .api_previewProctorCalendar(ps_settings.calendarId, ps_masterData);
+    }
+
+    function ps_renderSyncPreview() {
+        const container = document.getElementById('ps-sync-preview-table-container');
+        document.getElementById('ps-sync-preview-container').style.display = 'block';
+        
+        if (ps_syncProposals.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">No valid exams found to sync.</div>';
+            return;
+        }
+        
+        let html = `<table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 40px; text-align:center;"><input type="checkbox" id="ps-preview-select-all" checked onchange="ps_toggleAllPreview(this)"></th>
+                    <th>Status</th>
+                    <th>Event Title</th>
+                    <th>Date & Time</th>
+                </tr>
+            </thead>
+            <tbody>`;
+            
+        ps_syncProposals.forEach(p => {
+            const isExists = p.status === 'EXISTS';
+            const statusHtml = isExists 
+                ? `<span style="background:#fff3cd; color:#c62828; padding:2px 8px; border-radius:12px; font-size:11px; white-space:nowrap;">ALREADY EXISTS</span>`
+                : `<span style="background:#d4edda; color:#155724; padding:2px 8px; border-radius:12px; font-size:11px; white-space:nowrap;">NEW EVENT</span>`;
+                
+            const startStr = new Date(p.startTime).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+            
+            html += `<tr>
+                <td style="text-align:center;">
+                    <input type="checkbox" class="ps-preview-cb" value="${p.id}" ${!isExists ? 'checked' : ''}>
+                </td>
+                <td>${statusHtml}</td>
+                <td style="font-weight:bold;">${p.title}</td>
+                <td>${startStr}</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    }
+    
+    function ps_toggleAllPreview(masterCb) {
+        const cbs = document.querySelectorAll('.ps-preview-cb');
+        cbs.forEach(cb => cb.checked = masterCb.checked);
+    }
+    
+    function ps_commitSync(btn) {
+        const selectedIds = Array.from(document.querySelectorAll('.ps-preview-cb:checked')).map(cb => cb.value);
+        if (selectedIds.length === 0) {
+            showNotification("No events selected.", "error");
+            return;
+        }
+        
+        const selectedProposals = ps_syncProposals.filter(p => selectedIds.includes(p.id));
+        
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Committing Sync...";
+        
+        google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                if (res.success) {
+                    btn.textContent = "✅ Synced " + res.stats.created + " events!";
+                    showNotification("Calendar Sync Complete", "success");
+                    setTimeout(() => { 
+                        btn.textContent = originalText; 
+                        document.getElementById('ps-sync-preview-container').style.display = 'none';
+                    }, 3000);
+                } else {
+                    btn.textContent = originalText;
+                    showNotification(res.message, "error");
+                }
+            })
+            .api_commitProctorCalendar(ps_settings.calendarId, selectedProposals);
     }
 </script>

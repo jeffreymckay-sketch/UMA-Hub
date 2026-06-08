@@ -63,7 +63,7 @@ function api_createMasterSheet(folderId) {
         const folder = DriveApp.getFolderById(folderId);
         
         const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-        const ss = SpreadsheetApp.create("Master Exam Schedule - " + dateStr);
+        const ss = SpreadsheetApp.create("Exam Schedule - " + dateStr);
         const file = DriveApp.getFileById(ss.getId());
         
         folder.addFile(file);
@@ -95,6 +95,7 @@ function api_getProctorScheduleData() {
     try {
         const settings = _getPSSettings();
         const liveMap = {};
+        const writableCalendars = getWritableCalendars();
         
         // 1. Fetch Live Data
         const nursingRes = api_getNursingData();
@@ -276,7 +277,7 @@ function api_getProctorScheduleData() {
             return a.sortDate.localeCompare(b.sortDate);
         });
 
-        return { success: true, data: finalArray, settings: settings };
+        return { success: true, data: finalArray, settings: settings, calendars: writableCalendars.data };
 
     } catch (e) {
         console.error("Master Schedule Error: " + e.stack);
@@ -342,5 +343,145 @@ function api_exportProctorSchedule(dataArray) {
         
     } catch(e) {
         return { success: false, message: e.message };
+    }
+}
+
+function api_previewProctorCalendar(calendarId, eventsToSync) {
+    try {
+        if (!calendarId) throw new Error("No Calendar ID provided.");
+        const cal = CalendarApp.getCalendarById(calendarId);
+        if (!cal) throw new Error("Calendar not found. Make sure the ID is correct and you have write access.");
+        
+        const proposals = [];
+        
+        eventsToSync.forEach((exam, idx) => {
+            if (!exam.date || exam.date === "TBD" || exam.date === "-") return;
+            
+            let dateObj = new Date(exam.date);
+            if (isNaN(dateObj.getTime())) return;
+
+            let startHour = 8;
+            let startMin = 0;
+            let endHour = 10;
+            let endMin = 0;
+            let hasEnd = false;
+            let durMins = 120; // default 2 hours
+            
+            if (exam.timeDuration) {
+                const str = String(exam.timeDuration).trim();
+                const rangeMatch = str.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+                
+                if (rangeMatch) {
+                    startHour = parseInt(rangeMatch[1], 10);
+                    startMin = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : 0;
+                    let startAmPm = rangeMatch[3] ? rangeMatch[3].toUpperCase() : null;
+                    
+                    endHour = parseInt(rangeMatch[4], 10);
+                    endMin = rangeMatch[5] ? parseInt(rangeMatch[5], 10) : 0;
+                    let endAmPm = rangeMatch[6] ? rangeMatch[6].toUpperCase() : null;
+
+                    if (!startAmPm && endAmPm) {
+                         if (endAmPm === 'PM') {
+                             if (startHour >= 7 && startHour <= 11 && startHour < endHour) startAmPm = 'AM';
+                             else if (startHour === 12) startAmPm = 'PM';
+                             else startAmPm = 'PM';
+                         } else {
+                             startAmPm = endAmPm;
+                         }
+                    }
+
+                    if (startAmPm === "PM" && startHour < 12) startHour += 12;
+                    if (startAmPm === "AM" && startHour === 12) startHour = 0;
+                    if (endAmPm === "PM" && endHour < 12) endHour += 12;
+                    if (endAmPm === "AM" && endHour === 12) endHour = 0;
+                    hasEnd = true;
+                } else {
+                    const timeMatch = str.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?/);
+                    if (timeMatch) {
+                        startHour = parseInt(timeMatch[1], 10);
+                        startMin = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+                        const ampm = timeMatch[3] ? timeMatch[3].toUpperCase() : null;
+                        if (ampm === "PM" && startHour < 12) startHour += 12;
+                        if (ampm === "AM" && startHour === 12) startHour = 0;
+                    }
+                }
+                
+                if (!hasEnd) {
+                    const durMatch = str.match(/(?:\(|,\s*|\b)([\d.]+)\s*(?:Hour|hr|h)/i);
+                    if (durMatch) {
+                        durMins = parseFloat(durMatch[1]) * 60;
+                    } else {
+                        const minMatch = str.match(/([\d]+)\s*(?:min|m\b)/i);
+                        if (minMatch) {
+                            durMins = parseInt(minMatch[1], 10);
+                        }
+                    }
+                }
+            }
+
+            // Create date object natively so Google Apps Script automatically handles Daylight Saving Time (EDT vs EST)
+            // based on the appsscript.json "America/New_York" setting.
+            const start = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), startHour, startMin, 0);
+            let end = new Date(start.getTime());
+            
+            if (hasEnd) {
+                end = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), endHour, endMin, 0);
+                if (end.getTime() < start.getTime()) {
+                    // if end time is somehow before start time (e.g. crossing midnight), add a day
+                    end.setDate(end.getDate() + 1);
+                }
+            } else {
+                end.setTime(start.getTime() + (durMins * 60 * 1000));
+            }
+            
+            const prefix = exam.program === "Nursing" ? "NUR:" : (exam.program === "MLT" ? "MLT:" : "Proctor:");
+            const title = `${prefix} ${exam.course} - ${exam.examName}`;
+            
+            const events = cal.getEventsForDay(start);
+            const exists = events.some(e => e.getTitle() === title && e.getStartTime().getTime() === start.getTime());
+            
+            let desc = exam.instructions || "";
+            if (exam.umaalNotes) desc += `\nUMAAL Notes: ${exam.umaalNotes}`;
+            if (exam.campus) desc += `\nCampus: ${exam.campus}`;
+            if (exam.room) desc += `\nRoom: ${exam.room}`;
+            if (exam.docUrl) desc += `\n\nExam Document: ${exam.docUrl}`;
+            
+            proposals.push({
+                id: 'ps_evt_' + idx,
+                title: title,
+                startTime: start.toISOString(),
+                endTime: end.toISOString(),
+                description: desc.trim(),
+                status: exists ? 'EXISTS' : 'NEW'
+            });
+        });
+        
+        return { success: true, data: proposals };
+    } catch(e) {
+        return { success: false, message: e.message };
+    }
+}
+
+function api_commitProctorCalendar(calendarId, selectedProposals) {
+    const lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(30000);
+        const cal = CalendarApp.getCalendarById(calendarId);
+        if (!cal) throw new Error("Calendar not found.");
+        
+        let created = 0;
+        
+        selectedProposals.forEach(p => {
+            cal.createEvent(p.title, new Date(p.startTime), new Date(p.endTime), {
+                description: p.description
+            });
+            created++;
+        });
+        
+        return { success: true, stats: { created: created } };
+    } catch(e) {
+        return { success: false, message: e.message };
+    } finally {
+        lock.releaseLock();
     }
 }
