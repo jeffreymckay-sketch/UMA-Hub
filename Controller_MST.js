@@ -4,92 +4,198 @@
  * -------------------------------------------------------------------
  */
 
-function getMergedMstData() {
+/**
+ * Core Sync Engine: Runs automatically to pull external data, generate 
+ * fingerprints, and merge updates into the local database without losing IDs.
+ */
+function syncExternalMstData() {
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(15000)) return; // Prevent simultaneous syncs
+
+    try {
+        const settings = getSettings();
+        const extUrl = settings.mstExternalUrl;
+        const extTab = settings.mstExternalTab;
+        if (!extUrl || !extTab) return; // Sync not configured yet
+
+        const ss = getMasterDataHub();
+        let localSheet = ss.getSheetByName('Course_Schedule');
+        
+        // 1. Standardize Headers
+        const standardHeaders = ['Source', 'eventID', 'Zoom Link', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note'];
+        
+        // Setup local sheet if missing or if it has the old IMPORTRANGE formula
+        if (!localSheet) {
+            localSheet = ss.insertSheet('Course_Schedule');
+            localSheet.appendRow(standardHeaders);
+        } else {
+            const formula = localSheet.getRange("A1").getFormula();
+            if (formula && formula.toUpperCase().includes("IMPORTRANGE")) {
+                localSheet.clear();
+                localSheet.appendRow(standardHeaders);
+            }
+        }
+
+        const localData = localSheet.getDataRange().getValues();
+        const localHeaders = getColumnMap(localData[0] || standardHeaders);
+        
+        const localMap = new Map();
+        const manualClasses = [];
+
+        // Helper: Creates a unique composite key for a class
+        function createFingerprint(course, faculty, day, starttime) {
+            let sTimeStr = "";
+            if (starttime instanceof Date) {
+                sTimeStr = starttime.toTimeString().substring(0,5); // HH:mm
+            } else {
+                sTimeStr = String(starttime);
+            }
+            return String(course + faculty + day + sTimeStr).toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+
+        // 2. Parse existing local data
+        if (localData.length > 1) {
+            for (let i = 1; i < localData.length; i++) {
+                const row = localData[i];
+                const source = row[localHeaders['source']];
+                const evtId = row[localHeaders['eventid']];
+                if (!evtId) continue;
+
+                const obj = {};
+                for (const key in localHeaders) obj[key] = row[localHeaders[key]];
+
+                if (source === 'Manual') {
+                    manualClasses.push(obj);
+                } else {
+                    const fp = createFingerprint(obj.course, obj.faculty, obj.day, obj.starttime);
+                    localMap.set(fp, obj);
+                }
+            }
+        }
+
+        // 3. Fetch External Data
+        let extSS;
+        try {
+            const match = extUrl.match(/[-\w]{25,}/);
+            extSS = SpreadsheetApp.openById(match ? match[0] : extUrl);
+        } catch(e) {
+            console.error("MST Sync: Could not open external sheet.");
+            return;
+        }
+
+        const extSheet = extSS.getSheetByName(extTab);
+        if (!extSheet) return;
+
+        const extData = extSheet.getDataRange().getValues();
+        if (extData.length < 2) return;
+        const extHeaders = getColumnMap(extData[0]);
+
+        const newLocalData = [standardHeaders];
+        
+        // 4. Merge External Data into Local Database
+        for (let i = 1; i < extData.length; i++) {
+            const extRow = extData[i];
+            const course = extRow[extHeaders['course']];
+            if (!course) continue; // Skip empty rows
+
+            const faculty = extRow[extHeaders['faculty']];
+            const day = extRow[extHeaders['day']];
+            const startTime = extRow[extHeaders['starttime']];
+            
+            const fp = createFingerprint(course, faculty, day, startTime);
+            
+            let localObj = localMap.get(fp);
+            if (localObj) {
+                // UPDATE: Preserve eventID and Zoom, update dynamic fields
+                localObj.session = extRow[extHeaders['session']];
+                localObj.startdate = extRow[extHeaders['startdate']];
+                localObj.enddate = extRow[extHeaders['enddate']];
+                localObj.endtime = extRow[extHeaders['endtime']];
+                localObj.bxlocation = extRow[extHeaders['bxlocation']];
+                localObj.mstassignedbyemail = extRow[extHeaders['mstassignedbyemail']];
+                
+                const covKey = Object.keys(extHeaders).find(k => k.includes('coverage'));
+                localObj.coverage = covKey ? extRow[extHeaders[covKey]] : '';
+                localObj.note = extRow[extHeaders['note']];
+                
+                newLocalData.push(mapObjToArray(localObj, standardHeaders));
+                localMap.delete(fp); // Mark as processed
+            } else {
+                // CREATE NEW: Generate a permanent UUID
+                const covKey = Object.keys(extHeaders).find(k => k.includes('coverage'));
+                const newObj = {
+                    source: 'External',
+                    eventid: Utilities.getUuid(),
+                    zoomlink: '',
+                    session: extRow[extHeaders['session']],
+                    startdate: extRow[extHeaders['startdate']],
+                    enddate: extRow[extHeaders['enddate']],
+                    day: day,
+                    course: course,
+                    faculty: faculty,
+                    starttime: startTime,
+                    endtime: extRow[extHeaders['endtime']],
+                    bxlocation: extRow[extHeaders['bxlocation']],
+                    mstassignedbyemail: extRow[extHeaders['mstassignedbyemail']],
+                    coverage: covKey ? extRow[extHeaders[covKey]] : '',
+                    note: extRow[extHeaders['note']]
+                };
+                newLocalData.push(mapObjToArray(newObj, standardHeaders));
+            }
+        }
+
+        // 5. Re-append Manual Classes (Keeps them safe from sync deletion)
+        manualClasses.forEach(obj => newLocalData.push(mapObjToArray(obj, standardHeaders)));
+
+        // 6. Write back to database
+        localSheet.clearContents();
+        localSheet.getRange(1, 1, newLocalData.length, newLocalData[0].length).setValues(newLocalData);
+
+    } catch (e) {
+        console.error("MST Sync Error: " + e.stack);
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+// Helper for array mapping
+function mapObjToArray(obj, headers) {
+    return headers.map(h => {
+        const key = String(h).toLowerCase().replace(/[\s_]/g, '');
+        return obj[key] !== undefined ? obj[key] : '';
+    });
+}
+
+function getLocalMstData() {
     const ss = getMasterDataHub();
     const tz = ss.getSpreadsheetTimeZone(); 
-    
-    let baseSheet = null;
-    try { baseSheet = getSheet('Course_Schedule'); } catch(e) { baseSheet = ss.getSheetByName('Course_Schedule'); }
-    if (!baseSheet) throw new Error("Course_Schedule tab not found.");
+    let sheet = ss.getSheetByName('Course_Schedule');
+    if (!sheet) return [];
 
-    const baseData = baseSheet.getDataRange().getValues();
-    const baseHeaders = baseData[0];
-    const baseObjs =[];
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return [];
+
+    const headers = data[0];
+    const objs = [];
     
-    if (baseData.length > 1) {
-        for(let i = 1; i < baseData.length; i++) {
-            const obj = {};
-            baseHeaders.forEach((h, idx) => {
-                const key = String(h).toLowerCase().replace(/[\s_]/g, '');
-                let val = baseData[i][idx];
-                
-                if (val instanceof Date) {
-                    if (key === 'starttime' || key === 'endtime') {
-                        val = Utilities.formatDate(val, tz, "HH:mm");
-                    } else if (key === 'startdate' || key === 'enddate') {
-                        val = Utilities.formatDate(val, tz, "MM/dd/yyyy");
-                    }
+    for(let i = 1; i < data.length; i++) {
+        const obj = {};
+        headers.forEach((h, idx) => {
+            const key = String(h).toLowerCase().replace(/[\s_]/g, '');
+            let val = data[i][idx];
+            
+            if (val instanceof Date) {
+                if (key === 'starttime' || key === 'endtime') {
+                    val = Utilities.formatDate(val, tz, "HH:mm");
+                } else if (key === 'startdate' || key === 'enddate') {
+                    val = Utilities.formatDate(val, tz, "MM/dd/yyyy");
                 }
-                
-                if (key) obj[key] = val;
-            });
-            baseObjs.push(obj);
-        }
+            }
+            if (key) obj[key] = val;
+        });
+        objs.push(obj);
     }
-
-    let editsSheet = null;
-    try { editsSheet = getSheet('Course_Schedule_Edits'); } catch(e) { editsSheet = ss.getSheetByName('Course_Schedule_Edits'); }
-    
-    if (!editsSheet) {
-        editsSheet = ss.insertSheet('Course_Schedule_Edits');
-        editsSheet.appendRow(['Action_Type', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note', 'eventID', 'Zoom Link']);
-    }
-
-    const editObjs =[];
-    const editsData = editsSheet.getDataRange().getValues();
-    
-    if (editsData.length > 1) {
-        const eHeaders = editsData[0];
-        for(let i = 1; i < editsData.length; i++) {
-            const obj = {};
-            eHeaders.forEach((h, idx) => {
-                const key = String(h).toLowerCase().replace(/[\s_]/g, '');
-                let val = editsData[i][idx];
-                
-                if (val instanceof Date) {
-                    if (key === 'starttime' || key === 'endtime') {
-                        val = Utilities.formatDate(val, tz, "HH:mm");
-                    } else if (key === 'startdate' || key === 'enddate') {
-                        val = Utilities.formatDate(val, tz, "MM/dd/yyyy");
-                    }
-                }
-                
-                if (key) obj[key] = val;
-            });
-            editObjs.push(obj);
-        }
-    }
-
-    const mergedMap = new Map();
-    
-    baseObjs.forEach(obj => {
-        if (obj.eventid) mergedMap.set(String(obj.eventid).trim(), obj);
-    });
-
-    editObjs.forEach(obj => {
-        const id = obj.eventid ? String(obj.eventid).trim() : null;
-        if (!id) return;
-        const action = String(obj.actiontype).toUpperCase();
-        
-        if (action === 'DELETE') {
-            mergedMap.delete(id);
-        } else if (action === 'ADD' || action === 'EDIT') {
-            const existing = mergedMap.get(id) || {};
-            mergedMap.set(id, Object.assign({}, existing, obj));
-        }
-    });
-
-    return Array.from(mergedMap.values());
+    return objs;
 }
 
 function combineDateAndTime(dateVal, timeVal) {
@@ -116,13 +222,17 @@ function combineDateAndTime(dateVal, timeVal) {
 }
 
 function api_getMstViewData() {
+    // 1. Run the sync engine first
+    syncExternalMstData();
+
+    // 2. Fetch local data for UI
     const lock = LockService.getScriptLock();
     try {
         lock.waitLock(10000);
-        const mergedData = getMergedMstData();
+        const localData = getLocalMstData();
 
-        let staffData =[];
-        let assignData =[];
+        let staffData = [];
+        let assignData = [];
         try { staffData = getSheet('Staff_List').getDataRange().getValues(); } catch(e) {}
         try { assignData = getSheet('Staff_Assignments').getDataRange().getValues(); } catch(e) {}
 
@@ -140,7 +250,7 @@ function api_getMstViewData() {
                 role: String(row[roleIdx] || ''), 
                 isActive: (String(row[actIdx]).toUpperCase() === 'TRUE' || row[actIdx] === true)
             };
-        }).filter(s => s && s.id && s.isActive) :[];
+        }).filter(s => s && s.id && s.isActive) : [];
 
         const staffMap = new Map(allStaff.map(s => [String(s.id).toLowerCase(), s]));
 
@@ -154,7 +264,7 @@ function api_getMstViewData() {
             }
         }
 
-        const courseAssignmentsView = mergedData.map(courseObj => {
+        const courseAssignmentsView = localData.map(courseObj => {
             const id = String(courseObj.eventid);
             
             let staffId = null;
@@ -196,9 +306,7 @@ function api_getMstViewData() {
 
         const mstStaffList = allStaff.filter(s => s.role && s.role.toLowerCase().includes('mst')).map(s => ({ id: s.id, name: s.name }));
 
-        const payload = { success: true, data: { courseAssignments: courseAssignmentsView, mstStaffList: mstStaffList } };
-
-        return JSON.parse(JSON.stringify(payload));
+        return JSON.parse(JSON.stringify({ success: true, data: { courseAssignments: courseAssignmentsView, mstStaffList: mstStaffList } }));
 
     } catch(e) {
         console.error(e);
@@ -208,66 +316,21 @@ function api_getMstViewData() {
     }
 }
 
-function saveCourseEditState(actionType, courseObj) {
-    const ss = getMasterDataHub();
-    let sheet = ss.getSheetByName('Course_Schedule_Edits');
-    
-    if (!sheet) {
-        sheet = ss.insertSheet('Course_Schedule_Edits');
-    }
-    
-    let data = sheet.getDataRange().getValues();
-    let headers = data[0];
-    let headersChanged = false;
-    
-    if (data.length === 1 && headers.join('').trim() === '') {
-        headers =['Action_Type', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note', 'eventID', 'Zoom Link'];
-        headersChanged = true;
-    }
-    
-    const map = {};
-    headers.forEach((h, i) => map[String(h).toLowerCase().replace(/[\s_]/g, '')] = i);
-
-    const newRow = new Array(headers.length).fill('');
-    
-    if (map['actiontype'] !== undefined) {
-        newRow[map['actiontype']] = actionType;
-    } else {
-        map['actiontype'] = headers.length;
-        headers.push('Action_Type');
-        newRow.push(actionType);
-        headersChanged = true;
-    }
-
-    for (const key in courseObj) {
-        const cleanKey = key.toLowerCase().replace(/[\s_]/g, '');
-        let val = courseObj[key];
-        
-        if (typeof val === 'string' && val.includes('T12:00:00Z')) {
-            val = new Date(val);
-        }
-
-        if (map[cleanKey] !== undefined) {
-            newRow[map[cleanKey]] = val;
-        } else if (cleanKey !== 'actiontype') { 
-            map[cleanKey] = headers.length;
-            headers.push(key);
-            newRow.push(val);
-            headersChanged = true;
-        }
-    }
-    
-    sheet.appendRow(newRow);
-    if (headersChanged) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-}
+// --- MANUAL EDITS (Directly to Database) ---
 
 function api_mst_addCourse(courseDetails) {
     const lock = LockService.getScriptLock();
     try {
         lock.waitLock(10000);
         requireRole(['MST', 'Lead', 'Admin']);
+        const ss = getMasterDataHub();
+        const sheet = ss.getSheetByName('Course_Schedule');
+        
+        courseDetails.source = 'Manual';
         courseDetails.eventid = Utilities.getUuid();
-        saveCourseEditState('ADD', courseDetails);
+        
+        const standardHeaders = ['Source', 'eventID', 'Zoom Link', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note'];
+        sheet.appendRow(mapObjToArray(courseDetails, standardHeaders));
         return { success: true };
     } catch(e) { return { success: false, message: e.message || String(e) }; }
     finally { lock.releaseLock(); }
@@ -278,9 +341,23 @@ function api_mst_updateCourse(courseDetails) {
     try {
         lock.waitLock(10000);
         requireRole(['MST', 'Lead', 'Admin']);
-        const merged = getMergedMstData().find(c => String(c.eventid) === String(courseDetails.eventid)) || {};
-        saveCourseEditState('EDIT', Object.assign({}, merged, courseDetails));
-        return { success: true };
+        const ss = getMasterDataHub();
+        const sheet = ss.getSheetByName('Course_Schedule');
+        const data = sheet.getDataRange().getValues();
+        const headers = getColumnMap(data[0]);
+        
+        for (let i = 1; i < data.length; i++) {
+            if (String(data[i][headers.eventid]) === String(courseDetails.eventid)) {
+                // Update cells directly
+                for (const key in courseDetails) {
+                    if (headers[key] !== undefined && key !== 'eventid' && key !== 'source') {
+                        sheet.getRange(i + 1, headers[key] + 1).setValue(courseDetails[key]);
+                    }
+                }
+                return { success: true };
+            }
+        }
+        return { success: false, message: "Class not found in database." };
     } catch(e) { return { success: false, message: e.message || String(e) }; }
     finally { lock.releaseLock(); }
 }
@@ -290,8 +367,18 @@ function api_mst_deleteCourse(courseId) {
     try {
         lock.waitLock(10000);
         requireRole(['MST', 'Lead', 'Admin']);
-        saveCourseEditState('DELETE', { eventid: courseId });
-        return { success: true };
+        const ss = getMasterDataHub();
+        const sheet = ss.getSheetByName('Course_Schedule');
+        const data = sheet.getDataRange().getValues();
+        const headers = getColumnMap(data[0]);
+        
+        for (let i = 1; i < data.length; i++) {
+            if (String(data[i][headers.eventid]) === String(courseId)) {
+                sheet.deleteRow(i + 1);
+                return { success: true };
+            }
+        }
+        return { success: false, message: "Class not found." };
     } catch(e) { return { success: false, message: e.message || String(e) }; }
     finally { lock.releaseLock(); }
 }
@@ -301,11 +388,18 @@ function api_mst_updateCourseZoom(courseId, zoomLink) {
     try {
         lock.waitLock(10000);
         requireRole(['MST', 'Lead', 'Admin']);
-        const merged = getMergedMstData().find(c => String(c.eventid) === String(courseId)) || {};
-        merged.zoomlink = sanitizeInput(zoomLink);
-        merged.eventid = courseId;
-        saveCourseEditState('EDIT', merged);
-        return { success: true };
+        const ss = getMasterDataHub();
+        const sheet = ss.getSheetByName('Course_Schedule');
+        const data = sheet.getDataRange().getValues();
+        const headers = getColumnMap(data[0]);
+        
+        for (let i = 1; i < data.length; i++) {
+            if (String(data[i][headers.eventid]) === String(courseId)) {
+                sheet.getRange(i + 1, headers.zoomlink + 1).setValue(sanitizeInput(zoomLink));
+                return { success: true };
+            }
+        }
+        return { success: false, message: "Class not found." };
     } catch(e) { return { success: false, message: e.message || String(e) }; }
     finally { lock.releaseLock(); }
 }
@@ -350,14 +444,41 @@ function api_mst_updateCourseAssignment(courseId, staffId) {
     }
 }
 
+// --- SETTINGS & SYNC CONFIG ---
+
+function api_saveMstExternalSettings(url, tabName) {
+    try {
+        requireRole(['MST', 'Lead', 'Admin']);
+        saveSetting('mstExternalUrl', url);
+        saveSetting('mstExternalTab', tabName);
+        return { success: true, message: "Sync settings saved! The schedule will now sync automatically." };
+    } catch(e) {
+        return { success: false, message: e.message || String(e) };
+    }
+}
+
+function api_getExternalTabs(url) {
+    try {
+        requireRole('MST', 'Lead', 'Admin');
+        const match = url.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        const id = match ? match[1] : url;
+        const ss = SpreadsheetApp.openById(id);
+        return { success: true, data: ss.getSheets().map(s => s.getName()) };
+    } catch(e) {
+        return { success: false, message: "Could not read external sheet. Ensure you have permission to view it. Error: " + (e.message || String(e)) };
+    }
+}
+
+// --- CALENDAR SYNC (Untouched logic, mapped to new local data) ---
+
 function api_previewMstCalendarSync(targetCalendarId) {
     const lock = LockService.getScriptLock();
     try {
         lock.waitLock(10000);
         if (!targetCalendarId) return { success: false, message: "No Calendar Selected." };
 
-        const mergedData = getMergedMstData();
-        if (mergedData.length === 0) return { success: false, message: "No course data found." };
+        const localData = getLocalMstData();
+        if (localData.length === 0) return { success: false, message: "No course data found." };
 
         const assignData = getSheet('Staff_Assignments').getDataRange().getValues();
         const assignmentMap = new Map();
@@ -376,7 +497,7 @@ function api_previewMstCalendarSync(targetCalendarId) {
         let maxDate = new Date(-8640000000000000);
         let hasValidDates = false;
 
-        mergedData.forEach(row => {
+        localData.forEach(row => {
             const startDt = combineDateAndTime(row.startdate, row.starttime);
             const endDt = new Date(row.enddate);
             if (startDt && !isNaN(startDt.getTime())) {
@@ -423,9 +544,9 @@ function api_previewMstCalendarSync(targetCalendarId) {
             });
         }
 
-        const proposals =[];
+        const proposals = [];
 
-        mergedData.forEach(row => {
+        localData.forEach(row => {
             const rowId = String(row.eventid);
             if (!rowId) return;
 
@@ -454,9 +575,9 @@ function api_previewMstCalendarSync(targetCalendarId) {
                 const targetEmailLower = targetEmail ? targetEmail.toLowerCase() : null;
                 
                 let status = "NEW";
-                let diffs =[];
+                let diffs = [];
                 let existingId = null;
-                let currentGuests =[];
+                let currentGuests = [];
                 let currentData = {};
 
                 if (eventIdMap.has(rowId)) {
@@ -517,7 +638,7 @@ function api_previewMstCalendarSync(targetCalendarId) {
                         title: title, startTime: startDt.getTime(), endTime: endDt.getTime(),
                         location: locationVal, description: description, zoomLink: zoomLink, 
                         dayStr: dayStr, seriesEndDate: !isNaN(seriesEndDate.getTime()) ? seriesEndDate.getTime() : null,
-                        guests: targetEmailLower ? [targetEmail] :[]
+                        guests: targetEmailLower ? [targetEmail] : []
                     }
                 });
             }
@@ -610,7 +731,7 @@ function api_commitMstCalendarEvents(targetCalendarId, eventsToSync) {
                             target.setDescription(sanitizeInput(p.description));
 
                             if (!skipGuests) {
-                                const desiredGuests = (p.guests ||[]);
+                                const desiredGuests = (p.guests || []);
                                 const desiredGuestsLower = desiredGuests.map(e => e.toLowerCase());
                                 const currentGuestList = target.getGuestList();
                                 const currentEmailsLower = currentGuestList.map(g => g.getEmail().toLowerCase());
@@ -649,33 +770,4 @@ function mstHelper_parseDayOfWeek(dayStr) {
     if (s === 'sa' || s.includes('sat')) return CalendarApp.Weekday.SATURDAY;
     if (s === 'su' || s.includes('sun')) return CalendarApp.Weekday.SUNDAY;
     return null;
-}
-
-function api_getExternalTabs(url) {
-    try {
-        requireRole('MST', 'Lead', 'Admin');
-        const match = url.match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-        const id = match ? match[1] : url;
-        const ss = SpreadsheetApp.openById(id);
-        return { success: true, data: ss.getSheets().map(s => s.getName()) };
-    } catch(e) {
-        return { success: false, message: "Could not read external sheet. Ensure you have permission to view it. Error: " + (e.message || String(e)) };
-    }
-}
-
-function api_applyImportRange(url, tabName) {
-    try {
-        requireRole('MST', 'Lead', 'Admin');
-        const ss = getMasterDataHub();
-        let sheet = ss.getSheetByName('Course_Schedule');
-        if (!sheet) sheet = ss.insertSheet('Course_Schedule');
-        
-        sheet.clear();
-        const formula = '=IMPORTRANGE("' + url + '", "' + tabName + '!A:ZZ")';
-        sheet.getRange("A1").setFormula(formula);
-        
-        return { success: true, message: "Formula applied successfully. Please remember to click 'Allow access' on the cell if this is a new sheet." };
-    } catch(e) {
-        return { success: false, message: e.message || String(e) };
-    }
 }

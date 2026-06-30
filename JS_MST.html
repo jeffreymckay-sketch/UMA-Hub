@@ -111,7 +111,7 @@
   .tabulator {
       border: 1px solid #f0f0f0;
       background-color: transparent;
-      font-size: 15px; /* Clearer, larger font */
+      font-size: 15px; 
       font-family: 'Roboto', Arial, sans-serif;
       color: #333;
   }
@@ -122,16 +122,15 @@
   }
   .tabulator .tabulator-header .tabulator-col {
       background-color: var(--color-primary-navy, #00274c) !important;
-      border-right: 1px solid rgba(255, 255, 255, 0.2); /* Guide line for resizing */
+      border-right: 1px solid rgba(255, 255, 255, 0.2); 
   }
   
-  /* ENHANCED RESIZE HANDLES */
   .tabulator .tabulator-header .tabulator-col .tabulator-col-resize-handle {
-      width: 14px !important; /* Larger invisible grab area */
-      right: -7px !important; /* Center over the border */
+      width: 14px !important; 
+      right: -7px !important; 
   }
   .tabulator .tabulator-header .tabulator-col .tabulator-col-resize-handle:hover {
-      background-color: rgba(255, 255, 255, 0.15); /* Visual feedback when hovering over handle */
+      background-color: rgba(255, 255, 255, 0.15); 
       cursor: col-resize;
   }
   
@@ -139,15 +138,15 @@
       padding: 12px 10px;
   }
   .tabulator-row {
-      border-bottom: 1px solid #f4f4f4; /* Very subtle row border */
+      border-bottom: 1px solid #f4f4f4; 
   }
   .tabulator-row .tabulator-cell {
-      padding: 14px 10px; /* Taller cells for breathability */
-      border-right: 1px solid #f4f4f4; /* Very subtle column border */
+      padding: 14px 10px; 
+      border-right: 1px solid #f4f4f4; 
       vertical-align: middle;
   }
   .tabulator-row.tabulator-row-even {
-      background-color: #fafafa; /* Extremely subtle alternating row color */
+      background-color: #fafafa; 
   }
   .tabulator-row:hover {
       background-color: #e8f0fe !important;
@@ -162,8 +161,8 @@
 <script>
 // --- Custom Modals & Globals ---
 let pendingMstConfirmAction = null;
-let mstSyncData =[];
-let mstTabulatorTable = null; // Global reference for the Tabulator instance
+let mstSyncData = [];
+let mstTabulatorTable = null; 
 
 function showCustomConfirm(message, callback) {
     let overlay = document.getElementById('mst-custom-confirm-overlay');
@@ -221,25 +220,24 @@ function loadMstPage() {
       });
   }
 
-  if (g.mstData && !g.mstData.error) { loadMstClassroomTab(); } 
-  else { refreshMstData(); }
+  // Always refresh to ensure the auto-sync runs when the tab is clicked
+  refreshMstData();
 }
 
 function refreshMstData() {
     const classroomTab = document.getElementById('mst-classroom');
     
-    // Destroy table properly before wiping the DOM to prevent memory leaks/errors
     if (mstTabulatorTable) {
         try { mstTabulatorTable.destroy(); } catch(e) { console.warn(e); }
         mstTabulatorTable = null;
     }
 
-    classroomTab.innerHTML = '<div style="display:flex; justify-content:center; padding:40px;"><div class="loader-ring"></div></div>';
+    classroomTab.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; padding:40px;"><div class="loader-ring"></div><div style="margin-top:15px; color:#666;">Syncing External Data...</div></div>';
     
     google.script.run
         .withSuccessHandler(res => {
             if (!res) {
-                classroomTab.innerHTML = `<div class="error-message">Server returned no data. Please check the Apps Script execution logs for errors.</div>`;
+                classroomTab.innerHTML = `<div class="error-message">Server returned no data. Please check the Apps Script execution logs.</div>`;
                 return;
             }
             if (res.success) { g.mstData = res; loadMstClassroomTab(); } 
@@ -264,12 +262,11 @@ function handleMstTabClick(e, pageContainer) {
   }
 }
 
-// --- Classroom Management Tab (Powered by Tabulator) ---
+// --- Classroom Management Tab ---
 function loadMstClassroomTab() {
   const container = document.getElementById('mst-classroom');
   if (!g.mstData || !g.mstData.data) return; 
   
-  // If table already exists, just force a redraw to fix layout after being hidden
   if (mstTabulatorTable && document.getElementById('mst-tabulator-table')) {
       mstTabulatorTable.redraw(true);
   } else {
@@ -278,35 +275,14 @@ function loadMstClassroomTab() {
 }
 
 function renderScheduleTable(container, schedule, staffList) {
-  // 1. Destroy existing instance BEFORE wiping DOM
   if (mstTabulatorTable) {
       try { mstTabulatorTable.destroy(); } catch(e){}
       mstTabulatorTable = null;
   }
 
-  // 2. Build the Header UI
-  container.innerHTML = `
-    <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
-        <div>
-            <h3 style="margin:0;">Course Schedule</h3>
-            <p style="margin:5px 0 0 0; color:#666; font-size:0.9em;">Click and drag borders between headers to resize columns. Use boxes below headers to filter.</p>
-        </div>
-        <div style="display:flex; gap:10px;">
-            <button class="button-secondary" onclick="if(mstTabulatorTable) mstTabulatorTable.clearFilter(true);">Clear Filters</button>
-            <button class="button-success" onclick="openAddCourseModal()">+ Add Manual Class</button>
-        </div>
-    </div>
-    <div id="mst-tabulator-table"></div>
-  `;
-
-  // 3. Prepare staff filter options for Tabulator
   const staffFilterOptions = { "": "-- All Staff --" };
   staffList.forEach(s => staffFilterOptions[s.id] = s.name);
 
-  // Get unique courses for the groupBy dropdown
-  const uniqueCourses = [...new Set(schedule.map(item => item.itemName))].sort();
-
-  // Update the UI to include the Group By control
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
         <div>
@@ -327,24 +303,20 @@ function renderScheduleTable(container, schedule, staffList) {
     <div id="mst-tabulator-table"></div>
   `;
 
-  // 4. Initialize Tabulator
   mstTabulatorTable = new Tabulator("#mst-tabulator-table", {
       data: schedule,
       layout: "fitColumns",
       resizableColumnFit: false,
-      columnDefaults: {
-          resizable: true,
-          minWidth: 60
-      },
+      columnDefaults: { resizable: true, minWidth: 60 },
       responsiveLayout: "collapse",
       pagination: "local",
       paginationSize: 25,
-      paginationSizeSelector:[25, 50, 100],
+      paginationSizeSelector: [25, 50, 100],
       movableColumns: true,
       groupHeader: function(value, count, data, group){
           return value + "<span style='color:#d00; margin-left:10px;'>(" + count + " item" + (count > 1 ? "s" : "") + ")</span>";
       },
-      columns:[
+      columns: [
           { title: "Course", field: "itemName", headerFilter: "input", minWidth: 150, widthGrow: 2, headerSort: true },
           { title: "Faculty", field: "courseFaculty", headerFilter: "input", minWidth: 120, widthGrow: 2, headerSort: true },
           { 
@@ -439,14 +411,10 @@ function renderScheduleTable(container, schedule, staffList) {
       ]
   });
 
-  // Attach event listener to the Group By dropdown
   document.getElementById('mst-group-by-select').addEventListener('change', function(e) {
       const field = e.target.value;
-      if (field) {
-          mstTabulatorTable.setGroupBy(field);
-      } else {
-          mstTabulatorTable.setGroupBy(false);
-      }
+      if (field) mstTabulatorTable.setGroupBy(field);
+      else mstTabulatorTable.setGroupBy(false);
   });
 }
 
@@ -518,7 +486,6 @@ function saveCourseModal(btn) {
     const sDateRaw = document.getElementById('modal-course-start-date').value;
     const eDateRaw = document.getElementById('modal-course-end-date').value;
     
-    // Convert dates to ISO strings before sending to prevent GAS silent crashes
     const payload = {
         session: document.getElementById('modal-course-session').value,
         startdate: sDateRaw ? sDateRaw + "T12:00:00Z" : '', 
@@ -566,7 +533,7 @@ function saveCourseModal(btn) {
 }
 
 function deleteCourse(courseId) {
-    showCustomConfirm("Are you sure you want to delete this class? This will write an override record erasing it from the app schedule.", () => {
+    showCustomConfirm("Are you sure you want to delete this class? This will completely remove it from the database.", () => {
         google.script.run
             .withSuccessHandler(res => {
                 if (res && res.success) { refreshMstData(); showNotification("Class deleted", "success"); }
@@ -585,7 +552,6 @@ function updateZoomLink(courseId, inputEl) {
             inputEl.disabled = false; inputEl.style.opacity = '1';
             if (res && res.success) { 
                 inputEl.classList.add('saved'); setTimeout(() => inputEl.classList.remove('saved'), 2000); 
-                // Silently update global state
                 google.script.run.withSuccessHandler(r => { if(r && r.success) g.mstData = r; }).api_getMstViewData();
             } else { 
                 showNotification("Failed to save Zoom link: " + (res ? res.message : "Unknown"), 'error'); 
@@ -834,7 +800,7 @@ function runMstCommit(e) {
     if(btn.classList.contains('disabled')) return false;
 
     const calId = document.getElementById('mst-calendar-select').value;
-    const selectedEvents =[];
+    const selectedEvents = [];
     
     document.querySelectorAll('.sync-card-container').forEach(card => {
         const checkbox = card.querySelector('.sync-check');
@@ -862,10 +828,10 @@ function runMstCommit(e) {
                 const newStartStr = card.querySelector('.field-start').value;
                 const newEndStr = card.querySelector('.field-end').value;
                 const startDt = new Date(original.payload.startTime);
-                const[sh, sm] = newStartStr.split(':');
+                const [sh, sm] = newStartStr.split(':');
                 startDt.setHours(sh, sm);
                 const endDt = new Date(original.payload.endTime);
-                const[eh, em] = newEndStr.split(':');
+                const [eh, em] = newEndStr.split(':');
                 endDt.setHours(eh, em);
                 
                 finalPayload.startTime = startDt.getTime();
@@ -908,28 +874,30 @@ function runMstCommit(e) {
 // --- Settings Tab ---
 function loadMstSettingsTab() {
     const container = document.getElementById('mst-settings');
+    const settings = g.allSettings || {};
+    const currUrl = settings.mstExternalUrl || '';
     
     container.innerHTML = `
       <div class="widget" style="max-width: 800px;">
-        <h3>External IMPORTRANGE Setup</h3>
-        <p style="color:#666;">Connect the MST tool to a live external spreadsheet.</p>
+        <h3>Automated Database Sync Setup</h3>
+        <p style="color:#666;">Connect the MST tool to a live external spreadsheet. The app will automatically sync updates when the MST tab is opened.</p>
         
         <div style="background:#e8f0fe; padding:15px; border-left:4px solid var(--color-primary-navy); border-radius:6px; margin-bottom:20px;">
             <strong>Step 1: Fetch External Spreadsheet</strong>
             <div style="display:flex; gap:10px; margin-top:10px;">
-                <input type="text" id="import-url" class="form-input" style="flex-grow:1;" placeholder="Paste Google Sheet URL here...">
+                <input type="text" id="import-url" class="form-input" style="flex-grow:1;" placeholder="Paste Google Sheet URL here..." value="${currUrl}">
                 <button class="button-secondary" onclick="fetchExternalTabs(this)">Fetch Tabs</button>
             </div>
         </div>
 
         <div style="background:#fdfbf7; padding:15px; border-left:4px solid var(--color-primary-orange); border-radius:6px;">
-            <strong>Step 2: Apply Connection</strong>
+            <strong>Step 2: Save Connection</strong>
             <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
                 <select id="import-tab-select" class="form-input" style="flex-grow:1;"><option value="">-- Fetch URL first --</option></select>
-                <button class="button-success" onclick="applyImportRange(this)">Update Sync</button>
+                <button class="button-success" onclick="saveExternalSettings(this)">Save Sync Settings</button>
             </div>
-            <p style="font-size:0.85em; color:#d9534f; margin-top:10px; font-weight:bold;">
-                * Note: If this is a brand new external spreadsheet, you MUST open the Master Sheet once and click 'Allow access' on cell A1 in the Course_Schedule tab before data will appear.
+            <p style="font-size:0.85em; color:#666; margin-top:10px;">
+                The app will now automatically sync with this external sheet every time the MST tool is loaded, maintaining your staff assignments and Zoom links safely.
             </p>
         </div>
       </div>
@@ -946,6 +914,13 @@ function fetchExternalTabs(btn) {
         if (res && res.success) {
             const select = document.getElementById('import-tab-select');
             select.innerHTML = res.data.map(t => `<option value="${t}">${t}</option>`).join('');
+            
+            // Try to pre-select the currently saved tab if it exists
+            const settings = g.allSettings || {};
+            if (settings.mstExternalTab && res.data.includes(settings.mstExternalTab)) {
+                select.value = settings.mstExternalTab;
+            }
+            
             showNotification('Tabs found!', 'success');
         } else { showNotification(res ? res.message : "Unknown Error", 'error'); }
     }).withFailureHandler(err => {
@@ -954,21 +929,31 @@ function fetchExternalTabs(btn) {
     }).api_getExternalTabs(url);
 }
 
-function applyImportRange(btn) {
+function saveExternalSettings(btn) {
     const url = document.getElementById('import-url').value.trim();
     const tab = document.getElementById('import-tab-select').value;
     if (!url || !tab) return showNotification('Fetch and select a tab first.', 'error');
     
-    showCustomConfirm("This will overwrite the Course_Schedule tab with a new IMPORTRANGE formula. Proceed?", () => {
-        btn.disabled = true; btn.textContent = 'Applying...';
+    showCustomConfirm("This will connect the app to the external sheet and run an initial sync. Proceed?", () => {
+        btn.disabled = true; btn.textContent = 'Saving...';
         google.script.run.withSuccessHandler(res => {
-            btn.disabled = false; btn.textContent = 'Update Sync';
-            if (res && res.success) { showNotification(res.message, 'success', 8000); refreshMstData(); }
+            btn.disabled = false; btn.textContent = 'Save Sync Settings';
+            if (res && res.success) { 
+                showNotification(res.message, 'success', 8000); 
+                
+                // Update local config cache silently
+                if(!g.allSettings) g.allSettings = {};
+                g.allSettings.mstExternalUrl = url;
+                g.allSettings.mstExternalTab = tab;
+                
+                // Force a hard refresh to pull the new data
+                refreshMstData(); 
+            }
             else { showNotification(res ? res.message : "Unknown Error", 'error'); }
         }).withFailureHandler(err => {
-            btn.disabled = false; btn.textContent = 'Update Sync';
+            btn.disabled = false; btn.textContent = 'Save Sync Settings';
             showNotification("Server Error: " + (err.message || String(err)), "error");
-        }).api_applyImportRange(url, tab);
+        }).api_saveMstExternalSettings(url, tab);
     });
 }
 </script>
