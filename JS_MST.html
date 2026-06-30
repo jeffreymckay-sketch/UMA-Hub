@@ -156,6 +156,28 @@
       border-top: 1px solid #f0f0f0;
       padding: 10px;
   }
+  /* --- Tabulator Pagination Contrast Fix --- */
+  .tabulator .tabulator-footer .tabulator-page {
+      color: var(--color-primary-navy, #003057) !important;
+      border: 1px solid var(--color-primary-navy, #003057) !important;
+      background-color: #fff !important;
+      font-weight: 600;
+      border-radius: 4px;
+      margin: 0 2px;
+  }
+  .tabulator .tabulator-footer .tabulator-page:not(.disabled):hover {
+      background-color: var(--color-primary-navy, #003057) !important;
+      color: #fff !important;
+  }
+  .tabulator .tabulator-footer .tabulator-page.active {
+      background-color: var(--color-primary-navy, #003057) !important;
+      color: #fff !important;
+  }
+  .tabulator .tabulator-footer .tabulator-page.disabled {
+      color: #aaa !important;
+      border-color: #ddd !important;
+      background-color: #f9f9f9 !important;
+  }
 </style>
 
 <script>
@@ -296,6 +318,7 @@ function renderScheduleTable(container, schedule, staffList) {
                 <option value="courseDay">Day of Week</option>
                 <option value="itemName">Course</option>
             </select>
+            <button class="button-primary" onclick="refreshMstData()">↻ Refresh</button>
             <button class="button-secondary" onclick="if(mstTabulatorTable) mstTabulatorTable.clearFilter(true);">Clear Filters</button>
             <button class="button-success" onclick="openAddCourseModal()">+ Add Manual Class</button>
         </div>
