@@ -22,7 +22,7 @@ function syncExternalMstData() {
         let localSheet = ss.getSheetByName('Course_Schedule');
         
         // 1. Standardize Headers
-        const standardHeaders = ['Source', 'eventID', 'Zoom Link', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note'];
+        const standardHeaders = ['Source', 'eventID', 'Zoom Link', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note', 'Hidden'];
         
         // Setup local sheet if missing or if it has the old IMPORTRANGE formula
         if (!localSheet) {
@@ -42,13 +42,25 @@ function syncExternalMstData() {
         const localMap = new Map();
         const manualClasses = [];
 
-        // Helper: Creates a unique composite key for a class
+        // Helper: Creates a bulletproof composite key for a class
         function createFingerprint(course, faculty, day, starttime) {
-            let sTimeStr = "";
+            let sTimeStr = String(starttime || "").trim().toLowerCase();
+            
+            // If it's a Date object, format it reliably
             if (starttime instanceof Date) {
-                sTimeStr = starttime.toTimeString().substring(0,5); // HH:mm
+                const tz = ss.getSpreadsheetTimeZone();
+                sTimeStr = Utilities.formatDate(starttime, tz, "HH:mm");
             } else {
-                sTimeStr = String(starttime);
+                // Parse string times like "2:00 PM" -> "14:00"
+                const match = sTimeStr.match(/(\d+):(\d+)(?::\d+)?\s*(am|pm)?/);
+                if (match) {
+                    let h = parseInt(match[1], 10);
+                    const m = parseInt(match[2], 10);
+                    const ampm = match[3];
+                    if (ampm === 'pm' && h < 12) h += 12;
+                    if (ampm === 'am' && h === 12) h = 0;
+                    sTimeStr = (h < 10 ? '0'+h : h) + ':' + (m < 10 ? '0'+m : m);
+                }
             }
             return String(course + faculty + day + sTimeStr).toLowerCase().replace(/[^a-z0-9]/g, '');
         }
@@ -63,6 +75,10 @@ function syncExternalMstData() {
 
                 const obj = {};
                 for (const key in localHeaders) obj[key] = row[localHeaders[key]];
+                
+                // Explicitly capture hidden status safely
+                const hiddenVal = row[localHeaders['hidden']];
+                obj.hidden = (hiddenVal === true || String(hiddenVal).toLowerCase() === 'true');
 
                 if (source === 'Manual') {
                     manualClasses.push(obj);
@@ -106,7 +122,7 @@ function syncExternalMstData() {
             
             let localObj = localMap.get(fp);
             if (localObj) {
-                // UPDATE: Preserve eventID and Zoom, update dynamic fields
+                // UPDATE: Preserve eventID, Zoom, and Hidden flags, update dynamic fields
                 localObj.session = extRow[extHeaders['session']];
                 localObj.startdate = extRow[extHeaders['startdate']];
                 localObj.enddate = extRow[extHeaders['enddate']];
@@ -138,7 +154,8 @@ function syncExternalMstData() {
                     bxlocation: extRow[extHeaders['bxlocation']],
                     mstassignedbyemail: extRow[extHeaders['mstassignedbyemail']],
                     coverage: covKey ? extRow[extHeaders[covKey]] : '',
-                    note: extRow[extHeaders['note']]
+                    note: extRow[extHeaders['note']],
+                    hidden: ''
                 };
                 newLocalData.push(mapObjToArray(newObj, standardHeaders));
             }
@@ -162,6 +179,7 @@ function syncExternalMstData() {
 function mapObjToArray(obj, headers) {
     return headers.map(h => {
         const key = String(h).toLowerCase().replace(/[\s_]/g, '');
+        if (key === 'hidden') return obj[key] ? true : ''; // Ensure clean boolean
         return obj[key] !== undefined ? obj[key] : '';
     });
 }
@@ -265,6 +283,9 @@ function api_getMstViewData() {
         }
 
         const courseAssignmentsView = localData.map(courseObj => {
+            // Filter out hidden classes
+            if (String(courseObj.hidden).toLowerCase() === 'true' || courseObj.hidden === true) return null;
+
             const id = String(courseObj.eventid);
             
             let staffId = null;
@@ -302,7 +323,7 @@ function api_getMstViewData() {
                 staffId: staff ? staff.id : null,
                 raw: courseObj
             };
-        });
+        }).filter(Boolean); // Removes the nulls (hidden rows)
 
         const mstStaffList = allStaff.filter(s => s.role && s.role.toLowerCase().includes('mst')).map(s => ({ id: s.id, name: s.name }));
 
@@ -329,8 +350,9 @@ function api_mst_addCourse(courseDetails) {
         courseDetails.source = 'Manual';
         courseDetails.eventid = Utilities.getUuid();
         
-        const standardHeaders = ['Source', 'eventID', 'Zoom Link', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note'];
+        const standardHeaders = ['Source', 'eventID', 'Zoom Link', 'Session', 'Start Date', 'End Date', 'Day', 'Course', 'Faculty', 'Start Time', 'End Time', 'BX Location', 'MST Assigned by email', 'Coverage', 'Note', 'Hidden'];
         sheet.appendRow(mapObjToArray(courseDetails, standardHeaders));
+        SpreadsheetApp.flush();
         return { success: true };
     } catch(e) { return { success: false, message: e.message || String(e) }; }
     finally { lock.releaseLock(); }
@@ -348,12 +370,12 @@ function api_mst_updateCourse(courseDetails) {
         
         for (let i = 1; i < data.length; i++) {
             if (String(data[i][headers.eventid]) === String(courseDetails.eventid)) {
-                // Update cells directly
                 for (const key in courseDetails) {
                     if (headers[key] !== undefined && key !== 'eventid' && key !== 'source') {
                         sheet.getRange(i + 1, headers[key] + 1).setValue(courseDetails[key]);
                     }
                 }
+                SpreadsheetApp.flush();
                 return { success: true };
             }
         }
@@ -375,10 +397,58 @@ function api_mst_deleteCourse(courseId) {
         for (let i = 1; i < data.length; i++) {
             if (String(data[i][headers.eventid]) === String(courseId)) {
                 sheet.deleteRow(i + 1);
+                SpreadsheetApp.flush();
                 return { success: true };
             }
         }
         return { success: false, message: "Class not found." };
+    } catch(e) { return { success: false, message: e.message || String(e) }; }
+    finally { lock.releaseLock(); }
+}
+
+function api_mst_hideCourse(courseId) {
+    const lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(10000);
+        requireRole(['MST', 'Lead', 'Admin']);
+        const ss = getMasterDataHub();
+        const sheet = ss.getSheetByName('Course_Schedule');
+        const data = sheet.getDataRange().getValues();
+        const headers = getColumnMap(data[0]);
+        
+        // Safety check: Make sure the Hidden column exists
+        if (headers.hidden === undefined) {
+            sheet.getRange(1, data[0].length + 1).setValue('Hidden');
+            headers.hidden = data[0].length;
+        }
+
+        for (let i = 1; i < data.length; i++) {
+            if (String(data[i][headers.eventid]) === String(courseId)) {
+                sheet.getRange(i + 1, headers.hidden + 1).setValue(true);
+                SpreadsheetApp.flush(); // Force save immediately
+                return { success: true };
+            }
+        }
+        return { success: false, message: "Class not found." };
+    } catch(e) { return { success: false, message: e.message || String(e) }; }
+    finally { lock.releaseLock(); }
+}
+
+function api_mst_unhideAllCourses() {
+    const lock = LockService.getScriptLock();
+    try {
+        lock.waitLock(10000);
+        requireRole(['MST', 'Lead', 'Admin']);
+        const ss = getMasterDataHub();
+        const sheet = ss.getSheetByName('Course_Schedule');
+        const data = sheet.getDataRange().getValues();
+        const headers = getColumnMap(data[0]);
+        
+        if (headers.hidden !== undefined && data.length > 1) {
+            sheet.getRange(2, headers.hidden + 1, data.length - 1, 1).clearContent();
+            SpreadsheetApp.flush(); // Force save immediately
+        }
+        return { success: true };
     } catch(e) { return { success: false, message: e.message || String(e) }; }
     finally { lock.releaseLock(); }
 }
@@ -396,6 +466,7 @@ function api_mst_updateCourseZoom(courseId, zoomLink) {
         for (let i = 1; i < data.length; i++) {
             if (String(data[i][headers.eventid]) === String(courseId)) {
                 sheet.getRange(i + 1, headers.zoomlink + 1).setValue(sanitizeInput(zoomLink));
+                SpreadsheetApp.flush();
                 return { success: true };
             }
         }
@@ -436,6 +507,7 @@ function api_mst_updateCourseAssignment(courseId, staffId) {
             if(typeCol !== undefined) newRow[typeCol] = "Course";
             sheet.appendRow(newRow);
         }
+        SpreadsheetApp.flush();
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message || String(e) };
@@ -469,7 +541,7 @@ function api_getExternalTabs(url) {
     }
 }
 
-// --- CALENDAR SYNC (Untouched logic, mapped to new local data) ---
+// --- CALENDAR SYNC ---
 
 function api_previewMstCalendarSync(targetCalendarId) {
     const lock = LockService.getScriptLock();
@@ -498,6 +570,9 @@ function api_previewMstCalendarSync(targetCalendarId) {
         let hasValidDates = false;
 
         localData.forEach(row => {
+            // Filter out hidden classes from the calendar sync entirely
+            if (String(row.hidden).toLowerCase() === 'true' || row.hidden === true) return;
+
             const startDt = combineDateAndTime(row.startdate, row.starttime);
             const endDt = new Date(row.enddate);
             if (startDt && !isNaN(startDt.getTime())) {
@@ -547,6 +622,9 @@ function api_previewMstCalendarSync(targetCalendarId) {
         const proposals = [];
 
         localData.forEach(row => {
+            // Filter out hidden classes from proposals
+            if (String(row.hidden).toLowerCase() === 'true' || row.hidden === true) return;
+
             const rowId = String(row.eventid);
             if (!rowId) return;
 

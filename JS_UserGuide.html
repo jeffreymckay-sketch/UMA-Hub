@@ -167,23 +167,25 @@
   
           <div id="guide-dashboard" class="tab-content" style="display:none; padding-top:20px;">
               <div class="guide-intro">
-                  <h3 style="margin-top:0; color:var(--color-primary-navy);">The Staff Dashboard</h3>
-                  <p>Welcome to your Dashboard, the first thing you see when you log in and—with any luck—the last thing you’ll need to look at before you go off to do actual work. Think of this as your personal <strong>"Leave Me Alone" coordinator</strong>.</p>
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">My Dashboard</h3>
+                  <p>This tool is designed to help you and the department coordinate your schedules, set your working preferences, and view your upcoming shifts.</p>
+                  <p>When you first log in, you land on the My Schedule screen.<br>
+                  This screen gives you an overview of MST and Tech Hub shifts you have this week.</p>
+                  <p>Click on Availability on the left side menu bar to set your availability.</p>
               </div>
   
               <div class="guide-accordion">
                   <div class="guide-header" onclick="toggleGuide(this)">
-                      <span>1. Unavailable Times (The "Blackout" Zone)</span>
+                      <span>My Unavailable Times (Blackouts)</span>
                       <span class="guide-icon">+</span>
                   </div>
                   <div class="guide-content">
                       <div class="guide-inner-panel">
                           <div class="guide-body-text">
-                              <p>This section is for listing the times when you are strictly unavailable—perhaps because you are in class, at another job, or participating in a competitive napping league.</p>
+                              <p>At the top of this screen, you will see your blocked-out times. These are periods of the week when you strictly cannot work (such as when you have classes, another job, or personal commitments).</p>
                               <ul>
-                                  <li><strong>How to Add a Block:</strong> Select the day, pick your start and end times, and click "Block Time". It’s as easy as pie, but significantly less delicious.</li>
-                                  <li><strong>How it Protects Your Workflow:</strong> Once you save a "Blackout" time, it acts as a magical digital barrier. If a manager tries to schedule you during your blocked hours, the system will wave a red flag and tell them it's a no-go.</li>
-                                  <li><strong>Changing Your Mind:</strong> If your napping league gets canceled and you suddenly want to work, just click "Remove Block" next to the entry.</li>
+                                  <li><strong>The "Fully Available" Box:</strong> If you are brand new, you will see a green box with a checkmark that says Fully Available. This is a friendly message telling you that you haven't blocked out any busy times yet, so the college assumes you are available to work at any time.</li>
+                                  <li><strong>Unavailable Time Cards:</strong> Once you add busy times, they will appear on this screen as white cards with a red line on the left side. Each card will show the day of the week and the exact hours you are busy.</li>
                               </ul>
                           </div>
                       </div>
@@ -192,37 +194,81 @@
   
               <div class="guide-accordion">
                   <div class="guide-header" onclick="toggleGuide(this)">
-                      <span>2. Shift Preferences (Your "Wish List")</span>
+                      <span>Quick Actions (Buttons You Can Click)</span>
                       <span class="guide-icon">+</span>
                   </div>
                   <div class="guide-content">
                       <div class="guide-inner-panel">
                           <div class="guide-body-text">
-                              <p>This part lets you rank your favorite (and least favorite) times to work. You have three distinct options for each time block:</p>
-                              <ul>
-                                  <li><span class="guide-highlight" style="color:green;">"Yes Please"</span>: Use this for shifts you actually enjoy. Selecting this gives you a gold star in the system.</li>
-                                  <li><span class="guide-highlight" style="color:orange;">"No Thanks"</span>: Use this for times that are technically possible but would make you very grumpy.</li>
-                                  <li><span class="guide-highlight" style="color:#666;">"Eh, Sure"</span>: This is for when you are feeling neutral, like a Switzerland of scheduling.</li>
-                              </ul>
-                          </div>
-                      </div>
-                  </div>
-              </div>
+                              <p>Here are the step-by-step instructions for the buttons you will use to manage your hours:</p>
   
-              <div class="guide-accordion">
-                  <div class="guide-header" onclick="toggleGuide(this)">
-                      <span>Safety Features & Peace of Mind</span>
-                      <span class="guide-icon">+</span>
-                  </div>
-                  <div class="guide-content">
-                      <div class="guide-inner-panel">
-                          <div class="guide-body-text">
-                              <p>We know the word "database" sounds like something that might accidentally delete your digital existence, but we’ve built in some safety nets so you can click with confidence:</p>
-                              <ul>
-                                  <li><strong>The Conflict Flyout:</strong> If a supervisor accidentally select a shift that conflicts with your "Blackout" times, a warning window will pop up to double-check it's what they really want to do.</li>
-                                  <li><strong>Non-Destructive Saving:</strong> When you update your preferences, the app surgically removes your old choices and neatly tucks in the new ones in the Master Spreadsheet.</li>
-                                  <li><strong>Automatic Cache Refresh:</strong> Whenever you save a change, the app automatically tosses out the "old" view and grabs the freshest data.</li>
-                              </ul>
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>Block Out a Time You Cannot Work</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>If you have a recurring commitment and cannot work during a specific time, follow these steps:</p>
+                                              <ul>
+                                                  <li>Click the grey bar that says + Block New Time. This will open a small form on your screen.</li>
+                                                  <li>Click the first box under Day of Week to select Monday, Tuesday, etc., from the list.</li>
+                                                  <li>Click the box under Unavailable From to select the time your commitment starts.</li>
+                                                  <li>Click the box under Unavailable Until to select the time your commitment ends.</li>
+                                                  <li>Click the red Save Block button.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>Remove a Blocked Time</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>If your plans change and you become free to work during a time you previously blocked out:</p>
+                                              <ul>
+                                                  <li>Find the card for the day and time you want to remove.</li>
+                                                  <li>Click the small Trash Can button (which looks like 🗑️) on the right side of that card.</li>
+                                                  <li>A small box will pop up asking: "Remove this blackout time?"</li>
+                                                  <li>Click OK or Yes to confirm. The card will immediately fade away, and you will be listed as available again.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
+                              <div class="guide-accordion">
+                                  <div class="guide-header" onclick="toggleGuide(this)">
+                                      <span>Set Your Shift Preferences</span>
+                                      <span class="guide-icon">+</span>
+                                  </div>
+                                  <div class="guide-content">
+                                      <div class="guide-inner-panel">
+                                          <div class="guide-body-text">
+                                              <p>Beneath your blocked times, you will see a section labeled Shift Preferences. Clicking this bar opens a grid of the days of the week and different times of day (Morning, Afternoon, and Evening).</p>
+                                              <p>This is not for times you absolutely cannot work, but rather for telling us what times you prefer to work:</p>
+                                              <ul>
+                                                  <li>Look at the table. Each box has a dropdown menu with three choices:</li>
+                                                  <ul>
+                                                      <li><strong>Yes Please</strong> (shows in bold green text): Choose this if you highly prefer this shift.</li>
+                                                      <li><strong>No Thanks</strong> (shows in orange text): Choose this if you would prefer to avoid this shift if possible.</li>
+                                                      <li><strong>Eh, Sure</strong> (shows in regular black text): This is the neutral default choice. It means you are willing to work this shift without preference.</li>
+                                                  </ul>
+                                                  <li>Go through the table and select your ratings.</li>
+                                                  <li>When you are finished, click the blue Save Preferences button at the bottom of the grid.</li>
+                                                  <li>The button will change to say Saved! ✅ to let you know your choices are recorded.</li>
+                                              </ul>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+  
                           </div>
                       </div>
                   </div>
@@ -231,75 +277,27 @@
   
           <div id="guide-logistics" class="tab-content" style="display:none; padding-top:20px;">
               <div class="guide-intro">
-                  <h3 style="margin-top:0; color:var(--color-primary-navy);">Logistics Tools</h3>
-                  <p>Welcome to the Logistics Section, where we handle the complicated business of getting people to places at times they are supposed to be there.</p>
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">Media Service Technician (MST) Tool</h3>
+                  <p>The MST tool is used to manage course schedules, assign technicians to distance education classrooms, and sync scheduling data directly to Google Calendars.</p>
               </div>
               
               <div class="guide-accordion">
                   <div class="guide-header" onclick="toggleGuide(this)">
-                      <span>Tool Guide: MST</span>
+                      <span>Section 1.1: Setting the source sheet</span>
                       <span class="guide-icon">+</span>
                   </div>
                   <div class="guide-content">
                       <div class="guide-inner-panel">
                           <div class="guide-body-text">
+                              <p>The Settings tab connects the MST system to an external Google Sheet where courses are scheduled. Currently, the app uses the Hyflex Coverage Needs sheet for your current semester.</p>
                               
-                              <div class="guide-accordion">
-                                  <div class="guide-header" onclick="toggleGuide(this)">
-                                      <span>1. Classroom Management</span>
-                                      <span class="guide-icon">+</span>
-                                  </div>
-                                  <div class="guide-content">
-                                      <div class="guide-inner-panel">
-                                          <div class="guide-body-text">
-                                              <p>This tool is essentially the "Grand Central Station" for course logistics.</p>
-                                              <ul>
-                                                  <li><strong>Assigning Staff:</strong> To put someone in charge of a class, simply select their name from the dropdown menu and click "Save".</li>
-                                                  <li><strong>Zoom Link Management:</strong> You can paste the link directly into the Zoom Link box. The system saves this when you click save.</li>
-                                                  <li><strong>Workflow Safety:</strong> We use a "Script Lock" here to prevent two people from saving changes at the exact same microsecond.</li>
-                                              </ul>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-  
-                              <div class="guide-accordion">
-                                  <div class="guide-header" onclick="toggleGuide(this)">
-                                      <span>2. Calendar Sync</span>
-                                      <span class="guide-icon">+</span>
-                                  </div>
-                                  <div class="guide-content">
-                                      <div class="guide-inner-panel">
-                                          <div class="guide-body-text">
-                                              <p>Once your classroom assignments are perfect, this tool helps you push that information out to a Google Calendar.</p>
-                                              <ul>
-                                                  <li><strong>The Preview Step:</strong> Before anything happens, the app will show you exactly what it intends to do (New, Update, or Synced).</li>
-                                                  <li><strong>Selective Syncing:</strong> You can check or uncheck individual boxes to ensure only ready classes are touched.</li>
-                                                  <li><strong>Non-Destructive Design:</strong> If a class moves, the app will surgically delete the old event and create the new one.</li>
-                                              </ul>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-  
-                              <div class="guide-accordion">
-                                  <div class="guide-header" onclick="toggleGuide(this)">
-                                      <span>3. Settings</span>
-                                      <span class="guide-icon">+</span>
-                                  </div>
-                                  <div class="guide-content">
-                                      <div class="guide-inner-panel">
-                                          <div class="guide-body-text">
-                                              <p>This is the "Under the Hood" tab where you tell the MST tool where to look for its information.</p>
-                                              <ul>
-                                                  <li><strong>Selecting the Source:</strong> Pick the specific tab in the Master Spreadsheet that contains your course schedule.</li>
-                                                  <li><strong>Workflow Safety:</strong> Creates a dedicated connection so the tool doesn't pull data from the wrong sheet.</li>
-                                              </ul>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-  
+                              <p><strong>Connect an external course schedule sheet</strong></p>
+                              <ul>
+                                  <li>Select the Settings tab.</li>
+                                  <li>Step 1: Paste the full URL of the Hyflex Coverage Needs spreadsheet for the semester you are working on into the input box and click Fetch Tabs.</li>
+                                  <li>Step 2: Once the tabs are successfully retrieved, select the tab containing your course schedule from the import-tab-select dropdown menu.</li>
+                                  <li>Click Update Sync.</li>
+                              </ul>
                           </div>
                       </div>
                   </div>
@@ -307,76 +305,264 @@
   
               <div class="guide-accordion">
                   <div class="guide-header" onclick="toggleGuide(this)">
-                      <span>Tool Guide: Tech Hub</span>
+                      <span>Section 1.2: Classroom Management</span>
                       <span class="guide-icon">+</span>
                   </div>
                   <div class="guide-content">
                       <div class="guide-inner-panel">
                           <div class="guide-body-text">
-                              <p>Welcome to the Tech Hub section. This is where we manage the complex choreography of student staff shifts.</p>
+                              <p>The Classroom Management tab displays the master schedule of courses in an interactive table. Users can sort, filter, and modify course entries.</p>
+                              
+                              <p><strong>Assigning an MST staff member to a course</strong></p>
+                              <ul>
+                                  <li>Find the target course in the table.</li>
+                                  <li>Locate the dropdown menu in the Staff Assignment column for that row.</li>
+                                  <li>Select the name of the technician you wish to assign. Select -- Unassigned -- to clear an assignment.</li>
+                                  <li>Click the blue Save button next to the dropdown menu. The button text will briefly change to "Saved!" with a green background to confirm the change.</li>
+                              </ul>
+                              
+                              <p><strong>Adding or updating a Zoom link</strong></p>
+                              <ul>
+                                  <li>Find the target course in the table.</li>
+                                  <li>In the Zoom Link column, paste or edit the URL in the text box.</li>
+                                  <li>Click anywhere outside the text box or press Enter to trigger an auto-save. The input border will flash green to indicate that the Zoom link has been saved successfully.</li>
+                              </ul>
+                              
+                              <p><strong>Adding a new course manually</strong></p>
+                              <ul>
+                                  <li>Click the green + Add Manual Class button in the upper-right corner of the tab.</li>
+                                  <li>Fill out the Add New Class form with the following details:
+                                      <ul>
+                                          <li>Course Title (Required)</li>
+                                          <li>Session</li>
+                                          <li>Start Date / End Date</li>
+                                          <li>Day (e.g., Monday, Tu, etc.)</li>
+                                          <li>Faculty</li>
+                                          <li>Start Time / End Time</li>
+                                          <li>Location</li>
+                                          <li>Zoom Link</li>
+                                          <li>Notes</li>
+                                      </ul>
+                                  </li>
+                                  <li>Click Save Class. The system will assign a unique identifier to the course and append it to your schedule edits.</li>
+                              </ul>
+                              
+                              <p><strong>Editing an existing course</strong></p>
+                              <ul>
+                                  <li>Locate the course you want to modify in the table.</li>
+                                  <li>In the Actions column on the far right of the row, click the gray pencil icon (✎).</li>
+                                  <li>The edit form will open with the current details populated.</li>
+                                  <li>Make the necessary adjustments and click Save Class. The system will save these updates as overrides.</li>
+                              </ul>
+                              
+                              <p><strong>Deleting a course from the active schedule</strong></p>
+                              <ul>
+                                  <li>Find the target course in the table.</li>
+                                  <li>Click the red ✖ button in the Actions column.</li>
+                                  <li>A confirmation window will appear warning that this action will write an override record to remove the course.</li>
+                                  <li>Click Confirm to complete the deletion.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
   
-                              <div class="guide-accordion">
-                                  <div class="guide-header" onclick="toggleGuide(this)">
-                                      <span>1. Semester Roster</span>
-                                      <span class="guide-icon">+</span>
-                                  </div>
-                                  <div class="guide-content">
-                                      <div class="guide-inner-panel">
-                                          <div class="guide-body-text">
-                                              <p>This is your master planning board. It lists every shift for the entire week.</p>
-                                              <ul>
-                                                  <li><strong>Smart Staff Selection:</strong> It ranks people based on the Dashboard preferences they set earlier.
-                                                      <ul>
-                                                          <li><span style="color:green">★ Gold Star:</span> "Yes Please!"</li>
-                                                          <li><span style="color:orange">⚠ Warning Icon:</span> "No Thanks".</li>
-                                                          <li><span style="color:red">Unavailable:</span> Overlaps with a "Blackout" time.</li>
-                                                      </ul>
-                                                  </li>
-                                                  <li><strong>Workflow Safety:</strong> A warning window will pop up if you schedule a conflict.</li>
-                                                  <li><strong>Saving:</strong> Click "Save Full Roster" to update every shift at once.</li>
-                                              </ul>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Section 1.3: Calendar Sync</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>The Calendar Sync tab matches the course assignments against a selected Google Calendar, highlighting additions and discrepancies.</p>
+                              
+                              <p><strong>Preview Changes</strong></p>
+                              <ul>
+                                  <li>Select the Calendar Sync tab.</li>
+                                  <li>Choose your target calendar from the Target Calendar dropdown menu.</li>
+                                  <li>Click the Preview Changes button.</li>
+                                  <li>A loader will display while the tool analyzes your calendar. Once complete, a grid of status cards will appear.</li>
+                              </ul>
+                              
+                              <p><strong>Cards and Card Colors</strong></p>
+                              <p>Each card represents a course and is color-coded by its sync status:</p>
+                              <ul>
+                                  <li>Green (NEW): This course is not currently on the target calendar. Syncing will create a new recurring or single calendar event.</li>
+                                  <li>Orange (UPDATE): The course exists on the calendar, but details (such as the Title, Location, Time, or Guest List) do not match the spreadsheet. The card displays a "Proposed Changes" box pointing out the exact differences.</li>
+                                  <li>Gray (SYNCED): The calendar event matches the course schedule. No actions are required.</li>
+                              </ul>
+                              
+                              <p><strong>Excluding Specific Changes</strong></p>
+                              <p>If a card has an UPDATE status, you can decide which properties to sync:</p>
+                              <ul>
+                                  <li>In the Proposed Changes box on the card, locate the toggle switch next to each specific difference (e.g., Title, Location, Time).</li>
+                                  <li>Slide the toggle to the left (gray/unchecked) to skip that specific change.</li>
+                                  <li>Keep the toggle to the right (green/checked) to include the change.</li>
+                              </ul>
+                              
+                              <p><strong>Manual Override</strong></p>
+                              <ul>
+                                  <li>Click the Manual Edit ✎ button at the bottom-right of any course card.</li>
+                                  <li>The card will flip to display a Manual Override form.</li>
+                                  <li>Modify the Title, Start/End Times, Location, or Description fields as needed. Note that editing any field will automatically mark the card's checkbox for syncing.</li>
+                                  <li>Click Done ✓ to save your temporary overrides and return to the main card view.</li>
+                              </ul>
+                              
+                              <p><strong>Calendar Sync</strong></p>
+                              <ul>
+                                  <li>Check the small box in the top-right corner of each course card you wish to update.</li>
+                                  <li>By default, NEW and UPDATE cards are checked automatically, while SYNCED cards are unchecked.</li>
+                                  <li>You can filter the visible cards using the filter bar (All, New, Updates, Synced) to review specific groups.</li>
+                                  <li>Once satisfied with the selections, click Sync Selected to Calendar.</li>
+                                  <li>Confirm the prompt. The system will process the updates and display a confirmation showing the total number of events created and updated.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
   
-                              <div class="guide-accordion">
-                                  <div class="guide-header" onclick="toggleGuide(this)">
-                                      <span>2. Calendar Sync</span>
-                                      <span class="guide-icon">+</span>
-                                  </div>
-                                  <div class="guide-content">
-                                      <div class="guide-inner-panel">
-                                          <div class="guide-body-text">
-                                              <p>Tell Google Calendar about the roster so staff actually show up.</p>
-                                              <ul>
-                                                  <li><strong>The Preview Step:</strong> Compares your roster to the calendar and shows "New" or "Updating" statuses.</li>
-                                                  <li><strong>Invite Awareness:</strong> Automatically invites the assigned staff member to the calendar event.</li>
-                                              </ul>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
+              <div class="guide-intro" style="margin-top:40px;">
+                  <h3 style="margin-top:0; color:var(--color-primary-navy);">Part 2: Tech Hub Tool</h3>
+                  <p>The Tech Hub tool handles shifts, rosters, and automatic calendar syncing.</p>
+              </div>
   
-                              <div class="guide-accordion">
-                                  <div class="guide-header" onclick="toggleGuide(this)">
-                                      <span>3. Manage Shifts</span>
-                                      <span class="guide-icon">+</span>
-                                  </div>
-                                  <div class="guide-content">
-                                      <div class="guide-inner-panel">
-                                          <div class="guide-body-text">
-                                              <p>Think of this as the "Blueprint" area for defining the typical week.</p>
-                                              <ul>
-                                                  <li><strong>Adding/Deleting Shifts:</strong> Create descriptions, days, and times. Deleting removes it permanently.</li>
-                                                  <li><strong>The Zoom Toggle:</strong> Automatically includes the Tech Hub’s Zoom link in the calendar event.</li>
-                                                  <li><strong>Safety Lock:</strong> Deleting a shift also scrubs the staff assignment from the database.</li>
-                                              </ul>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Section 2.1: Semester Roster</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>The Semester Roster tab maps staff availability and preferences against the shift schedule to help build weekly rosters.</p>
+                              
+                              <p><strong>Setting the Semester Date Range</strong></p>
+                              <ul>
+                                  <li>Select the Semester Roster tab.</li>
+                                  <li>Locate the Semester Settings block at the top of the tab.</li>
+                                  <li>Set your Semester Start and Semester End dates using the calendar input fields.</li>
+                                  <li>These dates define the timeframe used when saving shifts to the database and generating recurring calendar events.</li>
+                              </ul>
+                              
+                              <p><strong>Assigning a Tech Hub Staff Member to a Shift</strong></p>
+                              <ul>
+                                  <li>Locate the shift row you want to fill in the roster table.</li>
+                                  <li>Click the dropdown menu in the Assigned Staff column.</li>
+                                  <li>Select the name of the staff member you want to assign.</li>
+                                  <li>Click the Save button next to the dropdown menu to write the individual assignment.</li>
+                              </ul>
+                              
+                              <p><strong>Interpreting Staff Dropdown Symbols and Colors</strong></p>
+                              <p>The dropdown uses availability data and preferences to help you make informed scheduling decisions:</p>
+                              <ul>
+                                  <li>Name (Unavailable) in red/italics: The staff member has blocked this time slot in their availability profile.</li>
+                                  <li>★ Name in green/bold: The staff member has marked this time block as a preferred shift ("Yes Please").</li>
+                                  <li>⚠ Name in orange: The staff member has marked this time block as an unpreferred shift ("No Thanks").</li>
+                                  <li>Name in standard text: The staff member is available and has neutral preferences for this shift.</li>
+                              </ul>
+                              
+                              <p><strong>Handling Scheduling Conflicts and Negative Preferences</strong></p>
+                              <p>If you select a staff member who has a conflict (either listed as "Unavailable" or marked "No Thanks"):</p>
+                              <ul>
+                                  <li>When you click Save or save the full roster, a Scheduling Conflict warning window will pop up.</li>
+                                  <li>The window will display the conflict details (e.g., They have listed this time as UNAVAILABLE).</li>
+                                  <li>Review the conflict:
+                                      <ul>
+                                          <li>To proceed with the assignment despite the conflict, click Schedule Anyway.</li>
+                                          <li>To cancel and select someone else, click Cancel.</li>
+                                      </ul>
+                                  </li>
+                              </ul>
+                              
+                              <p><strong>Saving the Entire Roster</strong></p>
+                              <ul>
+                                  <li>Set the assignments for all shifts in the table.</li>
+                                  <li>Click the blue Save Full Roster button inside the Semester Settings block at the top of the page.</li>
+                                  <li>If there are any conflicts, review and confirm them in the conflict warning popup.</li>
+                                  <li>The system will save all assignments simultaneously.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
   
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Section 2.2: Calendar Sync</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>The Calendar Sync tab recurrently schedules Tech Hub shifts to a selected Google Calendar for the duration of the semester.</p>
+                              
+                              <p><strong>Previewing Tech Hub Shifts to Sync</strong></p>
+                              <ul>
+                                  <li>Navigate to the Calendar Sync tab.</li>
+                                  <li>Ensure you have set the Semester Start and Semester End dates on the Roster tab.</li>
+                                  <li>Select your calendar from the Target Calendar dropdown menu.</li>
+                                  <li>Click Preview Changes. The application will display a list of shift preview cards.</li>
+                              </ul>
+                              
+                              <p><strong>Understanding Shift Statuses</strong></p>
+                              <ul>
+                                  <li>NEW (Green border): The shift is not yet scheduled on the calendar.</li>
+                                  <li>UPDATE (Orange border): The shift exists, but there is a change in the title (such as a different assigned staff member), location, or description.</li>
+                                  <li>SYNCED (Gray border): The shift is currently up-to-date on the calendar.</li>
+                              </ul>
+                              
+                              <p><strong>Syncing a Single Shift to the Calendar</strong></p>
+                              <ul>
+                                  <li>Locate the preview card for the specific shift.</li>
+                                  <li>Click the Sync This button on the bottom right of the card.</li>
+                                  <li>The button will change to "Synced" with a green background once the individual event is updated.</li>
+                              </ul>
+                              
+                              <p><strong>Batch-Syncing All Shifts to Google Calendar</strong></p>
+                              <ul>
+                                  <li>Click the green Sync All button at the top of the preview results.</li>
+                                  <li>Confirm the browser prompt asking to sync your shifts.</li>
+                                  <li>The system will delete any outdated event series and replace them with new weekly recurring calendar events matching your roster assignments.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+  
+              <div class="guide-accordion">
+                  <div class="guide-header" onclick="toggleGuide(this)">
+                      <span>Section 2.3: Manage Shifts</span>
+                      <span class="guide-icon">+</span>
+                  </div>
+                  <div class="guide-content">
+                      <div class="guide-inner-panel">
+                          <div class="guide-body-text">
+                              <p>The Manage Shifts tab allows managers to configure the standard weekly shift templates.</p>
+                              
+                              <p><strong>Viewing Existing Shift Templates</strong></p>
+                              <ul>
+                                  <li>Navigate to the Manage Shifts tab.</li>
+                                  <li>Review the Existing Shifts table on the left side of the screen.</li>
+                              </ul>
+                              
+                              <p><strong>Adding a New Shift Template</strong></p>
+                              <p>How do I add a new shift template (including multi-day shifts)?</p>
+                              <ul>
+                                  <li>Find the Add New Shift form on the right side of the Manage Shifts tab.</li>
+                                  <li>Enter a Description (e.g., "Morning Shift").</li>
+                                  <li>Select the Day(s) for the shift by checking the boxes for Mon, Tue, Wed, Thu, or Fri. Checking multiple days will create a separate shift template for each day selected.</li>
+                                  <li>Select the Start and End times from the dropdown menus.</li>
+                                  <li>Check the Is Zoom? box if the shift is a virtual support slot.</li>
+                                  <li>Click the blue Add Shift(s) button. The page will reload and display your new templates in the roster and shift tables.</li>
+                              </ul>
+                              
+                              <p><strong>Deleting a Shift Template</strong></p>
+                              <ul>
+                                  <li>Locate the shift template you want to remove in the Existing Shifts table.</li>
+                                  <li>Click the red Delete button in the actions column for that row.</li>
+                                  <li>Confirm the browser prompt. Deleting a shift template will automatically delete its corresponding staff assignments.</li>
+                              </ul>
                           </div>
                       </div>
                   </div>
@@ -543,4 +729,4 @@
             window.event.stopPropagation();
         }
     }
-  </script>
+</script>
