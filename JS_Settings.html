@@ -73,10 +73,6 @@
           </div>
           <button class="button-secondary" onclick="runAdminMapTabs()">Refresh Sheet Mapping</button>
         </div>
-          <h3>App Configuration</h3>
-          <p>Global app settings and ID mapping can be managed here.</p>
-          <button class="button-secondary" onclick="runAdminMapTabs()">Refresh Sheet Mapping</button>
-        </div>
 
         <div id="settings-staff" class="tab-content" style="display:none; padding-top:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
@@ -97,6 +93,9 @@
                 <h3 style="margin:0;">Permissions Matrix</h3>
                 <p style="margin:5px 0; color:#666; font-size:0.9em;">Control which roles can access specific tools and pages.</p>
              </div>
+             <button class="button-success" onclick="savePermissionsMatrix(this)">Save Permissions</button>
+           </div>
+           <div id="permissions-matrix-container">
               <div class="loader-ring"></div>
            </div>
         </div>
@@ -110,27 +109,36 @@
         if(staffTabBtn) staffTabBtn.style.display = 'none';
         if(permTabBtn) permTabBtn.style.display = 'none';
     }
+    
+    // Auto-load app config on first view
+    initAppConfig();
   }
 
   function openSettingsTab(evt, tabName) {
     if (evt) evt.preventDefault();
     const view = document.getElementById('page-Settings');
-    const contents = view.getElementsByClassName("tab-content");
-    for (let i = 0; i < contents.length; i++) contents[i].style.display = "none";
-    const links = view.getElementsByClassName("tab-link");
-    for (let i = 0; i < links.length; i++) links[i].className = links[i].className.replace(" active", "");
-    
-    document.getElementById(tabName).style.display = "block";
-    evt.currentTarget.className += " active";
+    if(!view) return;
 
+    const contents = view.getElementsByClassName("tab-content");
+    for (let i = 0; i < contents.length; i++) {
+      contents[i].style.display = "none";
+    }
+    const links = view.getElementsByClassName("tab-link");
+    for (let i = 0; i < links.length; i++) {
+      links[i].className = links[i].className.replace(" active", "");
+    }
+    
+    const tabToShow = document.getElementById(tabName);
+    if(tabToShow) tabToShow.style.display = "block";
+    if(evt && evt.currentTarget) evt.currentTarget.className += " active";
+
+    // Load content for the active tab
     if (tabName === 'settings-staff') {
-    if (tabName === 'settings-permissions') {
+      fetchFullStaffList();
+    } else if (tabName === 'settings-permissions') {
       fetchPermissionsMatrix();
-    }
-    if (tabName === 'settings-app') {
+    } else if (tabName === 'settings-app') {
       initAppConfig();
-    }
-      fetchPermissionsMatrix();
     }
   }
 
@@ -168,7 +176,8 @@
 
   function renderStaffTable(staff) {
     const container = document.getElementById('staff-list-container');
-    
+    if(!container) return;
+
     let rows = staff.map(s => {
       const safeId = s.email.replace(/[@.]/g,'');
       const currentRoles = s.roles.split(',').map(r => r.trim());
@@ -222,6 +231,7 @@
 
   function togglePillClass(checkbox, pillId) {
     const pill = document.getElementById(pillId);
+    if(!pill) return;
     if (checkbox.checked) pill.classList.add('active');
     else pill.classList.remove('active');
   }
@@ -285,6 +295,7 @@
 
   function fetchPermissionsMatrix() {
       const container = document.getElementById('permissions-matrix-container');
+      if(!container) return;
       container.innerHTML = '<div class="loader-ring"></div>';
       
       google.script.run.withSuccessHandler(res => {
@@ -298,7 +309,8 @@
 
   function renderPermissionsMatrix(matrix, roles, pages) {
       const container = document.getElementById('permissions-matrix-container');
-      
+      if(!container) return;
+
       let headerHtml = `<th>Page / Tool</th>`;
       roles.forEach(role => {
           headerHtml += `<th>${role}</th>`;

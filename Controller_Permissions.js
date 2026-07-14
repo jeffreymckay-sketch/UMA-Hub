@@ -29,20 +29,22 @@ function api_getPermissionsMatrix() {
         // We handle the "Edit" check in the save function.
         const ss = getMasterDataHub();
         let sheet = ss.getSheetByName(PERMISSIONS_CONFIG.SHEET_NAME);
+        let data, headers, sheetModified = false;
 
         // 1. Initialize Sheet if missing
         if (!sheet) {
             sheet = ss.insertSheet(PERMISSIONS_CONFIG.SHEET_NAME);
             // Create Headers
-            const headers = ['PageID', ...PERMISSIONS_CONFIG.ROLES];
+            headers = ['PageID', ...PERMISSIONS_CONFIG.ROLES];
             sheet.appendRow(headers);
             sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#003057').setFontColor('white');
             sheet.setFrozenRows(1);
             sheet.setFrozenColumns(1);
+            data = [headers];
+        } else {
+            data = sheet.getDataRange().getValues();
+            headers = data[0];
         }
-
-        const data = sheet.getDataRange().getValues();
-        const headers = data[0];
         
         // 2. Sync Logic: Ensure all Roles exist as columns
         const missingRoles = PERMISSIONS_CONFIG.ROLES.filter(r => !headers.includes(r));
@@ -50,8 +52,14 @@ function api_getPermissionsMatrix() {
             // Add missing columns
             const startCol = headers.length + 1;
             sheet.getRange(1, startCol, 1, missingRoles.length).setValues([missingRoles]);
-            // Re-fetch data after structure change
-            return api_getPermissionsMatrix();
+            sheetModified = true;
+        }
+
+        // Re-fetch data if columns were added
+        if(sheetModified){
+          data = sheet.getDataRange().getValues();
+          headers = data[0];
+          sheetModified = false; // Reset for next check
         }
 
         // 3. Sync Logic: Ensure all Pages exist as rows
@@ -73,8 +81,13 @@ function api_getPermissionsMatrix() {
                 return row;
             });
             sheet.getRange(data.length + 1, 1, newRows.length, headers.length).setValues(newRows);
-            // Re-fetch data
-            return api_getPermissionsMatrix();
+            sheetModified = true;
+        }
+
+        // Re-fetch data if anything changed to ensure we have the final matrix
+        if(sheetModified){
+          data = sheet.getDataRange().getValues();
+          headers = data[0];
         }
 
         // 4. Build the Matrix Object
