@@ -1,162 +1,751 @@
 /**
  * @file Utility_SheetReader.js
- * @description A standalone utility for parsing highly unstructured, messy Google Sheets
- * using 'Heuristic' pattern-matching instead of strict row numbers.
+ * @description
+ * Standalone utilities for parsing unstructured Google Sheets
+ * using heuristic matching instead of fixed row/column positions.
  */
 
 const SheetReader = {
 
   /**
-   * Helper to aggressively sanitize strings for comparison.
-   * @param {string} str The string to sanitize.
-   * @returns {string} Lowercased, trimmed string with excess whitespace removed.
+   * Aggressively sanitizes strings for loose comparisons.
+   *
+   * Example:
+   *   "  Start   Time " -> "start time"
    */
   sanitize: function(str) {
-    if (str === null || str === undefined) return '';
-    return String(str).toLowerCase().trim().replace(/\s+/g, ' ');
+    if (
+      str === null ||
+      str === undefined
+    ) {
+      return "";
+    }
+
+    return String(str)
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ");
   },
 
+
   /**
-   * Scans rows to find the most likely header row by scoring them based on keyword presence.
-   * @param {Array<Array<any>>} data 2D array of sheet data.
-   * @param {Array<string>} keywords Array of critical words expected in the header.
-   * @param {number} maxScanDepth Maximum number of rows to scan (defaults to 20).
-   * @returns {number} The index of the highest-scoring row, or -1 if no row scores > 0.
+   * Normalizes header text more aggressively than sanitize().
+   *
+   * Punctuation and separators become spaces so values such as:
+   *
+   *   Duration/Mins
+   *   Duration - Mins
+   *   duration_mins
+   *
+   * can all compare as:
+   *
+   *   duration mins
    */
-  findHeaderRowHeuristic: function(data, keywords, maxScanDepth = 20) {
-    if (!data || data.length === 0) return -1;
-    
+  normalizeHeader: function(str) {
+    if (
+      str === null ||
+      str === undefined
+    ) {
+      return "";
+    }
+
+    return String(str)
+      .toLowerCase()
+      .trim()
+      .replace(/[_\/\\|:;,\-–—]+/g, " ")
+      .replace(/[^a-z0-9.'&() ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  },
+
+
+  /**
+   * Scans rows to find the most likely header row by scoring keyword
+   * presence.
+   *
+   * Legacy utility retained for compatibility with other parsers.
+   *
+   * @param {Array<Array<any>>} data
+   * @param {Array<string>} keywords
+   * @param {number} maxScanDepth
+   * @returns {number}
+   */
+  findHeaderRowHeuristic: function(
+    data,
+    keywords,
+    maxScanDepth = 20
+  ) {
+    if (
+      !data ||
+      data.length === 0
+    ) {
+      return -1;
+    }
+
     let bestRowIndex = -1;
     let maxScore = 0;
-    const sanitizedKeywords = keywords.map(k => this.sanitize(k));
 
-    for (let i = 0; i < Math.min(data.length, maxScanDepth); i++) {
-      if (!data[i]) continue;
-      
+    const sanitizedKeywords =
+      keywords
+        .map(
+          keyword =>
+            this.sanitize(keyword)
+        )
+        .filter(Boolean);
+
+    for (
+      let i = 0;
+      i <
+      Math.min(
+        data.length,
+        maxScanDepth
+      );
+      i++
+    ) {
+      if (!data[i]) {
+        continue;
+      }
+
       let rowScore = 0;
-      const rowStr = data[i].map(cell => this.sanitize(cell)).join(' ');
 
-      sanitizedKeywords.forEach(keyword => {
-        if (rowStr.includes(keyword)) {
-          rowScore++;
+      const rowStr =
+        data[i]
+          .map(
+            cell =>
+              this.sanitize(cell)
+          )
+          .join(" ");
+
+      sanitizedKeywords.forEach(
+        keyword => {
+          if (
+            rowStr.includes(
+              keyword
+            )
+          ) {
+            rowScore++;
+          }
         }
-      });
+      );
 
-      // Tie-breaker goes to the earlier row
-      if (rowScore > maxScore) {
+      /*
+       * Tie-breaker goes to the earlier row.
+       */
+      if (
+        rowScore > maxScore
+      ) {
         maxScore = rowScore;
         bestRowIndex = i;
       }
     }
 
-    return maxScore > 0 ? bestRowIndex : -1;
+    return maxScore > 0
+      ? bestRowIndex
+      : -1;
   },
 
+
   /**
-   * Maps column indices based on arrays of synonyms.
-   * @param {Array<any>} headerRow The row array containing the headers.
-   * @param {Object} synonymConfig An object where keys are your internal column names, 
-   *                               and values are arrays of acceptable string synonyms.
-   *                               Example: { startTime: ['start time', 'time', 'onsite'] }
-   * @returns {Object} An object mapping internal names to column indices (or -1 if not found).
+   * Legacy synonym mapper retained for compatibility.
+   *
+   * This uses the original first-match behavior.
    */
-  mapColumnsBySynonyms: function(headerRow, synonymConfig) {
+  mapColumnsBySynonyms: function(
+    headerRow,
+    synonymConfig
+  ) {
     const colMap = {};
-    const sanitizedHeaders = headerRow.map(h => this.sanitize(h));
 
-    for (const [key, synonyms] of Object.entries(synonymConfig)) {
-      colMap[key] = -1; // Default to not found
-      const sanitizedSynonyms = synonyms.map(s => this.sanitize(s));
+    const sanitizedHeaders =
+      headerRow.map(
+        header =>
+          this.sanitize(header)
+      );
 
-      for (let i = 0; i < sanitizedHeaders.length; i++) {
-        const headerStr = sanitizedHeaders[i];
-        if (!headerStr) continue;
+    for (
+      const [key, synonyms]
+      of Object.entries(
+        synonymConfig
+      )
+    ) {
+      colMap[key] = -1;
 
-        // Check if any synonym matches or is included in the header string
-        const match = sanitizedSynonyms.some(syn => headerStr === syn || headerStr.includes(syn));
+      const sanitizedSynonyms =
+        synonyms
+          .map(
+            synonym =>
+              this.sanitize(
+                synonym
+              )
+          )
+          .filter(Boolean);
+
+      for (
+        let i = 0;
+        i <
+        sanitizedHeaders.length;
+        i++
+      ) {
+        const headerStr =
+          sanitizedHeaders[i];
+
+        if (!headerStr) {
+          continue;
+        }
+
+        const match =
+          sanitizedSynonyms.some(
+            synonym =>
+              headerStr ===
+                synonym ||
+              headerStr.includes(
+                synonym
+              )
+          );
+
         if (match) {
           colMap[key] = i;
-          break; // Stop looking for this key once found
+          break;
         }
       }
     }
+
     return colMap;
   },
 
+
   /**
-   * Scans rows to find a specific "anchor" row (like the start of a roster).
-   * @param {Array<Array<any>>} data 2D array of sheet data.
-   * @param {Array<string>} anchorWords Array of words to look for in the first column.
-   * @param {number} startRow The index to start scanning from.
-   * @returns {number} The index of the row containing an anchor word, or -1.
+   * Scores one header value against a group of synonyms.
+   *
+   * Higher score = stronger semantic match.
+   *
+   * Exact matches heavily outrank loose substring matches.
+   *
+   * This prevents generic synonyms such as "exam" from beating
+   * a stronger exact header such as "exam date" when mapping fields.
    */
-  findAnchorRow: function(data, anchorWords, startRow = 0) {
-    if (!data || data.length === 0) return -1;
-    
-    const sanitizedAnchors = anchorWords.map(w => this.sanitize(w));
+  scoreHeaderAgainstSynonyms:
+    function(
+      headerValue,
+      synonyms
+    ) {
+      const header =
+        this.normalizeHeader(
+          headerValue
+        );
 
-    for (let i = startRow; i < data.length; i++) {
-      if (!data[i] || data[i].length === 0) continue;
-      
-      const firstCell = this.sanitize(data[i][0]);
-      if (!firstCell) continue;
+      if (!header) {
+        return 0;
+      }
 
-      if (sanitizedAnchors.some(anchor => firstCell.includes(anchor))) {
+      let bestScore = 0;
+
+      synonyms.forEach(
+        synonymValue => {
+          const synonym =
+            this.normalizeHeader(
+              synonymValue
+            );
+
+          if (!synonym) {
+            return;
+          }
+
+          let score = 0;
+
+          /*
+           * Perfect normalized match.
+           */
+          if (
+            header === synonym
+          ) {
+            score =
+              120 +
+              Math.min(
+                synonym.length,
+                20
+              );
+          }
+
+          /*
+           * Header starts or ends with the complete synonym.
+           *
+           * Examples:
+           *   "exam date" matches "exam"
+           *   "scheduled start time" matches "start time"
+           */
+          else if (
+            header.startsWith(
+              synonym + " "
+            ) ||
+            header.endsWith(
+              " " + synonym
+            )
+          ) {
+            score =
+              90 +
+              Math.min(
+                synonym.length,
+                15
+              );
+          }
+
+          /*
+           * Whole phrase/token match inside a longer header.
+           */
+          else if (
+            (
+              " " +
+              header +
+              " "
+            ).includes(
+              " " +
+              synonym +
+              " "
+            )
+          ) {
+            score =
+              80 +
+              Math.min(
+                synonym.length,
+                15
+              );
+          }
+
+          /*
+           * Loose substring match is allowed, but intentionally weak.
+           */
+          else if (
+            synonym.length >= 4 &&
+            header.includes(
+              synonym
+            )
+          ) {
+            score =
+              55 +
+              Math.min(
+                synonym.length,
+                10
+              );
+          }
+
+          if (
+            score > bestScore
+          ) {
+            bestScore = score;
+          }
+        }
+      );
+
+      return bestScore;
+    },
+
+
+  /**
+   * Maps columns using scored synonym matching.
+   *
+   * Return format:
+   *
+   * {
+   *   columns: {
+   *     exam: 2,
+   *     date: 3
+   *   },
+   *   scores: {
+   *     exam: 124,
+   *     date: 129
+   *   }
+   * }
+   *
+   * Unlike mapColumnsBySynonyms(), this searches every possible header
+   * and returns the strongest match rather than the first substring hit.
+   */
+  mapColumnsBySynonymsScored:
+    function(
+      headerRow,
+      synonymConfig
+    ) {
+      const columns = {};
+      const scores = {};
+
+      const row =
+        headerRow || [];
+
+      for (
+        const [key, synonyms]
+        of Object.entries(
+          synonymConfig
+        )
+      ) {
+        let bestColumn = -1;
+        let bestScore = 0;
+
+        for (
+          let c = 0;
+          c < row.length;
+          c++
+        ) {
+          const score =
+            this.scoreHeaderAgainstSynonyms(
+              row[c],
+              synonyms
+            );
+
+          if (
+            score > bestScore
+          ) {
+            bestScore = score;
+            bestColumn = c;
+          }
+        }
+
+        columns[key] =
+          bestColumn;
+
+        scores[key] =
+          bestScore;
+      }
+
+      return {
+        columns: columns,
+        scores: scores
+      };
+    },
+
+
+  /**
+   * Generic scored-header-row finder.
+   *
+   * Not required by the Nursing parser directly, but useful for future
+   * resilient parsers.
+   *
+   * options:
+   * {
+   *   startRow: 0,
+   *   maxRows: 40,
+   *   requiredKeys: ["exam", "date"],
+   *   requireDistinctRequiredColumns: true
+   * }
+   */
+  findBestHeaderRowBySynonyms:
+    function(
+      data,
+      synonymConfig,
+      options
+    ) {
+      if (
+        !data ||
+        !data.length
+      ) {
+        return null;
+      }
+
+      options =
+        options || {};
+
+      const startRow =
+        Math.max(
+          0,
+          Number(
+            options.startRow || 0
+          )
+        );
+
+      const maxRows =
+        options.maxRows
+          ? Math.min(
+              data.length,
+              startRow +
+                Number(
+                  options.maxRows
+                )
+            )
+          : data.length;
+
+      const requiredKeys =
+        options.requiredKeys ||
+        [];
+
+      const requireDistinct =
+        options
+          .requireDistinctRequiredColumns !==
+        false;
+
+      let best = null;
+
+      for (
+        let r = startRow;
+        r < maxRows;
+        r++
+      ) {
+        const mapped =
+          this.mapColumnsBySynonymsScored(
+            data[r] || [],
+            synonymConfig
+          );
+
+        let valid = true;
+
+        requiredKeys.forEach(
+          key => {
+            if (
+              mapped.columns[key] ===
+              -1
+            ) {
+              valid = false;
+            }
+          }
+        );
+
+        if (!valid) {
+          continue;
+        }
+
+        if (
+          requireDistinct &&
+          requiredKeys.length > 1
+        ) {
+          const requiredColumns =
+            requiredKeys.map(
+              key =>
+                mapped.columns[key]
+            );
+
+          const uniqueColumns =
+            Array.from(
+              new Set(
+                requiredColumns
+              )
+            );
+
+          if (
+            uniqueColumns.length !==
+            requiredColumns.length
+          ) {
+            continue;
+          }
+        }
+
+        let totalScore = 0;
+        let matchedKeys = 0;
+
+        Object.keys(
+          mapped.columns
+        ).forEach(key => {
+          if (
+            mapped.columns[key] !==
+            -1
+          ) {
+            matchedKeys++;
+
+            totalScore +=
+              mapped.scores[key] ||
+              0;
+          }
+        });
+
+        /*
+         * Reward rows that match several semantic fields.
+         */
+        totalScore +=
+          matchedKeys * 10;
+
+        if (
+          !best ||
+          totalScore >
+            best.score
+        ) {
+          best = {
+            rowIndex: r,
+            columns:
+              mapped.columns,
+            scores:
+              mapped.scores,
+            matchedKeys:
+              matchedKeys,
+            score:
+              totalScore
+          };
+        }
+      }
+
+      return best;
+    },
+
+
+  /**
+   * Scans rows to find a specific anchor word in the first column.
+   *
+   * Legacy function retained for compatibility with other code.
+   * The Nursing parser intentionally does NOT use this function.
+   */
+  findAnchorRow: function(
+    data,
+    anchorWords,
+    startRow = 0
+  ) {
+    if (
+      !data ||
+      data.length === 0
+    ) {
+      return -1;
+    }
+
+    const sanitizedAnchors =
+      anchorWords
+        .map(
+          word =>
+            this.sanitize(word)
+        )
+        .filter(Boolean);
+
+    for (
+      let i = startRow;
+      i < data.length;
+      i++
+    ) {
+      if (
+        !data[i] ||
+        data[i].length === 0
+      ) {
+        continue;
+      }
+
+      const firstCell =
+        this.sanitize(
+          data[i][0]
+        );
+
+      if (!firstCell) {
+        continue;
+      }
+
+      if (
+        sanitizedAnchors.some(
+          anchor =>
+            firstCell.includes(
+              anchor
+            )
+        )
+      ) {
         return i;
       }
     }
+
     return -1;
   },
 
+
   /**
-   * Dynamically reads a list/roster starting from a specific row until a stopping condition is met.
-   * @param {Array<Array<any>>} data 2D array of sheet data.
-   * @param {number} startRow The row index to start reading data from.
-   * @param {number} nameColIndex The column index where the primary data (e.g., student name) lives.
-   * @param {Array<string>} stopWords Array of words that, if found in the name column, stop reading.
-   * @param {number} maxBlankRows The number of consecutive blank rows before stopping (defaults to 3).
-   * @returns {Array<Object>} An array of objects representing the rows read.
+   * Dynamically reads a list based on one primary column.
+   *
+   * Legacy function retained for compatibility.
+   *
+   * The Nursing student roster parser intentionally no longer uses this
+   * because Nursing rosters require cell-by-cell classification.
    */
-  readDynamicRoster: function(data, startRow, nameColIndex, stopWords, maxBlankRows = 3) {
+  readDynamicRoster: function(
+    data,
+    startRow,
+    nameColIndex,
+    stopWords,
+    maxBlankRows = 3
+  ) {
     const roster = [];
+
     let blankCount = 0;
-    const sanitizedStopWords = stopWords.map(w => this.sanitize(w));
 
-    for (let i = startRow; i < data.length; i++) {
-      const row = data[i];
-      if (!row || row.length <= nameColIndex) {
+    const sanitizedStopWords =
+      stopWords
+        .map(
+          word =>
+            this.sanitize(word)
+        )
+        .filter(Boolean);
+
+    for (
+      let i = startRow;
+      i < data.length;
+      i++
+    ) {
+      const row =
+        data[i];
+
+      if (
+        !row ||
+        row.length <=
+          nameColIndex
+      ) {
         blankCount++;
-        if (blankCount >= maxBlankRows) break;
+
+        if (
+          blankCount >=
+          maxBlankRows
+        ) {
+          break;
+        }
+
         continue;
       }
 
-      const primaryCell = this.sanitize(row[nameColIndex]);
+      const primaryCell =
+        this.sanitize(
+          row[nameColIndex]
+        );
 
-      // Check for blank row
-      if (primaryCell === '') {
+      if (
+        primaryCell === ""
+      ) {
         blankCount++;
-        if (blankCount >= maxBlankRows) break;
+
+        if (
+          blankCount >=
+          maxBlankRows
+        ) {
+          break;
+        }
+
         continue;
       }
 
-      // Reset blank count since we found data
       blankCount = 0;
 
-      // Check for stop words
-      if (sanitizedStopWords.some(stopWord => primaryCell === stopWord || primaryCell.includes(stopWord))) {
-        break; // Stop reading entirely
+      if (
+        sanitizedStopWords.some(
+          stopWord =>
+            primaryCell ===
+              stopWord ||
+            primaryCell.includes(
+              stopWord
+            )
+        )
+      ) {
+        break;
       }
 
-      // Format the row, replacing empty cells with 'TBD'
-      const formattedRow = row.map(cell => {
-         const strCell = String(cell).trim();
-         return strCell === '' ? 'TBD' : cell; // Keep original type if not empty string
-      });
+      const formattedRow =
+        row.map(cell => {
+          const strCell =
+            String(
+              cell === null ||
+              cell === undefined
+                ? ""
+                : cell
+            ).trim();
+
+          return strCell === ""
+            ? "TBD"
+            : cell;
+        });
 
       roster.push({
         rowIndex: i,
-        name: String(row[nameColIndex]).trim(), // Keep original capitalization for the name
-        data: formattedRow
+        name:
+          String(
+            row[nameColIndex]
+          ).trim(),
+        data:
+          formattedRow
       });
     }
 
